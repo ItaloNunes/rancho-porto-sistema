@@ -40,12 +40,30 @@ export interface Lote {
   foto_url?: string | null;
 }
 
+export interface QuadraZona {
+  /** Presente quando o empreendimento tem quadras reais (ex.: Porto Franco): casa por igualdade com Lote.quadra. */
+  quadra?: string | null;
+  /** Presentes quando a zona representa uma faixa de números de lote (ex.: Rancho Texas). */
+  lote_min?: number | null;
+  lote_max?: number | null;
+  /** Texto exibido no chip de filtro; se ausente, cai para "Quadra {quadra}". */
+  label?: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface CondominioDetalhe extends CondominioResumo {
   plan_w?: number | null;
   plan_h?: number | null;
   plan_minx?: number | null;
   plan_miny?: number | null;
   plan_decor?: PlanoDecoracao | null;
+  /** Quando preenchido, a planta é a imagem real (ver plan_quadras) em vez do modo polígono-por-lote. */
+  plan_image_url?: string | null;
+  /** Zonas clicáveis aproximadas por quadra — só usado quando plan_image_url está preenchido. */
+  plan_quadras?: QuadraZona[] | null;
   base_precos_em?: string | null;
   lotes: Lote[];
 }

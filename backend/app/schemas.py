@@ -31,6 +31,29 @@ class PlanoDecoracao(BaseModel):
     roundabout2: Optional[dict] = None
 
 
+class QuadraZona(BaseModel):
+    """Zona clicável aproximada usada no modo planta-em-imagem (ver
+    CondominioDetalhe.plan_image_url). Coordenadas no mesmo espaço de plan_w/plan_h.
+
+    Duas formas de casar a zona com os lotes da lista, dependendo do condomínio:
+    - `quadra`: quando o empreendimento tem quadras reais (ex.: Porto Franco) — casa
+      por igualdade com `Lote.quadra`.
+    - `lote_min`/`lote_max`: quando não há agrupamento por quadra e a zona representa
+      uma faixa de números de lote (ex.: Rancho Texas, onde cada lote é sua própria
+      "quadra") — casa por `lote_min <= Lote.lote_numero <= lote_max`.
+    `label`, quando presente, é o texto mostrado no lugar de "Quadra {quadra}".
+    """
+
+    quadra: Optional[str] = None
+    lote_min: Optional[int] = None
+    lote_max: Optional[int] = None
+    label: Optional[str] = None
+    x: float
+    y: float
+    w: float
+    h: float
+
+
 class Lote(BaseModel):
     id: str
     condominio_id: str
@@ -55,6 +78,8 @@ class CondominioDetalhe(CondominioResumo):
     plan_minx: Optional[float] = None
     plan_miny: Optional[float] = None
     plan_decor: Optional[PlanoDecoracao] = None
+    plan_image_url: Optional[str] = None
+    plan_quadras: Optional[list[QuadraZona]] = None
     base_precos_em: Optional[date] = None
     lotes: list[Lote] = Field(default_factory=list)
 

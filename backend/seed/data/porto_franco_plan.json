@@ -1,33 +1,28 @@
 {
-  "plan_w": 2208.0,
-  "plan_h": 218.0,
-  "plan_minx": -30.0,
-  "plan_miny": -40.0,
-  "decor": {
-    "entranceRoad": {
-      "x": 0,
-      "y": 64.0,
-      "w": 2208.0,
-      "h": 70.0
-    },
-    "roundabout1": {
-      "cx": 397.44,
-      "cy": 99.0,
-      "r": 26
-    },
-    "roundabout2": {
-      "cx": 1766.4,
-      "cy": 99.0,
-      "r": 24
-    },
-    "lagoon": {
-      "cx": 1104.0,
-      "cy": 228.0,
-      "rx": 927.36,
-      "ry": 26
-    },
-    "river": []
-  },
-  "provisorio": true,
-  "provisorio_nota": "Layout esquematico gerado a partir da tabela de precos e dos renders aereos do empreendimento -- ainda NAO eh a planta tecnica georreferenciada. Trocar assim que a planta real (arquivo CAD/PDF do projeto aprovado) chegar."
+  "plan_w": 2000.0,
+  "plan_h": 751.0,
+  "plan_minx": 0.0,
+  "plan_miny": 0.0,
+  "plan_image_url": "/brand/porto-franco-planta.jpg",
+  "decor": null,
+  "plan_quadras": [
+    { "quadra": "1", "x": 1550, "y": 130, "w": 58, "h": 225 },
+    { "quadra": "2", "x": 1550, "y": 405, "w": 58, "h": 245 },
+    { "quadra": "3", "x": 1480, "y": 130, "w": 65, "h": 270 },
+    { "quadra": "4", "x": 1480, "y": 405, "w": 60, "h": 245 },
+    { "quadra": "5", "x": 1405, "y": 135, "w": 62, "h": 270 },
+    { "quadra": "6", "x": 1405, "y": 405, "w": 62, "h": 245 },
+    { "quadra": "7", "x": 1330, "y": 145, "w": 62, "h": 260 },
+    { "quadra": "8", "x": 1330, "y": 405, "w": 65, "h": 245 },
+    { "quadra": "9", "x": 1262, "y": 145, "w": 68, "h": 265 },
+    { "quadra": "10", "x": 1262, "y": 405, "w": 68, "h": 245 },
+    { "quadra": "11", "x": 1200, "y": 140, "w": 60, "h": 290 },
+    { "quadra": "12", "x": 1195, "y": 460, "w": 65, "h": 190 },
+    { "quadra": "13", "x": 1125, "y": 135, "w": 70, "h": 275 },
+    { "quadra": "14", "x": 1130, "y": 300, "w": 55, "h": 350 },
+    { "quadra": "15", "x": 1065, "y": 170, "w": 55, "h": 150 },
+    { "quadra": "16", "x": 1050, "y": 300, "w": 60, "h": 355 }
+  ],
+  "provisorio": false,
+  "provisorio_nota": "Planta tecnica real (planta baixa oficial recebida em 09/2026). As zonas clicaveis sao aproximadas por quadra (o PDF fonte foi exportado em imagem, sem vetor por lote individual) -- clicar em uma quadra filtra a lista de lotes daquela quadra."
 }

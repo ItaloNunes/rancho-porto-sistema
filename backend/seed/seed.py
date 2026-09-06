@@ -7,7 +7,7 @@ Rode uma vez depois de aplicar as migrations (supabase/migrations/*.sql):
     cp .env.example .env   # preencha SUPABASE_URL / SUPABASE_SERVICE_KEY
     python -m seed.seed
 
-É seguro rodar de novo: usa upsert por slug/quadra/lote_numero, não duplica.
+É seguro rodar de novo: usa upsert por slug/lote_numero, não duplica.
 """
 
 import json
@@ -41,6 +41,8 @@ def seed_condominio(slug: str, nome: str, incorporadora: str, cidade: str, segme
         "plan_minx": plan["plan_minx"],
         "plan_miny": plan["plan_miny"],
         "plan_decor": plan["decor"],
+        "plan_image_url": plan.get("plan_image_url"),
+        "plan_quadras": plan.get("plan_quadras"),
         "base_precos_em": base_precos_em,
     }
     existing = sb.table("condominios").select("id").eq("slug", slug).limit(1).execute().data

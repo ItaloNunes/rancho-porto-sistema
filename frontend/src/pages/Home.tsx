@@ -15,31 +15,26 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen grid grid-rows-[auto_1fr_auto]">
-      <header className="border-b border-border bg-surface">
+    <div className="min-h-screen grid grid-rows-[auto_1fr_auto] min-w-0">
+      <header className="border-b border-border bg-surface min-w-0">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 h-16 grid grid-cols-[1fr_auto] items-center gap-4">
-          <span className="text-[13px] font-semibold tracking-[.08em] text-ink uppercase">
-            Castel <span className="text-accent-dark">•</span> Construções e Incorporações
-          </span>
+          <img
+            src="/brand/castel-logo.png"
+            alt="Castel Construções e Incorporações"
+            className="h-8 sm:h-9 w-auto object-contain"
+          />
           <span className="hidden sm:block text-xs font-medium tracking-wide text-ink-soft uppercase">
             Catálogo de Empreendimentos
           </span>
         </div>
       </header>
 
-      <main>
+      <main className="min-w-0">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-14 sm:py-24">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold tracking-[.12em] text-accent-dark uppercase mb-4">
-              Selecione um empreendimento
-            </p>
-            <h1 className="text-[2rem] leading-[1.15] sm:text-4xl font-bold text-ink tracking-tight">
-              Planta, disponibilidade e condições de cada lote — atualizadas com a incorporadora.
+            <h1 className="text-[1.6rem] leading-[1.2] sm:text-3xl font-bold text-ink tracking-tight">
+              Escolha um empreendimento
             </h1>
-            <p className="text-ink-soft mt-4 text-[15px] leading-relaxed">
-              Escolha o empreendimento abaixo para navegar pela planta, filtrar lotes por status e
-              conferir área, valores e condições de pagamento.
-            </p>
           </div>
 
           {erro && (
@@ -60,11 +55,14 @@ export default function Home() {
         </div>
       </main>
 
-      <footer className="border-t border-border">
+      <footer className="border-t border-border min-w-0">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-6 text-xs text-ink-soft leading-relaxed">
           Este material tem caráter informativo. Confirme disponibilidade e condições diretamente
           com a imobiliária antes de formalizar qualquer negociação.
         </div>
+        <p className="text-center text-[10px] text-ink-soft/40 tracking-wide pb-4 select-none">
+          italonunesdev@proton.me
+        </p>
       </footer>
     </div>
   );
