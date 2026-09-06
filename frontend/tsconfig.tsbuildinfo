@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/DetalheLote.tsx","./src/components/ListaLotes.tsx","./src/components/PlantaSVG.tsx","./src/lib/api.ts","./src/pages/Condominio.tsx","./src/pages/Home.tsx"],"version":"5.9.3"}

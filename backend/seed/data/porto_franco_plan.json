@@ -1,0 +1,33 @@
+{
+  "plan_w": 2208.0,
+  "plan_h": 218.0,
+  "plan_minx": -30.0,
+  "plan_miny": -40.0,
+  "decor": {
+    "entranceRoad": {
+      "x": 0,
+      "y": 64.0,
+      "w": 2208.0,
+      "h": 70.0
+    },
+    "roundabout1": {
+      "cx": 397.44,
+      "cy": 99.0,
+      "r": 26
+    },
+    "roundabout2": {
+      "cx": 1766.4,
+      "cy": 99.0,
+      "r": 24
+    },
+    "lagoon": {
+      "cx": 1104.0,
+      "cy": 228.0,
+      "rx": 927.36,
+      "ry": 26
+    },
+    "river": []
+  },
+  "provisorio": true,
+  "provisorio_nota": "Layout esquematico gerado a partir da tabela de precos e dos renders aereos do empreendimento -- ainda NAO eh a planta tecnica georreferenciada. Trocar assim que a planta real (arquivo CAD/PDF do projeto aprovado) chegar."
+}
