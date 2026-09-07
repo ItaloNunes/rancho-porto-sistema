@@ -1,1 +1,7 @@
-{"rewrites":[{"source":"/(.*)","destination":"/index.html"}]}
+{
+  "rewrites": [
+    { "source": "/condominios/rancho-texas", "destination": "/og/rancho-texas.html" },
+    { "source": "/condominios/porto-franco", "destination": "/og/porto-franco.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

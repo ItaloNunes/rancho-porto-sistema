@@ -122,6 +122,18 @@ class ReservaCreate(BaseModel):
         return _valida_contato(v)
 
 
+class ReservaPublicaCreate(ReservaCreate):
+    """Pedido vindo do formulário público (sem login) — carrega, além dos
+    campos normais, dois sinais anti-spam que só fazem sentido nesse
+    contexto (ver backend/app/antispam.py): um honeypot (`website`, campo
+    escondido que só um bot preenche) e o instante em que o formulário foi
+    carregado (`carregado_em`, epoch em ms — usado pra rejeitar envios rápidos
+    demais pra terem sido digitados). Nenhum dos dois é salvo no banco."""
+
+    website: Optional[str] = None
+    carregado_em: Optional[int] = None
+
+
 class ReservaCreateInterna(ReservaCreate):
     """Criação manual de um pedido pelo painel (corretor/admin) — diferente do
     pedido público (POST /lotes/{id}/reservar), aqui quem cria escolhe o lote

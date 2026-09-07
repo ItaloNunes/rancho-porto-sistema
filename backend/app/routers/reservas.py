@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from ..antispam import checar_honeypot, checar_rate_limit, checar_tempo_minimo, client_ip
 from ..database import get_supabase
 from ..schemas import (
     Reserva,
     ReservaComLote,
-    ReservaCreate,
     ReservaCreateInterna,
+    ReservaPublicaCreate,
     ReservaStatusUpdate,
     ReservaUpdate,
 )
@@ -20,13 +21,18 @@ def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
 
 
 @router.post("/{lote_id}/reservar", response_model=Reserva)
-def reservar_lote(lote_id: str, payload: ReservaCreate):
+def reservar_lote(lote_id: str, payload: ReservaPublicaCreate, request: Request):
     """Pedido de reserva feito pelo cliente no catálogo público.
 
     Não é uma reserva confirmada: cria um pedido 'pendente' e marca o lote
     como 'reservado' para tirá-lo da vitrine enquanto a imobiliária confere
-    e formaliza (ou libera de volta, se cair).
+    e formaliza (ou libera de volta, se cair). Como não tem login, passa
+    antes pelas checagens anti-spam (ver ..antispam).
     """
+    checar_honeypot(payload.website)
+    checar_tempo_minimo(payload.carregado_em)
+    checar_rate_limit(client_ip(request))
+
     sb = get_supabase()
     lote = sb.table("lotes").select("*").eq("id", lote_id).limit(1).execute().data
     if not lote:
@@ -35,9 +41,10 @@ def reservar_lote(lote_id: str, payload: ReservaCreate):
     if lote["status"] != "disponivel":
         raise HTTPException(409, "Este lote não está mais disponível.")
 
+    dados = payload.model_dump(exclude={"website", "carregado_em"})
     reserva = (
         sb.table("reservas")
-        .insert({"lote_id": lote_id, **payload.model_dump()})
+        .insert({"lote_id": lote_id, **dados})
         .execute()
         .data[0]
     )

@@ -73,8 +73,10 @@ export const api = {
   // Catálogo público
   listarCondominios: () => request<CondominioResumo[]>("/condominios"),
   obterCondominio: (slug: string) => request<CondominioDetalhe>(`/condominios/${slug}`),
-  reservarLote: (loteId: string, payload: { nome?: string; contato: string; observacao?: string }) =>
-    request(`/lotes/${loteId}/reservar`, { method: "POST", body: JSON.stringify(payload) }),
+  reservarLote: (
+    loteId: string,
+    payload: { nome?: string; contato: string; observacao?: string; website?: string; carregado_em?: number },
+  ) => request(`/lotes/${loteId}/reservar`, { method: "POST", body: JSON.stringify(payload) }),
 
   // Painel — perfil de quem está logado
   meuPerfil: () => request<Corretor>("/crm/me", undefined, true),

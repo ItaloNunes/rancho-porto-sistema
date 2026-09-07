@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import type { CondominioDetalhe, LoteStatus, QuadraZona } from "../types";
 import PlantaSVG from "../components/PlantaSVG";
@@ -12,6 +12,7 @@ type StatusFiltro = "todos" | LoteStatus;
 
 export default function Condominio() {
   const { slug } = useParams<{ slug: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [condo, setCondo] = useState<CondominioDetalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [view, setView] = useState<View>("planta");
@@ -37,6 +38,28 @@ export default function Condominio() {
       .then(setCondo)
       .catch((e) => setErro(e.message));
   }, [slug]);
+
+  useEffect(() => {
+    // Deep link vindo de um "Compartilhar no WhatsApp" (ver DetalheLote.tsx):
+    // abre direto o modal do lote indicado assim que o condomínio carrega.
+    if (!condo) return;
+    const loteParam = searchParams.get("lote");
+    if (!loteParam) return;
+    const numero = Number(loteParam);
+    if (!Number.isNaN(numero) && condo.lotes.some((l) => l.lote_numero === numero)) {
+      setSelecionado(numero);
+    }
+    // Limpa a query pra não reabrir o modal se o usuário fechar e navegar de volta.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("lote");
+        return next;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [condo]);
 
   const filtrados = useMemo(() => {
     if (!condo) return [];
@@ -120,7 +143,7 @@ export default function Condominio() {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-5 py-2.5 text-sm font-medium transition-colors ${
+                className={`min-h-11 px-5 py-3 text-sm font-medium transition-colors active:scale-[0.98] ${
                   view === v ? "bg-primary text-white" : "bg-surface text-ink hover:bg-surface-alt"
                 }`}
               >
@@ -191,7 +214,7 @@ export default function Condominio() {
 
       {loteSelecionado && (
         <Modal onClose={() => setSelecionado(null)} labelledBy="lote-modal-title">
-          <DetalheLote lote={loteSelecionado} />
+          <DetalheLote lote={loteSelecionado} condominioNome={condo.nome} condominioSlug={condo.slug} />
         </Modal>
       )}
     </div>

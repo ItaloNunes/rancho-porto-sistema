@@ -18,11 +18,13 @@ export default function Home() {
     <div className="min-h-screen grid grid-rows-[auto_1fr_auto] min-w-0">
       <header className="border-b border-border bg-surface min-w-0">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 h-16 grid grid-cols-[1fr_auto] items-center gap-4">
-          <img
-            src="/brand/castel-logo.png"
-            alt="Castel Construções e Incorporações"
-            className="h-8 sm:h-9 w-auto object-contain"
-          />
+          <Link to="/" className="shrink-0 opacity-90 hover:opacity-100 transition-opacity">
+            <img
+              src="/brand/castel-logo.png"
+              alt="Castel Construções e Incorporações"
+              className="h-8 sm:h-9 w-auto object-contain"
+            />
+          </Link>
           <div className="flex items-center gap-4">
             <span className="hidden sm:block text-xs font-medium tracking-wide text-ink-soft uppercase">
               Catálogo de Empreendimentos

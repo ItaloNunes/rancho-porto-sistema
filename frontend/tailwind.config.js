@@ -30,11 +30,13 @@ export default {
         "fade-in": { from: { opacity: 0 }, to: { opacity: 1 } },
         "scale-in": { from: { opacity: 0, transform: "scale(.96)" }, to: { opacity: 1, transform: "scale(1)" } },
         "slide-up": { from: { transform: "translateY(100%)" }, to: { transform: "translateY(0)" } },
+        "slide-in-left": { from: { transform: "translateX(-100%)" }, to: { transform: "translateX(0)" } },
       },
       animation: {
         "fade-in": "fade-in .18s ease-out",
         "scale-in": "scale-in .18s cubic-bezier(.16,1,.3,1)",
         "slide-up": "slide-up .28s cubic-bezier(.16,1,.3,1)",
+        "slide-in-left": "slide-in-left .22s cubic-bezier(.16,1,.3,1)",
       },
     },
   },

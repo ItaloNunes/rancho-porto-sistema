@@ -34,18 +34,20 @@ export default function Login() {
       <div className="card w-full max-w-sm p-8">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-ink mb-6 -mt-1"
+          className="flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-ink mb-6 -mt-1"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
             <path d="M19 12H5M11 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Voltar ao catálogo
         </Link>
-        <img
-          src="/brand/castel-logo.png"
-          alt="Castel Construções e Incorporações"
-          className="h-9 w-auto object-contain mb-8"
-        />
+        <Link to="/" className="block w-fit opacity-90 hover:opacity-100 transition-opacity mb-8">
+          <img
+            src="/brand/castel-logo.png"
+            alt="Castel Construções e Incorporações"
+            className="h-9 w-auto object-contain"
+          />
+        </Link>
         <h1 className="text-xl font-bold text-ink mb-1">Painel interno</h1>
         <p className="text-sm text-ink-soft mb-6">Entre com o login que o administrador criou pra você.</p>
         <form onSubmit={onSubmit} className="grid gap-3">

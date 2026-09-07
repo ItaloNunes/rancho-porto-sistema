@@ -41,8 +41,8 @@ export default function Modal({
         <button
           onClick={onClose}
           aria-label="Fechar"
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full
-                     bg-surface-alt text-ink-soft hover:bg-border hover:text-ink transition-colors"
+          className="absolute right-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full
+                     bg-surface-alt text-ink-soft hover:bg-border hover:text-ink transition-colors active:scale-[0.96]"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
