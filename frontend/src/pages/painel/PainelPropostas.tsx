@@ -1,17 +1,25 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { api, formatMoney } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import type { Cliente, LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
 const STATUS_LABEL: Record<PropostaStatus, string> = {
   rascunho: "Rascunho",
+  aguardando_aprovacao: "Aguardando aprovação",
+  aprovada: "Aprovada",
   enviada: "Enviada",
   aceita: "Aceita",
   recusada: "Recusada",
   cancelada: "Cancelada",
 };
 
+/** Só a partir daqui o PDF em papel timbrado pode ser gerado — ver mesma
+ * regra no backend (routers/crm.py: gerar_pdf_proposta). */
+const STATUS_LIBERA_PDF: PropostaStatus[] = ["aprovada", "enviada", "aceita"];
+
 export default function PainelPropostas() {
+  const { perfil } = useAuth();
   const [propostas, setPropostas] = useState<PropostaDetalhe[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -35,6 +43,22 @@ export default function PainelPropostas() {
       recarregar();
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const [gerandoPdf, setGerandoPdf] = useState<string | null>(null);
+
+  async function abrirPdf(p: PropostaDetalhe) {
+    setGerandoPdf(p.id);
+    try {
+      const blob = await api.gerarPdfProposta(p.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGerandoPdf(null);
     }
   }
 
@@ -62,6 +86,7 @@ export default function PainelPropostas() {
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Valor proposto</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -77,11 +102,27 @@ export default function PainelPropostas() {
                       onChange={(e) => mudarStatus(p, e.target.value as PropostaStatus)}
                     >
                       {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                        <option key={v} value={v}>
+                        <option key={v} value={v} disabled={v === "aprovada" && perfil?.papel !== "admin"}>
                           {label}
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      className="text-primary text-xs font-medium hover:underline disabled:opacity-50"
+                      disabled={gerandoPdf === p.id || !p.lote || !p.cliente || !STATUS_LIBERA_PDF.includes(p.status)}
+                      title={
+                        !p.lote || !p.cliente
+                          ? "Proposta sem lote ou cliente vinculado"
+                          : !STATUS_LIBERA_PDF.includes(p.status)
+                            ? "Aguardando aprovação de um administrador"
+                            : undefined
+                      }
+                      onClick={() => abrirPdf(p)}
+                    >
+                      {gerandoPdf === p.id ? "Gerando..." : "gerar PDF"}
+                    </button>
                   </td>
                 </tr>
               ))}

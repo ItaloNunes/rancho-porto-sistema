@@ -1,11 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import get_supabase
-from ..schemas import Reserva, ReservaComLote, ReservaCreate, ReservaStatusUpdate
+from ..schemas import (
+    Reserva,
+    ReservaComLote,
+    ReservaCreate,
+    ReservaCreateInterna,
+    ReservaStatusUpdate,
+    ReservaUpdate,
+)
 from ..security import get_current_corretor
 
 router = APIRouter(prefix="/lotes", tags=["reservas"])
 admin_router = APIRouter(prefix="/reservas", tags=["reservas"])
+
+
+def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
+    return corretor["papel"] == "admin" or reserva.get("corretor_id") in (None, corretor["id"])
 
 
 @router.post("/{lote_id}/reservar", response_model=Reserva)
@@ -48,6 +59,59 @@ def listar_reservas(corretor: dict = Depends(get_current_corretor)):
     return query.execute().data
 
 
+@admin_router.post("", response_model=Reserva)
+def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_current_corretor)):
+    """Cria um pedido manualmente pelo painel (ex.: lead que chegou por telefone
+    ou WhatsApp, sem passar pelo formulário público)."""
+    sb = get_supabase()
+    lote = sb.table("lotes").select("id, status").eq("id", payload.lote_id).limit(1).execute().data
+    if not lote:
+        raise HTTPException(404, "Lote não encontrado.")
+    lote = lote[0]
+
+    data = payload.model_dump()
+    if corretor["papel"] != "admin":
+        data["corretor_id"] = corretor["id"]
+    reserva = sb.table("reservas").insert(data).execute().data[0]
+    if lote["status"] == "disponivel":
+        sb.table("lotes").update({"status": "reservado"}).eq("id", payload.lote_id).execute()
+    return reserva
+
+
+@admin_router.patch("/{reserva_id}", response_model=Reserva)
+def atualizar_reserva(reserva_id: str, payload: ReservaUpdate, corretor: dict = Depends(get_current_corretor)):
+    """Edita nome/contato/observação do pedido (o status muda só pelo endpoint abaixo)."""
+    sb = get_supabase()
+    existente = sb.table("reservas").select("*").eq("id", reserva_id).limit(1).execute().data
+    if not existente:
+        raise HTTPException(404, "Reserva não encontrada.")
+    existente = existente[0]
+    if not _pode_mexer_na_reserva(corretor, existente):
+        raise HTTPException(403, "Esta reserva é de outro corretor.")
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not updates:
+        return existente
+    return sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]
+
+
+@admin_router.delete("/{reserva_id}", status_code=204)
+def excluir_reserva(reserva_id: str, corretor: dict = Depends(get_current_corretor)):
+    """Remove o pedido definitivamente. Se o lote ainda estiver 'reservado' por
+    causa dele, libera de volta pra 'disponível' (mesmo efeito de cancelar)."""
+    sb = get_supabase()
+    existente = sb.table("reservas").select("*").eq("id", reserva_id).limit(1).execute().data
+    if not existente:
+        raise HTTPException(404, "Reserva não encontrada.")
+    existente = existente[0]
+    if not _pode_mexer_na_reserva(corretor, existente):
+        raise HTTPException(403, "Esta reserva é de outro corretor.")
+    sb.table("reservas").delete().eq("id", reserva_id).execute()
+    if existente["status"] != "cancelada":
+        lote = sb.table("lotes").select("status").eq("id", existente["lote_id"]).limit(1).execute().data
+        if lote and lote[0]["status"] == "reservado":
+            sb.table("lotes").update({"status": "disponivel"}).eq("id", existente["lote_id"]).execute()
+
+
 @admin_router.patch("/{reserva_id}/status", response_model=Reserva)
 def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corretor: dict = Depends(get_current_corretor)):
     """Confirma ou cancela um pedido de reserva.
@@ -62,7 +126,7 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
     if not reserva:
         raise HTTPException(404, "Reserva não encontrada.")
     reserva = reserva[0]
-    if corretor["papel"] != "admin" and reserva.get("corretor_id") not in (None, corretor["id"]):
+    if not _pode_mexer_na_reserva(corretor, reserva):
         raise HTTPException(403, "Esta reserva é de outro corretor.")
 
     updates: dict = {"status": payload.status}

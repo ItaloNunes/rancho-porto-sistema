@@ -8,19 +8,44 @@ const STATUS_LABEL: Record<string, string> = {
   vendido: "Vendido",
 };
 
+/** Mesma regra do backend (ver backend/app/schemas.py: _valida_contato) — só
+ * pra dar o feedback na hora, sem precisar de uma ida e volta ao servidor.
+ * A validação que vale de verdade é sempre a da API. */
+function validaContato(v: string): string | null {
+  const valor = v.trim();
+  if (!valor) return "Informe um telefone ou e-mail pra gente confirmar a reserva com você.";
+  if (valor.includes("@")) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valor) ? null : "E-mail inválido.";
+  }
+  const digitos = valor.replace(/\D/g, "");
+  return digitos.length >= 10 && digitos.length <= 11
+    ? null
+    : "Telefone inválido — informe o DDD + número (ex: (84) 99999-0000).";
+}
+
 export default function DetalheLote({ lote }: { lote: Lote }) {
   const [nome, setNome] = useState("");
   const [contato, setContato] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<"ok" | "erro" | null>(null);
+  const [erroContato, setErroContato] = useState<string | null>(null);
+  const [erroMsg, setErroMsg] = useState<string | null>(null);
 
   async function reservar() {
+    const problema = validaContato(contato);
+    if (problema) {
+      setErroContato(problema);
+      return;
+    }
+    setErroContato(null);
+    setErroMsg(null);
     setEnviando(true);
     setResultado(null);
     try {
-      await api.reservarLote(lote.id, { nome, contato });
+      await api.reservarLote(lote.id, { nome: nome || undefined, contato: contato.trim() });
       setResultado("ok");
-    } catch {
+    } catch (e) {
+      setErroMsg(e instanceof Error ? e.message : String(e));
       setResultado("erro");
     } finally {
       setEnviando(false);
@@ -70,20 +95,27 @@ export default function DetalheLote({ lote }: { lote: Lote }) {
                   />
                 </label>
                 <label className="grid gap-1.5">
-                  <span className="text-xs font-medium text-ink-soft">Telefone ou e-mail (opcional)</span>
+                  <span className="text-xs font-medium text-ink-soft">Telefone ou e-mail *</span>
                   <input
                     className="input"
                     value={contato}
-                    onChange={(e) => setContato(e.target.value)}
+                    onChange={(e) => {
+                      setContato(e.target.value);
+                      if (erroContato) setErroContato(null);
+                    }}
                     placeholder="ex: (84) 99999-0000"
+                    required
                   />
+                  {erroContato && <span className="text-rust text-xs">{erroContato}</span>}
                 </label>
               </div>
               <button className="btn btn-primary w-full mt-4" disabled={enviando} onClick={reservar}>
                 {enviando ? "Enviando..." : "Reservar este lote"}
               </button>
               {resultado === "erro" && (
-                <p className="text-rust text-xs mt-2">Não foi possível enviar o pedido. Tente novamente.</p>
+                <p className="text-rust text-xs mt-2">
+                  {erroMsg || "Não foi possível enviar o pedido. Tente novamente."}
+                </p>
               )}
               <p className="text-xs text-ink-soft mt-3 leading-relaxed">
                 Isso registra um pedido de reserva com a imobiliária — ela confirma a disponibilidade

@@ -8,9 +8,15 @@ const TABS_BASE = [
   { to: "/painel/lotes", label: "Lotes" },
 ];
 
+const TABS_ADMIN = [
+  { to: "/painel/visao-geral", label: "Visão geral" },
+  { to: "/painel/acompanhamento", label: "Acompanhamento" },
+  { to: "/painel/corretores", label: "Corretores" },
+];
+
 export default function PainelLayout() {
   const { perfil, sair } = useAuth();
-  const tabs = perfil?.papel === "admin" ? [...TABS_BASE, { to: "/painel/corretores", label: "Corretores" }] : TABS_BASE;
+  const tabs = perfil?.papel === "admin" ? [...TABS_BASE, ...TABS_ADMIN] : TABS_BASE;
 
   return (
     <div className="min-h-screen grid grid-rows-[auto_auto_1fr] min-w-0">

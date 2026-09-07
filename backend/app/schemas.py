@@ -1,10 +1,26 @@
+import re
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 LoteStatus = Literal["disponivel", "reservado", "vendido"]
-ReservaStatus = Literal["pendente", "confirmada", "cancelada"]
+ReservaStatus = Literal["pendente", "em_atendimento", "confirmada", "cancelada"]
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _valida_contato(v: str) -> str:
+    """Aceita telefone (com DDD, 10 ou 11 dígitos) ou e-mail — o que vier no
+    campo único "telefone ou e-mail" do formulário de reserva."""
+    if "@" in v:
+        if not _EMAIL_RE.match(v):
+            raise ValueError("E-mail inválido.")
+        return v
+    digitos = re.sub(r"\D", "", v)
+    if len(digitos) < 10 or len(digitos) > 11:
+        raise ValueError("Telefone inválido — informe o DDD + número (10 ou 11 dígitos).")
+    return v
 
 
 class CondominioResumo(BaseModel):
@@ -89,9 +105,54 @@ class LoteStatusUpdate(BaseModel):
 
 
 class ReservaCreate(BaseModel):
+    """Pedido de reserva feito pelo cliente no catálogo público — contato é
+    obrigatório (telefone ou e-mail) pra evitar leads sem nenhum jeito de
+    retorno; nome fica opcional."""
+
+    nome: Optional[str] = None
+    contato: str
+    observacao: Optional[str] = None
+
+    @field_validator("contato")
+    @classmethod
+    def _contato_obrigatorio(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Informe um telefone ou e-mail para contato.")
+        return _valida_contato(v)
+
+
+class ReservaCreateInterna(ReservaCreate):
+    """Criação manual de um pedido pelo painel (corretor/admin) — diferente do
+    pedido público (POST /lotes/{id}/reservar), aqui quem cria escolhe o lote
+    e o contato pode ficar em branco por enquanto (é o formulário público que
+    precisa garantir um jeito de retorno; internamente o corretor já sabe
+    quem é o lead)."""
+
+    lote_id: str
+    contato: Optional[str] = None
+
+    @field_validator("contato")
+    @classmethod
+    def _contato_opcional(cls, v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip() or None
+        return _valida_contato(v) if v else v
+
+
+class ReservaUpdate(BaseModel):
+    """Edição dos dados do pedido (não do status — ver ReservaStatusUpdate).
+    Contato aqui também é opcional (pode já estar preenchido, ou o corretor
+    só quer corrigir o nome) — mas se vier preenchido, precisa ser válido."""
+
     nome: Optional[str] = None
     contato: Optional[str] = None
     observacao: Optional[str] = None
+
+    @field_validator("contato")
+    @classmethod
+    def _contato_valido_se_preenchido(cls, v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip() or None
+        return _valida_contato(v) if v else v
 
 
 class Reserva(BaseModel):
@@ -127,7 +188,9 @@ class LoteComCondominio(Lote):
 # CRM: clientes/leads, corretores e propostas de compra e venda.
 # ---------------------------------------------------------------------------
 
-PropostaStatus = Literal["rascunho", "enviada", "aceita", "recusada", "cancelada"]
+PropostaStatus = Literal[
+    "rascunho", "aguardando_aprovacao", "aprovada", "enviada", "aceita", "recusada", "cancelada"
+]
 
 
 class ClienteCreate(BaseModel):
@@ -220,3 +283,22 @@ class Proposta(BaseModel):
 class PropostaDetalhe(Proposta):
     lote: Optional[Lote] = None
     cliente: Optional[Cliente] = None
+
+
+# ---------------------------------------------------------------------------
+# Visão geral (painel gerencial, só admin): números consolidados por
+# empreendimento — pra dashboard e pro relatório em PDF.
+# ---------------------------------------------------------------------------
+
+
+class VisaoGeralCondominio(BaseModel):
+    condominio_id: str
+    nome: str
+    slug: str
+    total_lotes: int
+    disponiveis: int
+    reservados: int
+    vendidos: int
+    valor_total_vendido: float
+    propostas_abertas: int
+    valor_em_propostas_abertas: float

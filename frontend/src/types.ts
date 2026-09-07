@@ -82,7 +82,14 @@ export interface Cliente {
   created_at: string;
 }
 
-export type PropostaStatus = "rascunho" | "enviada" | "aceita" | "recusada" | "cancelada";
+export type PropostaStatus =
+  | "rascunho"
+  | "aguardando_aprovacao"
+  | "aprovada"
+  | "enviada"
+  | "aceita"
+  | "recusada"
+  | "cancelada";
 
 export interface Proposta {
   id: string;
@@ -102,7 +109,7 @@ export interface PropostaDetalhe extends Proposta {
   cliente?: Cliente | null;
 }
 
-export type ReservaStatus = "pendente" | "confirmada" | "cancelada";
+export type ReservaStatus = "pendente" | "em_atendimento" | "confirmada" | "cancelada";
 
 export interface Reserva {
   id: string;
@@ -123,6 +130,19 @@ export interface ReservaComLote extends Reserva {
 export interface LoteComCondominio extends Lote {
   condominio_nome: string;
   condominio_slug: string;
+}
+
+export interface VisaoGeralCondominio {
+  condominio_id: string;
+  nome: string;
+  slug: string;
+  total_lotes: number;
+  disponiveis: number;
+  reservados: number;
+  vendidos: number;
+  valor_total_vendido: number;
+  propostas_abertas: number;
+  valor_em_propostas_abertas: number;
 }
 
 export interface CondominioDetalhe extends CondominioResumo {

@@ -14,6 +14,8 @@ import PainelCorretores from "./pages/painel/PainelCorretores";
 import PainelPropostas from "./pages/painel/PainelPropostas";
 import PainelReservas from "./pages/painel/PainelReservas";
 import PainelLotes from "./pages/painel/PainelLotes";
+import PainelAcompanhamento from "./pages/painel/PainelAcompanhamento";
+import PainelVisaoGeral from "./pages/painel/PainelVisaoGeral";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -38,6 +40,22 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="propostas" element={<PainelPropostas />} />
             <Route path="reservas" element={<PainelReservas />} />
             <Route path="lotes" element={<PainelLotes />} />
+            <Route
+              path="visao-geral"
+              element={
+                <RequireAuth adminOnly>
+                  <PainelVisaoGeral />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="acompanhamento"
+              element={
+                <RequireAuth adminOnly>
+                  <PainelAcompanhamento />
+                </RequireAuth>
+              }
+            />
             <Route
               path="corretores"
               element={

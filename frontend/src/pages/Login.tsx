@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 export default function Login() {
@@ -32,6 +32,15 @@ export default function Login() {
   return (
     <div className="min-h-screen grid place-items-center bg-bg px-6">
       <div className="card w-full max-w-sm p-8">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-ink mb-6 -mt-1"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M19 12H5M11 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Voltar ao catálogo
+        </Link>
         <img
           src="/brand/castel-logo.png"
           alt="Castel Construções e Incorporações"
