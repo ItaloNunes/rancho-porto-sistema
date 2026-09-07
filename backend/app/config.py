@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     notificacao_email: str = ""
     cors_origins: str = "http://localhost:5173"
+    # URL pública do frontend — usada só pra montar o link de "definir senha"
+    # dentro do e-mail de convite de um corretor novo.
+    frontend_url: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 

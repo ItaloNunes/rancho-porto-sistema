@@ -54,6 +54,77 @@ export interface QuadraZona {
   h: number;
 }
 
+// ---------------------------------------------------------------------------
+// Painel gerencial (CRM): corretores (logins), clientes/leads, propostas e
+// reservas. Só usado dentro de /painel (autenticado) — nunca no catálogo público.
+// ---------------------------------------------------------------------------
+
+export type Papel = "admin" | "corretor";
+
+export interface Corretor {
+  id: string;
+  nome: string;
+  email?: string | null;
+  telefone?: string | null;
+  papel: Papel;
+  ativo: boolean;
+}
+
+export interface Cliente {
+  id: string;
+  nome: string;
+  telefone?: string | null;
+  email?: string | null;
+  cpf?: string | null;
+  observacoes?: string | null;
+  origem?: string | null;
+  corretor_id?: string | null;
+  created_at: string;
+}
+
+export type PropostaStatus = "rascunho" | "enviada" | "aceita" | "recusada" | "cancelada";
+
+export interface Proposta {
+  id: string;
+  lote_id: string;
+  cliente_id: string;
+  corretor_id?: string | null;
+  valor_proposto: number;
+  condicoes_pagamento?: string | null;
+  status: PropostaStatus;
+  documento_url?: string | null;
+  observacoes?: string | null;
+  created_at: string;
+}
+
+export interface PropostaDetalhe extends Proposta {
+  lote?: Lote | null;
+  cliente?: Cliente | null;
+}
+
+export type ReservaStatus = "pendente" | "confirmada" | "cancelada";
+
+export interface Reserva {
+  id: string;
+  lote_id: string;
+  nome?: string | null;
+  contato?: string | null;
+  observacao?: string | null;
+  status: ReservaStatus;
+  cliente_id?: string | null;
+  corretor_id?: string | null;
+  created_at: string;
+}
+
+export interface ReservaComLote extends Reserva {
+  lote?: Lote | null;
+}
+
+export interface LoteComCondominio extends Lote {
+  condominio_nome: string;
+  condominio_slug: string;
+}
+
 export interface CondominioDetalhe extends CondominioResumo {
   plan_w?: number | null;
   plan_h?: number | null;

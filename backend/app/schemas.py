@@ -112,6 +112,15 @@ class ReservaComLote(Reserva):
 
 class ReservaStatusUpdate(BaseModel):
     status: ReservaStatus
+    corretor_id: Optional[str] = None
+
+
+class LoteComCondominio(Lote):
+    """Lote com o nome/slug do condomínio embutido — usado só na listagem
+    unificada do painel (ver GET /crm/lotes)."""
+
+    condominio_nome: str
+    condominio_slug: str
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +137,19 @@ class ClienteCreate(BaseModel):
     cpf: Optional[str] = None
     observacoes: Optional[str] = None
     origem: Optional[str] = None
+    corretor_id: Optional[str] = None
+
+
+class ClienteUpdate(BaseModel):
+    """Todos os campos opcionais: só entra na atualização o que vier preenchido."""
+
+    nome: Optional[str] = None
+    telefone: Optional[str] = None
+    email: Optional[str] = None
+    cpf: Optional[str] = None
+    observacoes: Optional[str] = None
+    origem: Optional[str] = None
+    corretor_id: Optional[str] = None
 
 
 class Cliente(ClienteCreate):
@@ -135,11 +157,29 @@ class Cliente(ClienteCreate):
     created_at: datetime
 
 
+Papel = Literal["admin", "corretor"]
+
+
+class CorretorCreate(BaseModel):
+    nome: str
+    email: str
+    telefone: Optional[str] = None
+    papel: Papel = "corretor"
+
+
+class CorretorUpdate(BaseModel):
+    nome: Optional[str] = None
+    telefone: Optional[str] = None
+    papel: Optional[Papel] = None
+    ativo: Optional[bool] = None
+
+
 class Corretor(BaseModel):
     id: str
     nome: str
     email: Optional[str] = None
     telefone: Optional[str] = None
+    papel: Papel = "corretor"
     ativo: bool = True
 
 
@@ -154,6 +194,14 @@ class PropostaCreate(BaseModel):
 
 class PropostaStatusUpdate(BaseModel):
     status: PropostaStatus
+
+
+class PropostaUpdate(BaseModel):
+    """Edição dos dados da proposta (não do status — ver PropostaStatusUpdate)."""
+
+    valor_proposto: Optional[float] = None
+    condicoes_pagamento: Optional[str] = None
+    observacoes: Optional[str] = None
 
 
 class Proposta(BaseModel):

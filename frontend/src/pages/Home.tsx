@@ -23,9 +23,14 @@ export default function Home() {
             alt="Castel Construções e Incorporações"
             className="h-8 sm:h-9 w-auto object-contain"
           />
-          <span className="hidden sm:block text-xs font-medium tracking-wide text-ink-soft uppercase">
-            Catálogo de Empreendimentos
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="hidden sm:block text-xs font-medium tracking-wide text-ink-soft uppercase">
+              Catálogo de Empreendimentos
+            </span>
+            <Link to="/painel" className="text-xs font-medium text-primary hover:text-primary-dark whitespace-nowrap">
+              Painel interno
+            </Link>
+          </div>
         </div>
       </header>
 
