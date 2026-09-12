@@ -264,6 +264,18 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
     elif corretor["papel"] != "admin":
         responsavel = corretor
 
+    dados_qualificacao = None
+    if proposta.get("formulario_id"):
+        form = (
+            sb.table("formularios_qualificacao")
+            .select("dados")
+            .eq("id", proposta["formulario_id"])
+            .limit(1)
+            .execute()
+            .data
+        )
+        dados_qualificacao = form[0]["dados"] if form else None
+
     pdf_bytes = gerar_proposta_pdf(
         proposta=proposta,
         lote=lote,
@@ -271,6 +283,7 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
         corretor=responsavel,
         condominio_nome=condominio_nome,
         gerado_por=corretor,
+        dados_qualificacao=dados_qualificacao,
     )
     nome_arquivo = f"proposta-{lote.get('identificador', proposta_id)}.pdf".replace(" ", "-")
     return Response(
