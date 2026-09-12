@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # URL pública do frontend — usada só pra montar o link de "definir senha"
     # dentro do e-mail de convite de um corretor novo.
     frontend_url: str = "http://localhost:5173"
+    # Documentação interativa da API (/docs, /redoc, /openapi.json) — desligada
+    # por padrão (segura por padrão): em produção não tem motivo pra deixar
+    # qualquer um ver a lista completa de rotas e formatos da API. Ligue só
+    # localmente (ENABLE_DOCS=true no seu .env), nunca no Render.
+    enable_docs: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
