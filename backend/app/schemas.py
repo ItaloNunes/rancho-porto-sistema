@@ -5,7 +5,9 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 LoteStatus = Literal["disponivel", "reservado", "vendido"]
-ReservaStatus = Literal["pendente", "em_atendimento", "confirmada", "cancelada"]
+ReservaStatus = Literal[
+    "pendente", "em_atendimento", "aguardando_qualificacao", "em_analise_financeira", "confirmada", "cancelada"
+]
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -85,6 +87,11 @@ class Lote(BaseModel):
     prazo_entrega_meses: Optional[int] = None
     status: LoteStatus
     poligono: list[list[float]]
+    # Só True depois que um admin marcou manualmente os cantos do lote sobre a
+    # planta real, na ferramenta do painel — até lá, `poligono` é apenas um
+    # placeholder de grade (ver migração 0008) e não deve ser desenhado como
+    # a forma real do lote.
+    poligono_definido: bool = False
     foto_url: Optional[str] = None
 
 
@@ -102,6 +109,15 @@ class CondominioDetalhe(CondominioResumo):
 
 class LoteStatusUpdate(BaseModel):
     status: LoteStatus
+
+
+class LotePoligonoUpdate(BaseModel):
+    """Marca manual dos cantos do lote sobre a planta real (ferramenta do
+    painel, admin) — mesmo espaço de coordenadas de CondominioDetalhe
+    (plan_w/plan_h/plan_minx/plan_miny). Lista vazia "desmarca" o lote (volta
+    a cair no fallback de zona por quadra)."""
+
+    poligono: list[list[float]]
 
 
 class ReservaCreate(BaseModel):
@@ -176,6 +192,7 @@ class Reserva(BaseModel):
     status: ReservaStatus
     cliente_id: Optional[str] = None
     corretor_id: Optional[str] = None
+    analise_prazo_em: Optional[datetime] = None
     created_at: datetime
 
 
@@ -284,6 +301,7 @@ class Proposta(BaseModel):
     lote_id: str
     cliente_id: str
     corretor_id: Optional[str] = None
+    formulario_id: Optional[str] = None
     valor_proposto: float
     condicoes_pagamento: Optional[str] = None
     status: PropostaStatus
@@ -314,3 +332,145 @@ class VisaoGeralCondominio(BaseModel):
     valor_total_vendido: float
     propostas_abertas: int
     valor_em_propostas_abertas: float
+
+
+# ---------------------------------------------------------------------------
+# Qualificação do cliente: o corretor reserva o lote, cadastra o cliente com
+# o mínimo (nome/telefone/CPF) e gera um link público. O cliente final
+# preenche, sem login, os mesmos campos da Proposta de Compra/Venda em papel
+# e anexa os documentos exigidos. Vai pra análise financeira manual no
+# painel — aprovado já gera a proposta.
+# ---------------------------------------------------------------------------
+
+QualificacaoStatus = Literal["aguardando_preenchimento", "em_analise", "aprovada", "reprovada"]
+EstadoCivil = Literal["solteiro", "casado", "viuvo", "divorciado", "outros"]
+DocumentoTipo = Literal[
+    "rg", "cpf", "comprovante_residencia", "certidao_nascimento_casamento",
+    "conjuge_rg", "conjuge_cpf", "comprovante_renda", "outro",
+]
+
+DOCUMENTOS_OBRIGATORIOS: tuple[DocumentoTipo, ...] = (
+    "rg", "cpf", "comprovante_residencia", "certidao_nascimento_casamento", "comprovante_renda",
+)
+# Exigidos só quando estado_civil == "casado" (ver _valida_documentos_obrigatorios em qualificacao.py).
+DOCUMENTOS_CONJUGE: tuple[DocumentoTipo, ...] = ("conjuge_rg", "conjuge_cpf")
+
+
+class EnderecoDados(BaseModel):
+    rua: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+
+
+class PessoaDados(BaseModel):
+    """Campos de identificação — usado tanto para o proponente quanto (se
+    casado) para o cônjuge, igual ao formulário em papel."""
+
+    nome: Optional[str] = None
+    rg: Optional[str] = None
+    orgao_expedidor: Optional[str] = None
+    cpf_cnpj: Optional[str] = None
+    data_nascimento: Optional[str] = None
+    nacionalidade: Optional[str] = None
+    email: Optional[str] = None
+    profissao: Optional[str] = None
+
+
+class FormaPagamentoDados(BaseModel):
+    a_vista: Optional[bool] = None
+    renda: Optional[str] = None
+    valor_proposto: Optional[float] = None
+    sinal: Optional[str] = None
+    sinal_cheque_numero: Optional[str] = None
+    sinal_banco: Optional[str] = None
+    sinal_agencia: Optional[str] = None
+    dividido_em_parcelas: Optional[int] = None
+    valor_parcela: Optional[str] = None
+    vencimento: Optional[str] = None
+    primeiro_mes: Optional[str] = None
+    intercaladas_valor: Optional[str] = None
+    intercaladas_vencimento_dia: Optional[str] = None
+    observacoes: Optional[str] = None
+
+
+class QualificacaoDados(BaseModel):
+    """Corpo completo do formulário público — guardado como JSON
+    (`formularios_qualificacao.dados`). Tudo opcional no schema porque o
+    cliente pode salvar parcialmente entre etapas; a validação de
+    "está completo o bastante pra enviar pra análise" é feita à parte, no
+    endpoint de envio final (ver qualificacao.py)."""
+
+    proponente: PessoaDados = Field(default_factory=PessoaDados)
+    estado_civil: Optional[EstadoCivil] = None
+    conjuge: Optional[PessoaDados] = None
+    endereco_residencial: EnderecoDados = Field(default_factory=EnderecoDados)
+    endereco_comercial: EnderecoDados = Field(default_factory=EnderecoDados)
+    telefone_residencial: Optional[str] = None
+    telefone_comercial: Optional[str] = None
+    telefone_celular: Optional[str] = None
+    telefone_recados: Optional[str] = None
+    falar_com: Optional[str] = None
+    forma_pagamento: FormaPagamentoDados = Field(default_factory=FormaPagamentoDados)
+
+
+class QualificacaoCreate(BaseModel):
+    """O corretor gera o link a partir de uma reserva existente — escolhendo
+    um cliente já cadastrado ou cadastrando um novo ali mesmo (mínimo:
+    nome/telefone/CPF)."""
+
+    cliente_id: Optional[str] = None
+    cliente_novo: Optional[ClienteCreate] = None
+
+
+class Qualificacao(BaseModel):
+    id: str
+    reserva_id: str
+    lote_id: str
+    cliente_id: str
+    corretor_id: Optional[str] = None
+    token: str
+    status: QualificacaoStatus
+    dados: dict = Field(default_factory=dict)
+    enviado_em: Optional[datetime] = None
+    analisado_em: Optional[datetime] = None
+    analisado_por: Optional[str] = None
+    motivo_reprovacao: Optional[str] = None
+    created_at: datetime
+
+
+class QualificacaoComRelacoes(Qualificacao):
+    lote: Optional[Lote] = None
+    cliente: Optional[Cliente] = None
+    corretor: Optional[Corretor] = None
+    documentos: list["DocumentoQualificacao"] = Field(default_factory=list)
+
+
+class DocumentoQualificacao(BaseModel):
+    id: str
+    formulario_id: str
+    tipo: DocumentoTipo
+    nome_arquivo: str
+    tamanho_bytes: Optional[int] = None
+    enviado_em: datetime
+
+
+class QualificacaoPublica(BaseModel):
+    """O que o cliente final vê ao abrir o link — só o necessário pra
+    preencher o formulário, nada de dados internos (corretor, ids de
+    outros clientes etc.)."""
+
+    status: QualificacaoStatus
+    dados: dict = Field(default_factory=dict)
+    documentos: list[DocumentoQualificacao] = Field(default_factory=list)
+    lote_identificador: str
+    condominio_nome: str
+    motivo_reprovacao: Optional[str] = None
+
+
+class QualificacaoDecisao(BaseModel):
+    aprovado: bool
+    motivo_reprovacao: Optional[str] = None

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import get_supabase
-from ..schemas import CondominioDetalhe, CondominioResumo, Lote, LoteStatusUpdate
-from ..security import get_current_corretor
+from ..schemas import CondominioDetalhe, CondominioResumo, Lote, LotePoligonoUpdate, LoteStatusUpdate
+from ..security import get_current_corretor, require_admin
 
 router = APIRouter(prefix="/condominios", tags=["condominios"])
 
@@ -57,5 +57,27 @@ def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, _corretor=Dep
         raise HTTPException(404, "Lote não encontrado.")
     updated = (
         sb.table("lotes").update({"status": payload.status}).eq("id", lote_id).execute().data
+    )
+    return updated[0]
+
+
+@router.patch("/lotes/{lote_id}/poligono", response_model=Lote)
+def atualizar_poligono_lote(lote_id: str, payload: LotePoligonoUpdate, _admin=Depends(require_admin)):
+    """Ferramenta de marcação manual (painel, só admin): salva os cantos do
+    lote traçados sobre a planta real. Só admin porque é uma tarefa de
+    configuração pontual, não uma ação de vendas do dia a dia. Lista vazia
+    "desmarca" o lote (poligono_definido volta a False)."""
+    sb = get_supabase()
+    existing = sb.table("lotes").select("id").eq("id", lote_id).limit(1).execute().data
+    if not existing:
+        raise HTTPException(404, "Lote não encontrado.")
+    if payload.poligono and len(payload.poligono) < 3:
+        raise HTTPException(422, "Um polígono precisa de pelo menos 3 pontos.")
+    updated = (
+        sb.table("lotes")
+        .update({"poligono": payload.poligono, "poligono_definido": bool(payload.poligono)})
+        .eq("id", lote_id)
+        .execute()
+        .data
     )
     return updated[0]

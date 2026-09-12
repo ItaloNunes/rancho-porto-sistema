@@ -121,7 +121,26 @@ class _CastelPDF(FPDF):
         self.set_y(-16)
         self.multi_cell(0, 4, self.RODAPE, align="C")
 
+    def _garante_espaco(self, altura: float):
+        """Quebra a página ANTES de desenhar, se o bloco não couber inteiro
+        no que resta dela — sem isso, uma `linha()`/`secao()` que estoura o
+        fim da página é cortada ao meio pela quebra automática do fpdf
+        (rótulo fica numa página, valor aparece sozinho na próxima)."""
+        if self.get_y() + altura > self.page_break_trigger:
+            self.add_page()
+
+    def _estima_linhas(self, texto: str, largura_mm: float) -> int:
+        """Estimativa (não exata) de quantas linhas um texto vai ocupar numa
+        coluna de `largura_mm`, só pra reservar altura suficiente antes de
+        desenhar — não precisa ser pixel-perfeito, só não subestimar muito."""
+        texto = str(texto or "")
+        if not texto:
+            return 1
+        caracteres_por_linha = max(int(largura_mm / 1.9), 10)
+        return max(1, -(-len(texto) // caracteres_por_linha))
+
     def secao(self, titulo: str):
+        self._garante_espaco(20)
         self.ln(3)
         self.set_font("Helvetica", "B", 10.5)
         self.set_text_color(*AZUL)
@@ -145,9 +164,15 @@ class _CastelPDF(FPDF):
 
     def linha(self, label1: str, valor1: str, label2: Optional[str] = None, valor2: Optional[str] = None):
         """Uma linha de campos (um ou dois lado a lado) e avança o cursor pro
-        próximo bloco, já contando o espaço que o texto ocupou."""
+        próximo bloco, já contando o espaço que o texto ocupou. Garante que
+        rótulo+valor sempre caem na mesma página (ver _garante_espaco)."""
+        largura1 = 88 if label2 else 180
+        n1 = self._estima_linhas(valor1, largura1)
+        n2 = self._estima_linhas(valor2, 85) if label2 else 0
+        self._garante_espaco(4.3 + max(n1, n2, 1) * 5 + 4)
+
         y0 = self.get_y()
-        self._rotulo_valor(15, y0, label1, valor1, 88 if label2 else 180)
+        self._rotulo_valor(15, y0, label1, valor1, largura1)
         y_fim = self.get_y()
         if label2:
             self._rotulo_valor(110, y0, label2, valor2 or "-", 85)
@@ -163,6 +188,57 @@ class _PropostaPDF(_CastelPDF):
     )
 
 
+ESTADO_CIVIL_LABEL = {
+    "solteiro": "Solteiro(a)",
+    "casado": "Casado(a)",
+    "viuvo": "Viúvo(a)",
+    "divorciado": "Divorciado(a)",
+    "outros": "Outros",
+}
+
+# Mesmo texto/condições exigidas do modelo em papel (Proposta de Compra/Venda
+# Castel, operada em conjunto com a JR Imóveis | A&S Imobiliária) — ver
+# painel-mudancas: adaptação do modelo real enviado pelo cliente.
+DISCLAIMER_PROPOSTA = (
+    "1. Todas as parcelas acima descritas serao corrigidas mensalmente pela variacao do INCC ate a entrega, "
+    "e apos a entrega do lote, pelo IGPM/FGV + 1% a.m. (um por cento ao mes) sobre o saldo devedor.\n"
+    "2. Esta proposta so sera aceita com copia legivel dos seguintes documentos: identidade (RG), CPF, "
+    "comprovante de residencia do proponente, certidao de nascimento ou casamento, comprovante de renda "
+    "e, em caso de casamento, os documentos do conjuge (RG e CPF).\n\n"
+    "Estou de pleno acordo com esta proposta e comprometo-me a mante-la nas condicoes dos dados acima mencionados."
+)
+
+RODAPE_JR_IMOVEIS = (
+    "JR IMOVEIS | A&S IMOBILIARIA\n"
+    "Av. Joao da Escossia, 176 - Jr Center - Nova Betania - Mossoro/RN - CEP: 59.607-330\n"
+    "Fones: (84) 3317-3493 / (84) 3312-4885 - www.jrcenter.com.br"
+)
+
+
+def _fmt_data_livre(v: Optional[str]) -> str:
+    """Datas do formulário do cliente podem chegar como 'YYYY-MM-DD' (input
+    date do navegador) ou já em texto livre — tenta o formato ISO primeiro,
+    cai pro texto puro se não bater."""
+    if not v:
+        return "-"
+    try:
+        return datetime.strptime(v[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+    except Exception:
+        return v
+
+
+def _endereco_linha1(end: dict) -> str:
+    partes = [end.get("rua"), end.get("complemento")]
+    return ", ".join(p for p in partes if p) or "-"
+
+
+def _cidade_uf(end: dict) -> str:
+    cidade, estado = end.get("cidade"), end.get("estado")
+    if cidade and estado:
+        return f"{cidade}/{estado}"
+    return cidade or estado or "-"
+
+
 def gerar_proposta_pdf(
     *,
     proposta: dict,
@@ -171,19 +247,73 @@ def gerar_proposta_pdf(
     corretor: Optional[dict],
     condominio_nome: str,
     gerado_por: Optional[dict] = None,
+    dados_qualificacao: Optional[dict] = None,
 ) -> bytes:
+    """Gera a Proposta de Compra/Venda em papel timbrado Castel (mantendo a
+    JR Imóveis | A&S Imobiliária, parceira nas vendas, no rodapé — igual ao
+    modelo em papel). Quando a proposta veio de uma qualificação de cliente
+    (formulário público preenchido + documentos), `dados_qualificacao` traz
+    todos os campos extras (RG, endereços, cônjuge, forma de pagamento
+    detalhada); sem isso, cai de volta pro resumo simples (proposta criada
+    manualmente pelo painel, sem qualificação)."""
+    dq = dados_qualificacao or {}
+    proponente = dq.get("proponente") or {}
+    conjuge = dq.get("conjuge") or {}
+    end_res = dq.get("endereco_residencial") or {}
+    end_com = dq.get("endereco_comercial") or {}
+    fp = dq.get("forma_pagamento") or {}
+    estado_civil = dq.get("estado_civil")
+
     pdf = _PropostaPDF(format="A4", unit="mm")
     pdf.EMISSOR = _fmt_emissor(gerado_por)
-    pdf.set_auto_page_break(auto=True, margin=24)
+    pdf.set_auto_page_break(auto=True, margin=26)
     pdf.add_page()
 
     pdf.secao("Empreendimento e lote")
     pdf.linha("Empreendimento", condominio_nome, "Lote", lote.get("identificador", "-"))
-    pdf.linha("Tamanho", _fmt_area(lote.get("tamanho_m2")))
+    pdf.linha("Quadra", lote.get("quadra") or "-", "Área", _fmt_area(lote.get("tamanho_m2")))
 
-    pdf.secao("Cliente")
-    pdf.linha("Nome", cliente.get("nome") or "-", "CPF", cliente.get("cpf") or "-")
-    pdf.linha("Contato", " · ".join(filter(None, [cliente.get("telefone"), cliente.get("email")])) or "-")
+    pdf.secao("Proponente")
+    pdf.linha(
+        "Nome", proponente.get("nome") or cliente.get("nome") or "-",
+        "CPF/CNPJ", proponente.get("cpf_cnpj") or cliente.get("cpf") or "-",
+    )
+    pdf.linha("RG", proponente.get("rg") or "-", "Órgão expedidor", proponente.get("orgao_expedidor") or "-")
+    if dq:
+        pdf.linha(
+            "Data de nascimento", _fmt_data_livre(proponente.get("data_nascimento")),
+            "Nacionalidade", proponente.get("nacionalidade") or "-",
+        )
+        pdf.linha("Profissão", proponente.get("profissao") or "-", "Estado civil", ESTADO_CIVIL_LABEL.get(estado_civil, "-"))
+    pdf.linha(
+        "E-mail", proponente.get("email") or cliente.get("email") or "-",
+        "Celular", dq.get("telefone_celular") or cliente.get("telefone") or "-",
+    )
+
+    if estado_civil == "casado":
+        pdf.secao("Cônjuge")
+        pdf.linha("Nome", conjuge.get("nome") or "-", "CPF/CNPJ", conjuge.get("cpf_cnpj") or "-")
+        pdf.linha("RG", conjuge.get("rg") or "-", "Órgão expedidor", conjuge.get("orgao_expedidor") or "-")
+        pdf.linha(
+            "Data de nascimento", _fmt_data_livre(conjuge.get("data_nascimento")),
+            "Nacionalidade", conjuge.get("nacionalidade") or "-",
+        )
+
+    if end_res.get("rua") or end_res.get("bairro"):
+        pdf.secao("Endereço residencial")
+        pdf.linha("Rua/Avenida", _endereco_linha1(end_res), "Nº", end_res.get("numero") or "-")
+        pdf.linha("Bairro", end_res.get("bairro") or "-", "Cidade/UF", _cidade_uf(end_res))
+        pdf.linha("CEP", end_res.get("cep") or "-")
+
+    if end_com.get("rua") or end_com.get("bairro"):
+        pdf.secao("Endereço comercial")
+        pdf.linha("Rua/Avenida", _endereco_linha1(end_com), "Nº", end_com.get("numero") or "-")
+        pdf.linha("Bairro", end_com.get("bairro") or "-", "Cidade/UF", _cidade_uf(end_com))
+
+    if dq.get("telefone_residencial") or dq.get("telefone_comercial") or dq.get("telefone_recados"):
+        pdf.secao("Outros contatos")
+        pdf.linha("Telefone residencial", dq.get("telefone_residencial") or "-", "Telefone comercial", dq.get("telefone_comercial") or "-")
+        pdf.linha("Telefone para recados", dq.get("telefone_recados") or "-", "Falar com", dq.get("falar_com") or "-")
 
     pdf.secao("Corretor responsável")
     if corretor:
@@ -198,42 +328,45 @@ def gerar_proposta_pdf(
         pdf.set_text_color(*CINZA)
         pdf.cell(0, 5, "Lead ainda sem corretor responsável definido.", new_x="LMARGIN", new_y="NEXT")
 
-    pdf.secao("Condições comerciais")
-    linhas = [
-        ("Valor de tabela do lote", _fmt_money(lote.get("valor_total"))),
-        ("Valor proposto", _fmt_money(proposta.get("valor_proposto"))),
-        ("Entrada (tabela)", _fmt_money(lote.get("entrada"))),
-        (
-            "Parcelamento (tabela)",
-            f"{lote.get('qtd_parcelas')}x de {_fmt_money(lote.get('parcela_mensal'))}"
-            if lote.get("qtd_parcelas")
-            else "-",
-        ),
-        ("Prazo de entrega", f"{lote['prazo_entrega_meses']} meses" if lote.get("prazo_entrega_meses") else "-"),
-        ("Condições de pagamento propostas", proposta.get("condicoes_pagamento") or "A combinar"),
-    ]
-    pdf.set_font("Helvetica", "", 10)
-    for i, (label, valor) in enumerate(linhas):
-        if i % 2 == 0:
-            pdf.set_fill_color(*CINZA_CLARO)
-            pdf.rect(15, pdf.get_y(), 180, 7.2, style="F")
-        pdf.set_font("Helvetica", "B", 9.5)
-        pdf.set_text_color(*AZUL)
-        pdf.set_x(17)
-        pdf.cell(85, 7.2, label, new_x="RIGHT", new_y="TOP")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(30, 30, 35)
-        pdf.cell(90, 7.2, str(valor), new_x="LMARGIN", new_y="NEXT")
+    pdf.secao("Forma de pagamento")
+    if dq:
+        a_vista = fp.get("a_vista")
+        pdf.linha(
+            "À vista", "Sim" if a_vista else ("Não" if a_vista is False else "-"),
+            "Renda informada", fp.get("renda") or "-",
+        )
+    pdf.linha("Valor de tabela do lote", _fmt_money(lote.get("valor_total")), "Valor proposto", _fmt_money(proposta.get("valor_proposto")))
+    if fp.get("sinal") or fp.get("sinal_banco"):
+        pdf.linha(
+            "Sinal", fp.get("sinal") or "-",
+            "Banco/Agência", " / ".join(p for p in [fp.get("sinal_banco"), fp.get("sinal_agencia")] if p) or "-",
+        )
+    if fp.get("dividido_em_parcelas"):
+        pdf.linha(
+            "Parcelas", f"{fp['dividido_em_parcelas']}x de {fp.get('valor_parcela') or '-'}",
+            "Vencimento", fp.get("vencimento") or "-",
+        )
+        if fp.get("primeiro_mes"):
+            pdf.linha("1ª parcela em", fp.get("primeiro_mes"))
+    if fp.get("intercaladas_valor"):
+        pdf.linha("Parcelas intercaladas", fp.get("intercaladas_valor"), "Dia de vencimento", fp.get("intercaladas_vencimento_dia") or "-")
+    pdf.linha("Condições de pagamento (resumo)", proposta.get("condicoes_pagamento") or "A combinar")
 
-    if proposta.get("observacoes"):
+    observacoes = " ".join(filter(None, [fp.get("observacoes"), proposta.get("observacoes")]))
+    if observacoes:
         pdf.secao("Observações")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(30, 30, 35)
-        pdf.multi_cell(0, 5.5, proposta["observacoes"])
+        pdf.multi_cell(0, 5.5, observacoes)
 
-    pdf.ln(14)
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*CINZA)
+    pdf.multi_cell(0, 4.1, DISCLAIMER_PROPOSTA)
+
+    pdf.ln(10)
     y = pdf.get_y()
-    if y > 250:
+    if y > 246:
         pdf.add_page()
         y = pdf.get_y() + 10
     pdf.set_draw_color(*CINZA)
@@ -243,9 +376,14 @@ def gerar_proposta_pdf(
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*CINZA)
     pdf.set_xy(20, y + 2)
-    pdf.cell(70, 5, "Corretor responsável", align="C")
+    pdf.cell(70, 5, "Proponente", align="C")
     pdf.set_xy(120, y + 2)
-    pdf.cell(70, 5, "Cliente", align="C")
+    pdf.cell(70, 5, "Imobiliária - CRECI", align="C")
+
+    pdf.ln(16)
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_text_color(*CINZA)
+    pdf.multi_cell(0, 3.6, RODAPE_JR_IMOVEIS, align="C")
 
     out = pdf.output()
     return bytes(out)

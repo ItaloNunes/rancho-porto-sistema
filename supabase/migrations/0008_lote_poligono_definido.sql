@@ -1,0 +1,17 @@
+-- Os dois empreendimentos reais (Rancho Texas, Porto Franco) usam o modo de
+-- "planta em imagem" (condominios.plan_image_url preenchido): a planta técnica
+-- real, não um SVG desenhado. Cada lote já tem uma coluna `poligono`, mas nesse
+-- modo ela hoje só guarda um retângulo-placeholder de layout de grade (não a
+-- forma real do lote na imagem) — não dá pra confiar nela pra pintar o status
+-- em cima da planta.
+--
+-- A extração automática do polígono real a partir do PDF da planta técnica se
+-- mostrou inviável (a camada de contorno dos lotes no PDF é composta de milhares
+-- de traços curtos e desconectados, não polilinhas fechadas) — ver decisão do
+-- produto. A solução é uma ferramenta no painel (admin) pra marcar manualmente
+-- os cantos de cada lote sobre a imagem, uma vez, salvando em `poligono`.
+--
+-- Esta flag existe só pra distinguir "poligono é o placeholder de grade" de
+-- "poligono foi de fato marcado sobre a planta real" — sem ela não dá pra
+-- saber, só olhando a coluna `poligono`, se o valor é confiável pra desenhar.
+alter table lotes add column if not exists poligono_definido boolean not null default false;

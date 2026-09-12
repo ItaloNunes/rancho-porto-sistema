@@ -37,6 +37,10 @@ export interface Lote {
   prazo_entrega_meses?: number | null;
   status: LoteStatus;
   poligono: number[][];
+  /** Só true depois que um admin marcou os cantos do lote na ferramenta do
+   * painel — até lá `poligono` é só um placeholder de grade (não representa
+   * a forma real do lote na planta em imagem). */
+  poligono_definido?: boolean;
   foto_url?: string | null;
 }
 
@@ -109,7 +113,13 @@ export interface PropostaDetalhe extends Proposta {
   cliente?: Cliente | null;
 }
 
-export type ReservaStatus = "pendente" | "em_atendimento" | "confirmada" | "cancelada";
+export type ReservaStatus =
+  | "pendente"
+  | "em_atendimento"
+  | "aguardando_qualificacao"
+  | "em_analise_financeira"
+  | "confirmada"
+  | "cancelada";
 
 export interface Reserva {
   id: string;
@@ -120,6 +130,9 @@ export interface Reserva {
   status: ReservaStatus;
   cliente_id?: string | null;
   corretor_id?: string | null;
+  /** Preenchido quando a reserva entra em "em_analise_financeira" (now + 48h) —
+   * só um alerta/contador no painel, ninguém libera o lote sozinho por causa disso. */
+  analise_prazo_em?: string | null;
   created_at: string;
 }
 
@@ -143,6 +156,148 @@ export interface VisaoGeralCondominio {
   valor_total_vendido: number;
   propostas_abertas: number;
   valor_em_propostas_abertas: number;
+}
+
+// ---------------------------------------------------------------------------
+// Qualificação do cliente final: reserva -> link público -> formulário em
+// etapas + documentos -> análise financeira manual -> aprova (gera proposta)
+// ou reprova. Ver backend/app/routers/qualificacao.py.
+// ---------------------------------------------------------------------------
+
+export type QualificacaoStatus = "aguardando_preenchimento" | "em_analise" | "aprovada" | "reprovada";
+export type EstadoCivil = "solteiro" | "casado" | "viuvo" | "divorciado" | "outros";
+export type DocumentoTipo =
+  | "rg"
+  | "cpf"
+  | "comprovante_residencia"
+  | "certidao_nascimento_casamento"
+  | "conjuge_rg"
+  | "conjuge_cpf"
+  | "comprovante_renda"
+  | "outro";
+
+export const DOCUMENTOS_OBRIGATORIOS: DocumentoTipo[] = [
+  "rg",
+  "cpf",
+  "comprovante_residencia",
+  "certidao_nascimento_casamento",
+  "comprovante_renda",
+];
+export const DOCUMENTOS_CONJUGE: DocumentoTipo[] = ["conjuge_rg", "conjuge_cpf"];
+
+export const DOCUMENTO_LABEL: Record<DocumentoTipo, string> = {
+  rg: "RG",
+  cpf: "CPF",
+  comprovante_residencia: "Comprovante de residência",
+  certidao_nascimento_casamento: "Certidão de nascimento ou casamento",
+  conjuge_rg: "RG do cônjuge",
+  conjuge_cpf: "CPF do cônjuge",
+  comprovante_renda: "Comprovante de renda",
+  outro: "Outro documento",
+};
+
+export interface EnderecoDados {
+  rua?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  cep?: string | null;
+}
+
+export interface PessoaDados {
+  nome?: string | null;
+  rg?: string | null;
+  orgao_expedidor?: string | null;
+  cpf_cnpj?: string | null;
+  data_nascimento?: string | null;
+  nacionalidade?: string | null;
+  email?: string | null;
+  profissao?: string | null;
+}
+
+export interface FormaPagamentoDados {
+  a_vista?: boolean | null;
+  renda?: string | null;
+  valor_proposto?: number | null;
+  sinal?: string | null;
+  sinal_cheque_numero?: string | null;
+  sinal_banco?: string | null;
+  sinal_agencia?: string | null;
+  dividido_em_parcelas?: number | null;
+  valor_parcela?: string | null;
+  vencimento?: string | null;
+  primeiro_mes?: string | null;
+  intercaladas_valor?: string | null;
+  intercaladas_vencimento_dia?: string | null;
+  observacoes?: string | null;
+}
+
+export interface QualificacaoDados {
+  proponente: PessoaDados;
+  estado_civil?: EstadoCivil | null;
+  conjuge?: PessoaDados | null;
+  endereco_residencial: EnderecoDados;
+  endereco_comercial: EnderecoDados;
+  telefone_residencial?: string | null;
+  telefone_comercial?: string | null;
+  telefone_celular?: string | null;
+  telefone_recados?: string | null;
+  falar_com?: string | null;
+  forma_pagamento: FormaPagamentoDados;
+}
+
+export function qualificacaoDadosVazio(): QualificacaoDados {
+  return {
+    proponente: {},
+    estado_civil: null,
+    conjuge: null,
+    endereco_residencial: {},
+    endereco_comercial: {},
+    forma_pagamento: {},
+  };
+}
+
+export interface DocumentoQualificacao {
+  id: string;
+  formulario_id: string;
+  tipo: DocumentoTipo;
+  nome_arquivo: string;
+  tamanho_bytes?: number | null;
+  enviado_em: string;
+}
+
+export interface Qualificacao {
+  id: string;
+  reserva_id: string;
+  lote_id: string;
+  cliente_id: string;
+  corretor_id?: string | null;
+  token: string;
+  status: QualificacaoStatus;
+  dados: Partial<QualificacaoDados>;
+  enviado_em?: string | null;
+  analisado_em?: string | null;
+  analisado_por?: string | null;
+  motivo_reprovacao?: string | null;
+  created_at: string;
+}
+
+export interface QualificacaoComRelacoes extends Qualificacao {
+  lote?: Lote | null;
+  cliente?: Cliente | null;
+  corretor?: Corretor | null;
+  documentos: DocumentoQualificacao[];
+}
+
+export interface QualificacaoPublica {
+  status: QualificacaoStatus;
+  dados: Partial<QualificacaoDados>;
+  documentos: DocumentoQualificacao[];
+  lote_identificador: string;
+  condominio_nome: string;
+  motivo_reprovacao?: string | null;
 }
 
 export interface CondominioDetalhe extends CondominioResumo {

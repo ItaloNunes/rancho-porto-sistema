@@ -7,6 +7,7 @@ const TABS_BASE = [
   { to: "/painel/clientes", label: "Clientes" },
   { to: "/painel/propostas", label: "Propostas" },
   { to: "/painel/reservas", label: "Reservas" },
+  { to: "/painel/qualificacoes", label: "Qualificações" },
   { to: "/painel/lotes", label: "Lotes" },
 ];
 
@@ -14,6 +15,7 @@ const TABS_ADMIN = [
   { to: "/painel/visao-geral", label: "Visão geral" },
   { to: "/painel/acompanhamento", label: "Acompanhamento" },
   { to: "/painel/corretores", label: "Corretores" },
+  { to: "/painel/plantas", label: "Marcar plantas" },
 ];
 
 // Intervalo de checagem do indicador de "reserva nova" na aba Reservas —
@@ -26,6 +28,7 @@ export default function PainelLayout() {
   const tabs = perfil?.papel === "admin" ? [...TABS_BASE, ...TABS_ADMIN] : TABS_BASE;
   const [menuAberto, setMenuAberto] = useState(false);
   const [reservasPendentes, setReservasPendentes] = useState(0);
+  const [qualificacoesPendentes, setQualificacoesPendentes] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
@@ -37,6 +40,14 @@ export default function PainelLayout() {
         })
         .catch(() => {
           /* falha silenciosa — é só um indicador, não vale interromper o painel por isso */
+        });
+      api
+        .listarQualificacoes()
+        .then((qs) => {
+          if (!cancelado) setQualificacoesPendentes(qs.filter((q) => q.status === "em_analise").length);
+        })
+        .catch(() => {
+          /* idem — falha silenciosa */
         });
     }
     carregar();
@@ -94,7 +105,7 @@ export default function PainelLayout() {
       <nav className="hidden sm:block border-b border-border bg-surface min-w-0 overflow-x-auto">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 flex gap-1">
           {tabs.map((t) => (
-            <TabLink key={t.to} to={t.to} label={t.label} badge={t.to === "/painel/reservas" ? reservasPendentes : 0} />
+            <TabLink key={t.to} to={t.to} label={t.label} badge={badgeDe(t.to, reservasPendentes, qualificacoesPendentes)} />
           ))}
         </div>
       </nav>
@@ -126,7 +137,7 @@ export default function PainelLayout() {
                   key={t.to}
                   to={t.to}
                   label={t.label}
-                  badge={t.to === "/painel/reservas" ? reservasPendentes : 0}
+                  badge={badgeDe(t.to, reservasPendentes, qualificacoesPendentes)}
                   vertical
                   onClick={() => setMenuAberto(false)}
                 />
@@ -147,6 +158,12 @@ export default function PainelLayout() {
       </main>
     </div>
   );
+}
+
+function badgeDe(to: string, reservasPendentes: number, qualificacoesPendentes: number): number {
+  if (to === "/painel/reservas") return reservasPendentes;
+  if (to === "/painel/qualificacoes") return qualificacoesPendentes;
+  return 0;
 }
 
 function TabLink({

@@ -4,12 +4,19 @@ import type {
   CondominioDetalhe,
   CondominioResumo,
   Corretor,
+  DocumentoQualificacao,
+  DocumentoTipo,
+  Lote,
   LoteComCondominio,
   LoteStatus,
   Papel,
   Proposta,
   PropostaDetalhe,
   PropostaStatus,
+  Qualificacao,
+  QualificacaoComRelacoes,
+  QualificacaoDados,
+  QualificacaoPublica,
   Reserva,
   ReservaComLote,
   ReservaStatus,
@@ -78,6 +85,27 @@ export const api = {
     payload: { nome?: string; contato: string; observacao?: string; website?: string; carregado_em?: number },
   ) => request(`/lotes/${loteId}/reservar`, { method: "POST", body: JSON.stringify(payload) }),
 
+  // Qualificação — link público que o cliente final preenche (sem login, só
+  // pela posse do token). Ver backend/app/routers/qualificacao.py.
+  abrirQualificacao: (token: string) => request<QualificacaoPublica>(`/qualificacao/${token}`),
+  salvarQualificacao: (token: string, dados: QualificacaoDados) =>
+    request<QualificacaoPublica>(`/qualificacao/${token}`, { method: "PATCH", body: JSON.stringify(dados) }),
+  enviarDocumentoQualificacao: async (token: string, tipo: DocumentoTipo, arquivo: File): Promise<DocumentoQualificacao> => {
+    const form = new FormData();
+    form.append("arquivo", arquivo);
+    const res = await fetch(`${API_URL}/qualificacao/${token}/documentos?tipo=${tipo}`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(extrairErro(body, `Erro ${res.status} ao enviar o documento`));
+    }
+    return res.json();
+  },
+  enviarQualificacaoParaAnalise: (token: string) =>
+    request<QualificacaoPublica>(`/qualificacao/${token}/enviar`, { method: "POST" }),
+
   // Painel — perfil de quem está logado
   meuPerfil: () => request<Corretor>("/crm/me", undefined, true),
 
@@ -85,6 +113,9 @@ export const api = {
   listarTodosLotes: () => request<LoteComCondominio[]>("/crm/lotes", undefined, true),
   atualizarStatusLote: (loteId: string, status: LoteStatus) =>
     request(`/condominios/lotes/${loteId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
+  // Painel — ferramenta de marcação manual dos lotes na planta real (só admin)
+  atualizarPoligonoLote: (loteId: string, poligono: number[][]) =>
+    request<Lote>(`/condominios/lotes/${loteId}/poligono`, { method: "PATCH", body: JSON.stringify({ poligono }) }, true),
 
   // Painel — corretores (logins); CRUD restrito a admin no backend
   listarCorretores: () => request<Corretor[]>("/crm/corretores", undefined, true),
@@ -128,6 +159,18 @@ export const api = {
   atualizarStatusReserva: (id: string, status: ReservaStatus) =>
     request<Reserva>(`/reservas/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
 
+  // Painel — qualificação do cliente final (link gerado a partir de uma reserva)
+  gerarLinkQualificacao: (
+    reservaId: string,
+    payload: { cliente_id?: string; cliente_novo?: Partial<Cliente> & { nome: string } },
+  ) => request<Qualificacao>(`/crm/qualificacoes/gerar/${reservaId}`, { method: "POST", body: JSON.stringify(payload) }, true),
+  listarQualificacoes: () => request<QualificacaoComRelacoes[]>("/crm/qualificacoes", undefined, true),
+  detalheQualificacao: (id: string) => request<QualificacaoComRelacoes>(`/crm/qualificacoes/${id}`, undefined, true),
+  baixarDocumentoQualificacao: (qualificacaoId: string, documentoId: string) =>
+    request<{ url: string }>(`/crm/qualificacoes/${qualificacaoId}/documentos/${documentoId}/arquivo`, undefined, true),
+  decidirQualificacao: (id: string, payload: { aprovado: boolean; motivo_reprovacao?: string | null }) =>
+    request<Qualificacao>(`/crm/qualificacoes/${id}/decisao`, { method: "PATCH", body: JSON.stringify(payload) }, true),
+
   // Painel — visão geral (só admin): números por empreendimento + relatório em PDF
   visaoGeral: () => request<VisaoGeralCondominio[]>("/crm/visao-geral", undefined, true),
   exportarVisaoGeralPdf: (condominioId?: string) =>
@@ -141,4 +184,15 @@ export function formatMoney(v?: number | null): string {
 
 export function formatArea(v: number): string {
   return `${v.toLocaleString("pt-BR")} m²`;
+}
+
+export function formatDateTime(v?: string | null): string {
+  if (!v) return "—";
+  return new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+/** Horas restantes (pode ser negativo — prazo vencido) até um prazo ISO. */
+export function horasRestantes(prazoIso?: string | null): number | null {
+  if (!prazoIso) return null;
+  return (new Date(prazoIso).getTime() - Date.now()) / 3_600_000;
 }

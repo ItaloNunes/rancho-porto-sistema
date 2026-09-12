@@ -190,6 +190,23 @@ export default function PlantaSVG({ condo, selecionado, onSelecionar, onSelecion
                     </g>
                   );
                 })}
+                {/* Lotes já marcados na ferramenta do painel (ver PainelPlantas) —
+                    pintados de verdade sobre a planta real, por cima da zona da
+                    quadra. Os que ainda não foram marcados continuam só com o
+                    hover de quadra acima. */}
+                {condo.lotes
+                  .filter((l) => l.poligono_definido && l.poligono.length >= 3)
+                  .map((l) => (
+                    <LotePolygon
+                      key={l.id}
+                      lote={l}
+                      selecionado={selecionado === l.lote_numero}
+                      hovered={hovered === l.lote_numero}
+                      onHover={setHovered}
+                      onSelecionar={onSelecionar}
+                      moved={() => drag.current.moved}
+                    />
+                  ))}
               </>
             ) : (
               <>
