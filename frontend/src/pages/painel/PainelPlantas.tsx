@@ -1,11 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
-import type { CondominioDetalhe, CondominioResumo, Lote } from "../../types";
+import type { CondominioDetalhe, CondominioResumo, Lote, QuadraZona } from "../../types";
 
 // 100% = exatamente a largura disponível (a planta cabe na tela sem rolar de
 // lado, celular ou computador). Zoom acima disso é pra ganhar precisão ao
 // marcar os cantos — aí sim é esperado rolar dentro da própria moldura.
 const ZOOMS = [100, 150, 200, 300];
+
+/** Acha a zona (plan_quadras) correspondente a um lote — mesma regra de
+ * casamento usada no catálogo público (ver QuadraZona no schemas.py): por
+ * `quadra` quando o empreendimento tem quadras reais (Porto Franco), ou por
+ * faixa `lote_min..lote_max` quando cada lote é sua própria "quadra"
+ * (Rancho Texas). Usada só pra AJUDAR a pessoa a achar visualmente onde
+ * clicar — não decide sozinha qual é o contorno do lote certo. */
+function zonaDoLote(lote: Lote, quadras: QuadraZona[] | null | undefined): QuadraZona | null {
+  if (!quadras) return null;
+  return (
+    quadras.find(
+      (z) =>
+        (z.quadra != null && z.quadra === lote.quadra) ||
+        (z.lote_min != null && z.lote_max != null && lote.lote_numero >= z.lote_min && lote.lote_numero <= z.lote_max)
+    ) ?? null
+  );
+}
 
 /** Candidatos de contorno pré-calculados por visão computacional a partir da
  * imagem raster da planta (script backend/scripts/gerar_candidatos_planta.py)
@@ -262,7 +279,10 @@ export default function PainelPlantas() {
                 </div>
               )}
               <select className="input !w-auto !py-1.5 !text-xs" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}>
-                {ZOOMS.map((z) => (
+                {/* Selecionar um lote ajusta o zoom sozinho pra achar a
+                    quadra dele (ver PlantaClicavel) — o valor pode não bater
+                    com nenhum destes presets, por isso ele entra na lista. */}
+                {(ZOOMS.includes(zoom) ? ZOOMS : [...ZOOMS, zoom].sort((a, b) => a - b)).map((z) => (
                   <option key={z} value={z}>
                     {z}%
                   </option>
@@ -276,6 +296,7 @@ export default function PainelPlantas() {
           <PlantaClicavel
             condo={condo}
             zoom={zoom}
+            setZoom={setZoom}
             loteAtualId={loteId}
             pontos={pontos}
             setPontos={setPontos}
@@ -347,6 +368,7 @@ export default function PainelPlantas() {
 function PlantaClicavel({
   condo,
   zoom,
+  setZoom,
   loteAtualId,
   pontos,
   setPontos,
@@ -355,6 +377,7 @@ function PlantaClicavel({
 }: {
   condo: CondominioDetalhe;
   zoom: number;
+  setZoom: (z: number) => void;
   loteAtualId: string | null;
   pontos: number[][];
   setPontos: (p: number[][]) => void;
@@ -383,6 +406,43 @@ function PlantaClicavel({
   }, []);
 
   const renderedWidth = (larguraDisponivel * zoom) / 100;
+
+  // Ao selecionar um lote, pré-localiza ele sozinho: dá zoom na quadra dele
+  // (usando plan_quadras — a mesma zona aproximada do catálogo público) e
+  // centraliza a rolagem ali, em vez de deixar a pessoa procurar visualmente
+  // entre centenas de lotes minúsculos numa planta de 100%. A IA só ajuda a
+  // CHEGAR perto — quem confirma qual contorno é o lote certo continua sendo
+  // a pessoa (clique manual ou automático, ver comentário lá em cima).
+  useEffect(() => {
+    if (!loteAtualId) return;
+    const lote = condo.lotes.find((l) => l.id === loteAtualId);
+    if (!lote) return;
+    const zona = zonaDoLote(lote, condo.plan_quadras);
+    if (!zona) return;
+
+    const FRACAO_ALVO = 0.42; // a quadra ocupa ~42% da largura visível da moldura
+    const ZOOM_MIN = 100;
+    const ZOOM_MAX = 900;
+    const zoomIdeal = Math.round(
+      Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (100 * FRACAO_ALVO * planW) / zona.w))
+    );
+    setZoom(zoomIdeal);
+
+    // Rolagem centralizada na zona: precisa do renderedWidth/Height JÁ com o
+    // zoom novo — calcula direto (não espera o próximo render) pra não
+    // "piscar" na posição antiga antes de centralizar.
+    const larguraNova = (larguraDisponivel * zoomIdeal) / 100;
+    const alturaNova = larguraNova * (planH / planW);
+    const cx = ((zona.x + zona.w / 2 - planMinX) / planW) * larguraNova;
+    const cy = ((zona.y + zona.h / 2 - planMinY) / planH) * alturaNova;
+    requestAnimationFrame(() => {
+      const el = molduraRef.current;
+      if (!el) return;
+      el.scrollLeft = cx - el.clientWidth / 2;
+      el.scrollTop = cy - el.clientHeight / 2;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loteAtualId]);
   const renderedHeight = renderedWidth * (planH / planW);
 
   function planParaPixel(p: number[]): [number, number] {
