@@ -1,8 +1,13 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .routers import condominios, crm, qualificacao, reservas
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Rancho Porto | Catálogo de Lotes",
@@ -22,6 +27,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def erro_inesperado(request: Request, exc: Exception):
+    """Sem isso, uma exceção não tratada (ex.: erro de query no Supabase)
+    "escapa" por fora do CORSMiddleware — o navegador recebe a resposta de
+    erro sem o header Access-Control-Allow-Origin, bloqueia ela por CORS, e
+    o fetch() do painel rejeita com "Failed to fetch" (sem mensagem nenhuma
+    pra saber o que houve, e sem sair do ar nem com o F5). Capturando aqui
+    devolve um 500 de verdade, com CORS, e uma mensagem legível."""
+    logger.exception("Erro não tratado em %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Erro interno no servidor. Tente novamente."})
+
 
 app.include_router(condominios.router)
 app.include_router(reservas.router)

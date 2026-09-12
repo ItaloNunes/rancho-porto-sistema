@@ -103,7 +103,7 @@ def gerar_link_qualificacao(
 def _carregar_qualificacao_completa(sb, qualificacao_id: str) -> dict:
     q = (
         sb.table("formularios_qualificacao")
-        .select("*, lote:lotes(*), cliente:clientes(*), corretor:corretores(*)")
+        .select("*, lote:lotes(*), cliente:clientes(*), corretor:corretores!corretor_id(*)")
         .eq("id", qualificacao_id)
         .limit(1)
         .execute()
@@ -129,7 +129,7 @@ def listar_qualificacoes(corretor: dict = Depends(get_current_corretor)):
     próprias (mesmo padrão de reservas/propostas)."""
     sb = get_supabase()
     query = sb.table("formularios_qualificacao").select(
-        "*, lote:lotes(*), cliente:clientes(*), corretor:corretores(*)"
+        "*, lote:lotes(*), cliente:clientes(*), corretor:corretores!corretor_id(*)"
     ).order("created_at", desc=True)
     if corretor["papel"] != "admin":
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
