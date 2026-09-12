@@ -21,6 +21,19 @@ export default function PainelLotes() {
   // de verdade no estoque).
   const [pendente, setPendente] = useState<{ lote: LoteComCondominio; novoStatus: LoteStatus } | null>(null);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  // Lote já VENDIDO é o estado mais "definitivo" da tabela — mudar ele pra
+  // qualquer outro status desfaz o registro de uma venda concluída. Por
+  // isso passa por uma verificação em 3 passos (não só um clique de
+  // confirmar): 1) aviso explícito, 2) digitar o identificador do lote de
+  // volta, 3) marcar que está ciente + botão final. `passo` avança só
+  // depois de cada etapa realmente cumprida.
+  const [desbloqueio, setDesbloqueio] = useState<{
+    lote: LoteComCondominio;
+    novoStatus: LoteStatus;
+    passo: 1 | 2 | 3;
+    digitado: string;
+    ciente: boolean;
+  } | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -43,6 +56,10 @@ export default function PainelLotes() {
 
   function selecionarStatus(l: LoteComCondominio, status: LoteStatus) {
     if (status === l.status) return;
+    if (l.status === "vendido") {
+      setDesbloqueio({ lote: l, novoStatus: status, passo: 1, digitado: "", ciente: false });
+      return;
+    }
     if (status === "reservado") {
       setPendente({ lote: l, novoStatus: status });
       return;
@@ -147,6 +164,102 @@ export default function PainelLotes() {
                 Sim, reservar este lote
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {desbloqueio && (
+        <Modal onClose={() => setDesbloqueio(null)} labelledBy="desbloquear-vendido-titulo">
+          <div className="p-6">
+            <h2 id="desbloquear-vendido-titulo" className="text-lg font-bold text-rust mb-2">
+              Esse lote está marcado como Vendido
+            </h2>
+            <p className="text-sm text-ink mb-4">
+              <span className="font-semibold">{desbloqueio.lote.identificador}</span>{" "}
+              <span className="text-ink-soft">— {desbloqueio.lote.condominio_nome}</span>
+            </p>
+
+            {desbloqueio.passo === 1 && (
+              <>
+                <p className="text-sm text-ink-soft mb-5">
+                  Mudar o status agora desfaz o registro de uma venda concluída. Isso pode afetar contrato,
+                  comissão e o que já foi informado ao cliente. Só continue se tiver certeza de que a venda
+                  não é mais válida.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setDesbloqueio(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-outline !text-xs !py-2 !border-rust !text-rust"
+                    onClick={() => setDesbloqueio({ ...desbloqueio, passo: 2 })}
+                  >
+                    Entendi, continuar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {desbloqueio.passo === 2 && (
+              <>
+                <p className="text-sm text-ink-soft mb-2">
+                  Pra confirmar, digite o identificador do lote exatamente como aparece na lista:
+                </p>
+                <p className="text-sm font-semibold text-ink mb-3">{desbloqueio.lote.identificador}</p>
+                <input
+                  autoFocus
+                  className="input mb-5"
+                  placeholder="Digite o identificador do lote"
+                  value={desbloqueio.digitado}
+                  onChange={(e) => setDesbloqueio({ ...desbloqueio, digitado: e.target.value })}
+                />
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setDesbloqueio(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-outline !text-xs !py-2 !border-rust !text-rust disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={desbloqueio.digitado.trim().toLowerCase() !== desbloqueio.lote.identificador.trim().toLowerCase()}
+                    onClick={() => setDesbloqueio({ ...desbloqueio, passo: 3 })}
+                  >
+                    Continuar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {desbloqueio.passo === 3 && (
+              <>
+                <p className="text-sm text-ink-soft mb-4">
+                  Última confirmação: o status vai mudar de <span className="font-semibold text-ink">Vendido</span>{" "}
+                  para <span className="font-semibold text-ink">{STATUS_LABEL[desbloqueio.novoStatus]}</span>.
+                </p>
+                <label className="flex items-start gap-2 text-sm text-ink mb-5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={desbloqueio.ciente}
+                    onChange={(e) => setDesbloqueio({ ...desbloqueio, ciente: e.target.checked })}
+                  />
+                  Estou ciente e quero desfazer essa venda mesmo assim.
+                </label>
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setDesbloqueio(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-primary !text-xs !py-2 !bg-rust disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={!desbloqueio.ciente}
+                    onClick={() => {
+                      mudarStatus(desbloqueio.lote, desbloqueio.novoStatus);
+                      setDesbloqueio(null);
+                    }}
+                  >
+                    Sim, mudar mesmo assim
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}
