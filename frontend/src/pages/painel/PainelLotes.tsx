@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import type { LoteComCondominio, LoteStatus } from "../../types";
+import Modal from "../../components/Modal";
 
 const STATUS_LABEL: Record<LoteStatus, string> = {
   disponivel: "Disponível",
@@ -12,6 +13,14 @@ export default function PainelLotes() {
   const [lotes, setLotes] = useState<LoteComCondominio[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
+  // Troca pra "Reservado" passa por uma confirmação antes de aplicar (pedido
+  // explícito — evita reservar um lote sem querer com um clique errado no
+  // select). `pendente` guarda a troca esperando confirmação; `salvandoId`
+  // é o lote com a troca em andamento (select trava e mostra "Salvando..."
+  // até o backend confirmar, pra não parecer que já mudou antes de mudar
+  // de verdade no estoque).
+  const [pendente, setPendente] = useState<{ lote: LoteComCondominio; novoStatus: LoteStatus } | null>(null);
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -21,12 +30,24 @@ export default function PainelLotes() {
   useEffect(recarregar, []);
 
   async function mudarStatus(l: LoteComCondominio, status: LoteStatus) {
+    setSalvandoId(l.id);
     try {
       await api.atualizarStatusLote(l.id, status);
       recarregar();
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSalvandoId(null);
     }
+  }
+
+  function selecionarStatus(l: LoteComCondominio, status: LoteStatus) {
+    if (status === l.status) return;
+    if (status === "reservado") {
+      setPendente({ lote: l, novoStatus: status });
+      return;
+    }
+    mudarStatus(l, status);
   }
 
   const filtrados = (lotes ?? []).filter(
@@ -67,23 +88,67 @@ export default function PainelLotes() {
                   <td className="px-4 py-3 font-medium text-ink">{l.identificador}</td>
                   <td className="px-4 py-3 text-ink-soft">{l.tamanho_m2.toLocaleString("pt-BR")} m²</td>
                   <td className="px-4 py-3">
-                    <select
-                      className="input !py-1.5 !text-xs w-auto"
-                      value={l.status}
-                      onChange={(e) => mudarStatus(l, e.target.value as LoteStatus)}
-                    >
-                      {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                        <option key={v} value={v}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                    {salvandoId === l.id ? (
+                      <span className="inline-flex items-center gap-2 text-xs text-ink-soft">
+                        <span
+                          className="h-3.5 w-3.5 rounded-full border-2 border-border border-t-primary animate-spin"
+                          aria-hidden="true"
+                        />
+                        Salvando...
+                      </span>
+                    ) : (
+                      <select
+                        className="input !py-1.5 !text-xs w-auto"
+                        value={l.status}
+                        disabled={salvandoId !== null}
+                        onChange={(e) => selecionarStatus(l, e.target.value as LoteStatus)}
+                      >
+                        {Object.entries(STATUS_LABEL).map(([v, label]) => (
+                          <option key={v} value={v}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {pendente && (
+        <Modal onClose={() => setPendente(null)} labelledBy="confirmar-reserva-titulo">
+          <div className="p-6">
+            <h2 id="confirmar-reserva-titulo" className="text-lg font-bold text-ink mb-2">
+              Confirmar reserva
+            </h2>
+            <p className="text-sm text-ink-soft mb-1">
+              Você está prestes a marcar o lote abaixo como <span className="font-semibold text-ink">Reservado</span>:
+            </p>
+            <p className="text-sm text-ink mb-5">
+              <span className="font-semibold">{pendente.lote.identificador}</span>{" "}
+              <span className="text-ink-soft">— {pendente.lote.condominio_nome}</span>
+              <br />
+              <span className="text-ink-soft">Status atual: {STATUS_LABEL[pendente.lote.status]}</span>
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-outline !text-xs !py-2" onClick={() => setPendente(null)}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary !text-xs !py-2"
+                onClick={() => {
+                  mudarStatus(pendente.lote, pendente.novoStatus);
+                  setPendente(null);
+                }}
+              >
+                Sim, reservar este lote
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
