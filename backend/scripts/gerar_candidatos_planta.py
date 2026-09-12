@@ -40,7 +40,7 @@ Uso:
   python backend/scripts/gerar_candidatos_planta.py rancho-texas \
       frontend/public/brand/rancho-texas-planta.jpg
   python backend/scripts/gerar_candidatos_planta.py porto-franco \
-      frontend/public/brand/porto-franco-planta.jpg
+      frontend/public/brand/porto-franco-planta.jpg --metodo grade
 
 Reprocessar é seguro: sobrescreve os dois arquivos de saída.
 """
@@ -57,8 +57,73 @@ AREA_MAX = 6000
 FILL_RATIO_MIN = 0.35
 EPS_FRACOES = [0.01, 0.02, 0.03, 0.05, 0.08]
 
+# Método "grade": usado em plantas organizadas em grade retangular (quadras
+# com lotes em fileiras, ex.: Porto Franco), a partir do render em alta
+# resolução do PDF fonte. Em vez de procurar contornos fechados diretamente
+# (método "contorno", abaixo — bom pra lotes orgânicos/radiais como Rancho
+# Texas), isola só as LINHAS RETAS longas da grade (ignorando texto e
+# cotas/números de medida, que são curtos) e reconstrói cada célula a partir
+# do cruzamento delas. Funciona bem pra fileiras retas; quadras de meio-fio
+# curvo/diagonal (testadas em Porto Franco) têm cobertura parcial e caem no
+# fallback manual — aceitável, igual ao método "contorno".
+GRADE_AREA_MIN = 800
+GRADE_AREA_MAX = 12000
+GRADE_KERNEL = 35
+GRADE_LIMIAR_BIN = 200
 
-def gerar(caminho_imagem: Path):
+
+def gerar_grade(caminho_imagem: Path):
+    img = cv2.imread(str(caminho_imagem))
+    if img is None:
+        raise SystemExit(f"Não consegui abrir a imagem: {caminho_imagem}")
+    h_img, w_img = img.shape[:2]
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, bw = cv2.threshold(gray, GRADE_LIMIAR_BIN, 255, cv2.THRESH_BINARY_INV)
+    horiz = cv2.erode(bw, cv2.getStructuringElement(cv2.MORPH_RECT, (GRADE_KERNEL, 1)), iterations=1)
+    horiz = cv2.dilate(horiz, cv2.getStructuringElement(cv2.MORPH_RECT, (GRADE_KERNEL, 1)), iterations=1)
+    vert = cv2.erode(bw, cv2.getStructuringElement(cv2.MORPH_RECT, (1, GRADE_KERNEL)), iterations=1)
+    vert = cv2.dilate(vert, cv2.getStructuringElement(cv2.MORPH_RECT, (1, GRADE_KERNEL)), iterations=1)
+    grade = cv2.bitwise_or(horiz, vert)
+    grade_d = cv2.dilate(grade, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
+    bg = cv2.bitwise_not(grade_d)
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(bg, connectivity=4)
+
+    mapa = np.zeros((h_img, w_img), dtype=np.int32)
+    poligonos: list[list[list[float]]] = []
+
+    for i in range(1, n):
+        area = stats[i, cv2.CC_STAT_AREA]
+        x, y, w, h = (
+            stats[i, cv2.CC_STAT_LEFT],
+            stats[i, cv2.CC_STAT_TOP],
+            stats[i, cv2.CC_STAT_WIDTH],
+            stats[i, cv2.CC_STAT_HEIGHT],
+        )
+        if not (GRADE_AREA_MIN <= area <= GRADE_AREA_MAX):
+            continue
+        if x <= 1 or y <= 1 or x + w >= w_img - 1 or y + h >= h_img - 1:
+            continue
+
+        mask = (labels == i).astype(np.uint8) * 255
+        contornos, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contornos:
+            continue
+        c = max(contornos, key=cv2.contourArea)
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+        if len(approx) < 3:
+            continue
+
+        idx = len(poligonos) + 1
+        poligonos.append([[float(p[0][0]), float(p[0][1])] for p in approx])
+        cv2.drawContours(mapa, [approx], -1, idx, thickness=-1)
+
+    return mapa, poligonos
+
+
+def gerar_contorno(caminho_imagem: Path):
     img = cv2.imread(str(caminho_imagem))
     if img is None:
         raise SystemExit(f"Não consegui abrir a imagem: {caminho_imagem}")
@@ -116,6 +181,12 @@ def gerar(caminho_imagem: Path):
     return mapa, poligonos
 
 
+def gerar(caminho_imagem: Path, metodo: str = "contorno"):
+    if metodo == "grade":
+        return gerar_grade(caminho_imagem)
+    return gerar_contorno(caminho_imagem)
+
+
 def salvar(slug: str, mapa: np.ndarray, poligonos: list, saida_dir: Path):
     h, w = mapa.shape
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
@@ -129,8 +200,13 @@ def salvar(slug: str, mapa: np.ndarray, poligonos: list, saida_dir: Path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        raise SystemExit("uso: gerar_candidatos_planta.py <slug> <caminho-da-imagem.jpg>")
+    if len(sys.argv) not in (3, 5):
+        raise SystemExit(
+            "uso: gerar_candidatos_planta.py <slug> <caminho-da-imagem.jpg> [--metodo contorno|grade]"
+        )
     slug, caminho = sys.argv[1], Path(sys.argv[2])
-    mapa, poligonos = gerar(caminho)
+    metodo = "contorno"
+    if len(sys.argv) == 5 and sys.argv[3] == "--metodo":
+        metodo = sys.argv[4]
+    mapa, poligonos = gerar(caminho, metodo)
     salvar(slug, mapa, poligonos, Path("frontend/public/brand"))

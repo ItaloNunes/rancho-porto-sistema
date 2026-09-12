@@ -2,7 +2,7 @@
   {
     "quadra": "1",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 1",
     "tamanho_m2": 233.64,
     "valor_total": 105126.32,
     "entrada": 10512.63,
@@ -32,7 +32,7 @@
   {
     "quadra": "1",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 1",
     "tamanho_m2": 235.31,
     "valor_total": 105877.73,
     "entrada": 10587.77,
@@ -62,7 +62,7 @@
   {
     "quadra": "1",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 1",
     "tamanho_m2": 236.99,
     "valor_total": 106633.65,
     "entrada": 10663.37,
@@ -92,7 +92,7 @@
   {
     "quadra": "1",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 1",
     "tamanho_m2": 238.67,
     "valor_total": 107389.57,
     "entrada": 10738.96,
@@ -122,7 +122,7 @@
   {
     "quadra": "1",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 1",
     "tamanho_m2": 240.39,
     "valor_total": 108163.48,
     "entrada": 10816.35,
@@ -152,7 +152,7 @@
   {
     "quadra": "1",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 1",
     "tamanho_m2": 242.31,
     "valor_total": 109027.38,
     "entrada": 10902.74,
@@ -182,7 +182,7 @@
   {
     "quadra": "1",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 1",
     "tamanho_m2": 244.4,
     "valor_total": 109967.78,
     "entrada": 10996.78,
@@ -212,7 +212,7 @@
   {
     "quadra": "1",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 1",
     "tamanho_m2": 246.48,
     "valor_total": 110903.68,
     "entrada": 11090.37,
@@ -242,7 +242,7 @@
   {
     "quadra": "1",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 1",
     "tamanho_m2": 248.56,
     "valor_total": 111839.57,
     "entrada": 11183.96,
@@ -272,7 +272,7 @@
   {
     "quadra": "1",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 1",
     "tamanho_m2": 250.65,
     "valor_total": 112779.97,
     "entrada": 11278.0,
@@ -302,7 +302,7 @@
   {
     "quadra": "1",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 1",
     "tamanho_m2": 252.73,
     "valor_total": 113715.86,
     "entrada": 11371.59,
@@ -332,7 +332,7 @@
   {
     "quadra": "1",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 1",
     "tamanho_m2": 254.79,
     "valor_total": 114642.76,
     "entrada": 11464.28,
@@ -362,7 +362,7 @@
   {
     "quadra": "1",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 1",
     "tamanho_m2": 256.63,
     "valor_total": 115470.67,
     "entrada": 11547.07,
@@ -392,7 +392,7 @@
   {
     "quadra": "1",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 1",
     "tamanho_m2": 258.3,
     "valor_total": 116222.09,
     "entrada": 11622.21,
@@ -422,7 +422,7 @@
   {
     "quadra": "1",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 1",
     "tamanho_m2": 259.98,
     "valor_total": 116978.0,
     "entrada": 11697.8,
@@ -452,7 +452,7 @@
   {
     "quadra": "1",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 1",
     "tamanho_m2": 261.65,
     "valor_total": 117729.42,
     "entrada": 11772.94,
@@ -482,7 +482,7 @@
   {
     "quadra": "1",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 1",
     "tamanho_m2": 263.32,
     "valor_total": 118480.83,
     "entrada": 11848.08,
@@ -512,7 +512,7 @@
   {
     "quadra": "1",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 1",
     "tamanho_m2": 264.99,
     "valor_total": 119232.25,
     "entrada": 11923.23,
@@ -542,7 +542,7 @@
   {
     "quadra": "1",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 1",
     "tamanho_m2": 249.07,
     "valor_total": 112069.05,
     "entrada": 11206.9,
@@ -572,7 +572,7 @@
   {
     "quadra": "1",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 1",
     "tamanho_m2": 350.31,
     "valor_total": 157621.98,
     "entrada": 15762.2,
@@ -602,7 +602,7 @@
   {
     "quadra": "3",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 3",
     "tamanho_m2": 225.21,
     "valor_total": 101333.24,
     "entrada": 10133.32,
@@ -632,7 +632,7 @@
   {
     "quadra": "3",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -662,7 +662,7 @@
   {
     "quadra": "3",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -692,7 +692,7 @@
   {
     "quadra": "3",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -722,7 +722,7 @@
   {
     "quadra": "3",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -752,7 +752,7 @@
   {
     "quadra": "3",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -782,7 +782,7 @@
   {
     "quadra": "3",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -812,7 +812,7 @@
   {
     "quadra": "3",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -842,7 +842,7 @@
   {
     "quadra": "3",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -872,7 +872,7 @@
   {
     "quadra": "3",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -902,7 +902,7 @@
   {
     "quadra": "3",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -932,7 +932,7 @@
   {
     "quadra": "3",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -962,7 +962,7 @@
   {
     "quadra": "3",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -992,7 +992,7 @@
   {
     "quadra": "3",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1022,7 +1022,7 @@
   {
     "quadra": "3",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1052,7 +1052,7 @@
   {
     "quadra": "3",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1082,7 +1082,7 @@
   {
     "quadra": "3",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1112,7 +1112,7 @@
   {
     "quadra": "3",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1142,7 +1142,7 @@
   {
     "quadra": "3",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1172,7 +1172,7 @@
   {
     "quadra": "3",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1202,7 +1202,7 @@
   {
     "quadra": "3",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 3",
     "tamanho_m2": 214.86,
     "valor_total": 96676.26,
     "entrada": 9667.63,
@@ -1232,7 +1232,7 @@
   {
     "quadra": "3",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 3",
     "tamanho_m2": 202.08,
     "valor_total": 90925.9,
     "entrada": 9092.59,
@@ -1262,7 +1262,7 @@
   {
     "quadra": "3",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 3",
     "tamanho_m2": 256.7,
     "valor_total": 115502.17,
     "entrada": 11550.22,
@@ -1292,7 +1292,7 @@
   {
     "quadra": "3",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 3",
     "tamanho_m2": 224.98,
     "valor_total": 101229.75,
     "entrada": 10122.98,
@@ -1322,7 +1322,7 @@
   {
     "quadra": "3",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1352,7 +1352,7 @@
   {
     "quadra": "3",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1382,7 +1382,7 @@
   {
     "quadra": "3",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1412,7 +1412,7 @@
   {
     "quadra": "3",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1442,7 +1442,7 @@
   {
     "quadra": "3",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1472,7 +1472,7 @@
   {
     "quadra": "3",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1502,7 +1502,7 @@
   {
     "quadra": "3",
     "lote_numero": 31,
-    "identificador": "LOTE 31",
+    "identificador": "LOTE 31 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1532,7 +1532,7 @@
   {
     "quadra": "3",
     "lote_numero": 32,
-    "identificador": "LOTE 32",
+    "identificador": "LOTE 32 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1562,7 +1562,7 @@
   {
     "quadra": "3",
     "lote_numero": 33,
-    "identificador": "LOTE 33",
+    "identificador": "LOTE 33 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1592,7 +1592,7 @@
   {
     "quadra": "3",
     "lote_numero": 34,
-    "identificador": "LOTE 34",
+    "identificador": "LOTE 34 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1622,7 +1622,7 @@
   {
     "quadra": "3",
     "lote_numero": 35,
-    "identificador": "LOTE 35",
+    "identificador": "LOTE 35 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1652,7 +1652,7 @@
   {
     "quadra": "3",
     "lote_numero": 36,
-    "identificador": "LOTE 36",
+    "identificador": "LOTE 36 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1682,7 +1682,7 @@
   {
     "quadra": "3",
     "lote_numero": 37,
-    "identificador": "LOTE 37",
+    "identificador": "LOTE 37 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1712,7 +1712,7 @@
   {
     "quadra": "3",
     "lote_numero": 38,
-    "identificador": "LOTE 38",
+    "identificador": "LOTE 38 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1742,7 +1742,7 @@
   {
     "quadra": "3",
     "lote_numero": 39,
-    "identificador": "LOTE 39",
+    "identificador": "LOTE 39 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1772,7 +1772,7 @@
   {
     "quadra": "3",
     "lote_numero": 40,
-    "identificador": "LOTE 40",
+    "identificador": "LOTE 40 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1802,7 +1802,7 @@
   {
     "quadra": "3",
     "lote_numero": 41,
-    "identificador": "LOTE 41",
+    "identificador": "LOTE 41 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1832,7 +1832,7 @@
   {
     "quadra": "3",
     "lote_numero": 42,
-    "identificador": "LOTE 42",
+    "identificador": "LOTE 42 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1862,7 +1862,7 @@
   {
     "quadra": "3",
     "lote_numero": 43,
-    "identificador": "LOTE 43",
+    "identificador": "LOTE 43 - QUADRA 3",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1892,7 +1892,7 @@
   {
     "quadra": "5",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1922,7 +1922,7 @@
   {
     "quadra": "5",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1952,7 +1952,7 @@
   {
     "quadra": "5",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -1982,7 +1982,7 @@
   {
     "quadra": "5",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2012,7 +2012,7 @@
   {
     "quadra": "5",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2042,7 +2042,7 @@
   {
     "quadra": "5",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2072,7 +2072,7 @@
   {
     "quadra": "5",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2102,7 +2102,7 @@
   {
     "quadra": "5",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2132,7 +2132,7 @@
   {
     "quadra": "5",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2162,7 +2162,7 @@
   {
     "quadra": "5",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2192,7 +2192,7 @@
   {
     "quadra": "5",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2222,7 +2222,7 @@
   {
     "quadra": "5",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2252,7 +2252,7 @@
   {
     "quadra": "5",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2282,7 +2282,7 @@
   {
     "quadra": "5",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2312,7 +2312,7 @@
   {
     "quadra": "5",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2342,7 +2342,7 @@
   {
     "quadra": "5",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2372,7 +2372,7 @@
   {
     "quadra": "5",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2402,7 +2402,7 @@
   {
     "quadra": "5",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2432,7 +2432,7 @@
   {
     "quadra": "5",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2462,7 +2462,7 @@
   {
     "quadra": "5",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2492,7 +2492,7 @@
   {
     "quadra": "5",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2522,7 +2522,7 @@
   {
     "quadra": "5",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2552,7 +2552,7 @@
   {
     "quadra": "5",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2582,7 +2582,7 @@
   {
     "quadra": "5",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2612,7 +2612,7 @@
   {
     "quadra": "5",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2642,7 +2642,7 @@
   {
     "quadra": "5",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2672,7 +2672,7 @@
   {
     "quadra": "5",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2702,7 +2702,7 @@
   {
     "quadra": "5",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2732,7 +2732,7 @@
   {
     "quadra": "5",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2762,7 +2762,7 @@
   {
     "quadra": "5",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2792,7 +2792,7 @@
   {
     "quadra": "5",
     "lote_numero": 31,
-    "identificador": "LOTE 31",
+    "identificador": "LOTE 31 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2822,7 +2822,7 @@
   {
     "quadra": "5",
     "lote_numero": 32,
-    "identificador": "LOTE 32",
+    "identificador": "LOTE 32 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2852,7 +2852,7 @@
   {
     "quadra": "5",
     "lote_numero": 33,
-    "identificador": "LOTE 33",
+    "identificador": "LOTE 33 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2882,7 +2882,7 @@
   {
     "quadra": "5",
     "lote_numero": 34,
-    "identificador": "LOTE 34",
+    "identificador": "LOTE 34 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2912,7 +2912,7 @@
   {
     "quadra": "5",
     "lote_numero": 35,
-    "identificador": "LOTE 35",
+    "identificador": "LOTE 35 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2942,7 +2942,7 @@
   {
     "quadra": "5",
     "lote_numero": 36,
-    "identificador": "LOTE 36",
+    "identificador": "LOTE 36 - QUADRA 5",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -2972,7 +2972,7 @@
   {
     "quadra": "7",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3002,7 +3002,7 @@
   {
     "quadra": "7",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3032,7 +3032,7 @@
   {
     "quadra": "7",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3062,7 +3062,7 @@
   {
     "quadra": "7",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3092,7 +3092,7 @@
   {
     "quadra": "7",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3122,7 +3122,7 @@
   {
     "quadra": "7",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3152,7 +3152,7 @@
   {
     "quadra": "7",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3182,7 +3182,7 @@
   {
     "quadra": "7",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3212,7 +3212,7 @@
   {
     "quadra": "7",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3242,7 +3242,7 @@
   {
     "quadra": "7",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3272,7 +3272,7 @@
   {
     "quadra": "7",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3302,7 +3302,7 @@
   {
     "quadra": "7",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3332,7 +3332,7 @@
   {
     "quadra": "7",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3362,7 +3362,7 @@
   {
     "quadra": "7",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3392,7 +3392,7 @@
   {
     "quadra": "7",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3422,7 +3422,7 @@
   {
     "quadra": "7",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3452,7 +3452,7 @@
   {
     "quadra": "7",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3482,7 +3482,7 @@
   {
     "quadra": "7",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3512,7 +3512,7 @@
   {
     "quadra": "7",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3542,7 +3542,7 @@
   {
     "quadra": "7",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3572,7 +3572,7 @@
   {
     "quadra": "7",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3602,7 +3602,7 @@
   {
     "quadra": "7",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3632,7 +3632,7 @@
   {
     "quadra": "7",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3662,7 +3662,7 @@
   {
     "quadra": "7",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3692,7 +3692,7 @@
   {
     "quadra": "7",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3722,7 +3722,7 @@
   {
     "quadra": "7",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3752,7 +3752,7 @@
   {
     "quadra": "7",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3782,7 +3782,7 @@
   {
     "quadra": "7",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3812,7 +3812,7 @@
   {
     "quadra": "7",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3842,7 +3842,7 @@
   {
     "quadra": "7",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3872,7 +3872,7 @@
   {
     "quadra": "7",
     "lote_numero": 31,
-    "identificador": "LOTE 31",
+    "identificador": "LOTE 31 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3902,7 +3902,7 @@
   {
     "quadra": "7",
     "lote_numero": 32,
-    "identificador": "LOTE 32",
+    "identificador": "LOTE 32 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3932,7 +3932,7 @@
   {
     "quadra": "7",
     "lote_numero": 33,
-    "identificador": "LOTE 33",
+    "identificador": "LOTE 33 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3962,7 +3962,7 @@
   {
     "quadra": "7",
     "lote_numero": 34,
-    "identificador": "LOTE 34",
+    "identificador": "LOTE 34 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -3992,7 +3992,7 @@
   {
     "quadra": "7",
     "lote_numero": 35,
-    "identificador": "LOTE 35",
+    "identificador": "LOTE 35 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4022,7 +4022,7 @@
   {
     "quadra": "7",
     "lote_numero": 36,
-    "identificador": "LOTE 36",
+    "identificador": "LOTE 36 - QUADRA 7",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4052,7 +4052,7 @@
   {
     "quadra": "9",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 9",
     "tamanho_m2": 264.21,
     "valor_total": 118881.29,
     "entrada": 11888.13,
@@ -4082,7 +4082,7 @@
   {
     "quadra": "9",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4112,7 +4112,7 @@
   {
     "quadra": "9",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4142,7 +4142,7 @@
   {
     "quadra": "9",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4172,7 +4172,7 @@
   {
     "quadra": "9",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4202,7 +4202,7 @@
   {
     "quadra": "9",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4232,7 +4232,7 @@
   {
     "quadra": "9",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4262,7 +4262,7 @@
   {
     "quadra": "9",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4292,7 +4292,7 @@
   {
     "quadra": "9",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4322,7 +4322,7 @@
   {
     "quadra": "9",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4352,7 +4352,7 @@
   {
     "quadra": "9",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4382,7 +4382,7 @@
   {
     "quadra": "9",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4412,7 +4412,7 @@
   {
     "quadra": "9",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4442,7 +4442,7 @@
   {
     "quadra": "9",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4472,7 +4472,7 @@
   {
     "quadra": "9",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4502,7 +4502,7 @@
   {
     "quadra": "9",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 9",
     "tamanho_m2": 240.0,
     "valor_total": 107988.0,
     "entrada": 10798.8,
@@ -4532,7 +4532,7 @@
   {
     "quadra": "9",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 9",
     "tamanho_m2": 303.62,
     "valor_total": 136613.82,
     "entrada": 13661.38,
@@ -4562,7 +4562,7 @@
   {
     "quadra": "9",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 9",
     "tamanho_m2": 270.04,
     "valor_total": 121504.5,
     "entrada": 12150.45,
@@ -4592,7 +4592,7 @@
   {
     "quadra": "9",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 9",
     "tamanho_m2": 227.7,
     "valor_total": 102453.62,
     "entrada": 10245.36,
@@ -4622,7 +4622,7 @@
   {
     "quadra": "9",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4652,7 +4652,7 @@
   {
     "quadra": "9",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4682,7 +4682,7 @@
   {
     "quadra": "9",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4712,7 +4712,7 @@
   {
     "quadra": "9",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4742,7 +4742,7 @@
   {
     "quadra": "9",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4772,7 +4772,7 @@
   {
     "quadra": "9",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4802,7 +4802,7 @@
   {
     "quadra": "9",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4832,7 +4832,7 @@
   {
     "quadra": "9",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4862,7 +4862,7 @@
   {
     "quadra": "9",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4892,7 +4892,7 @@
   {
     "quadra": "9",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4922,7 +4922,7 @@
   {
     "quadra": "9",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4952,7 +4952,7 @@
   {
     "quadra": "9",
     "lote_numero": 31,
-    "identificador": "LOTE 31",
+    "identificador": "LOTE 31 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -4982,7 +4982,7 @@
   {
     "quadra": "9",
     "lote_numero": 32,
-    "identificador": "LOTE 32",
+    "identificador": "LOTE 32 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5012,7 +5012,7 @@
   {
     "quadra": "9",
     "lote_numero": 33,
-    "identificador": "LOTE 33",
+    "identificador": "LOTE 33 - QUADRA 9",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5042,7 +5042,7 @@
   {
     "quadra": "11",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 11",
     "tamanho_m2": 348.44,
     "valor_total": 156780.58,
     "entrada": 15678.06,
@@ -5072,7 +5072,7 @@
   {
     "quadra": "11",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5102,7 +5102,7 @@
   {
     "quadra": "11",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5132,7 +5132,7 @@
   {
     "quadra": "11",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5162,7 +5162,7 @@
   {
     "quadra": "11",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5192,7 +5192,7 @@
   {
     "quadra": "11",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5222,7 +5222,7 @@
   {
     "quadra": "11",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5252,7 +5252,7 @@
   {
     "quadra": "11",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5282,7 +5282,7 @@
   {
     "quadra": "11",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5312,7 +5312,7 @@
   {
     "quadra": "11",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5342,7 +5342,7 @@
   {
     "quadra": "11",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5372,7 +5372,7 @@
   {
     "quadra": "11",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 11",
     "tamanho_m2": 360.88,
     "valor_total": 162377.96,
     "entrada": 16237.8,
@@ -5402,7 +5402,7 @@
   {
     "quadra": "11",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 11",
     "tamanho_m2": 285.41,
     "valor_total": 128420.23,
     "entrada": 12842.02,
@@ -5432,7 +5432,7 @@
   {
     "quadra": "11",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 11",
     "tamanho_m2": 231.66,
     "valor_total": 104235.42,
     "entrada": 10423.54,
@@ -5462,7 +5462,7 @@
   {
     "quadra": "11",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5492,7 +5492,7 @@
   {
     "quadra": "11",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5522,7 +5522,7 @@
   {
     "quadra": "11",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5552,7 +5552,7 @@
   {
     "quadra": "11",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5582,7 +5582,7 @@
   {
     "quadra": "11",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5612,7 +5612,7 @@
   {
     "quadra": "11",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5642,7 +5642,7 @@
   {
     "quadra": "11",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5672,7 +5672,7 @@
   {
     "quadra": "11",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 11",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5702,7 +5702,7 @@
   {
     "quadra": "11",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 11",
     "tamanho_m2": 272.8,
     "valor_total": 122746.36,
     "entrada": 12274.64,
@@ -5732,7 +5732,7 @@
   {
     "quadra": "13",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 13",
     "tamanho_m2": 264.21,
     "valor_total": 118881.29,
     "entrada": 11888.13,
@@ -5762,7 +5762,7 @@
   {
     "quadra": "13",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5792,7 +5792,7 @@
   {
     "quadra": "13",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5822,7 +5822,7 @@
   {
     "quadra": "13",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5852,7 +5852,7 @@
   {
     "quadra": "13",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5882,7 +5882,7 @@
   {
     "quadra": "13",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5912,7 +5912,7 @@
   {
     "quadra": "13",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5942,7 +5942,7 @@
   {
     "quadra": "13",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -5972,7 +5972,7 @@
   {
     "quadra": "13",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 13",
     "tamanho_m2": 306.53,
     "valor_total": 137923.17,
     "entrada": 13792.32,
@@ -6002,7 +6002,7 @@
   {
     "quadra": "13",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 13",
     "tamanho_m2": 243.21,
     "valor_total": 109432.34,
     "entrada": 10943.23,
@@ -6032,7 +6032,7 @@
   {
     "quadra": "13",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 13",
     "tamanho_m2": 222.2,
     "valor_total": 99978.89,
     "entrada": 9997.89,
@@ -6062,7 +6062,7 @@
   {
     "quadra": "13",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6092,7 +6092,7 @@
   {
     "quadra": "13",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6122,7 +6122,7 @@
   {
     "quadra": "13",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6152,7 +6152,7 @@
   {
     "quadra": "13",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6182,7 +6182,7 @@
   {
     "quadra": "13",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 13",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6212,7 +6212,7 @@
   {
     "quadra": "13",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 13",
     "tamanho_m2": 332.43,
     "valor_total": 149576.88,
     "entrada": 14957.69,
@@ -6242,7 +6242,7 @@
   {
     "quadra": "15",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 15",
     "tamanho_m2": 257.77,
     "valor_total": 115983.61,
     "entrada": 11598.36,
@@ -6272,7 +6272,7 @@
   {
     "quadra": "15",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 15",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6302,7 +6302,7 @@
   {
     "quadra": "15",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 15",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6332,7 +6332,7 @@
   {
     "quadra": "15",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 15",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6362,7 +6362,7 @@
   {
     "quadra": "15",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 15",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6392,7 +6392,7 @@
   {
     "quadra": "15",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 15",
     "tamanho_m2": 235.18,
     "valor_total": 105819.24,
     "entrada": 10581.92,
@@ -6422,7 +6422,7 @@
   {
     "quadra": "15",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 15",
     "tamanho_m2": 267.08,
     "valor_total": 120172.65,
     "entrada": 12017.26,
@@ -6452,7 +6452,7 @@
   {
     "quadra": "2",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 2",
     "tamanho_m2": 245.25,
     "valor_total": 110350.24,
     "entrada": 11035.02,
@@ -6482,7 +6482,7 @@
   {
     "quadra": "2",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 2",
     "tamanho_m2": 221.19,
     "valor_total": 99524.44,
     "entrada": 9952.44,
@@ -6512,7 +6512,7 @@
   {
     "quadra": "2",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 2",
     "tamanho_m2": 219.52,
     "valor_total": 98773.02,
     "entrada": 9877.3,
@@ -6542,7 +6542,7 @@
   {
     "quadra": "2",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 2",
     "tamanho_m2": 217.84,
     "valor_total": 98017.11,
     "entrada": 9801.71,
@@ -6572,7 +6572,7 @@
   {
     "quadra": "2",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 2",
     "tamanho_m2": 216.16,
     "valor_total": 97261.19,
     "entrada": 9726.12,
@@ -6602,7 +6602,7 @@
   {
     "quadra": "2",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 2",
     "tamanho_m2": 214.48,
     "valor_total": 96505.28,
     "entrada": 9650.53,
@@ -6632,7 +6632,7 @@
   {
     "quadra": "2",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 2",
     "tamanho_m2": 212.81,
     "valor_total": 95753.86,
     "entrada": 9575.39,
@@ -6662,7 +6662,7 @@
   {
     "quadra": "2",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 2",
     "tamanho_m2": 211.13,
     "valor_total": 94997.94,
     "entrada": 9499.79,
@@ -6692,7 +6692,7 @@
   {
     "quadra": "2",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 2",
     "tamanho_m2": 209.45,
     "valor_total": 94242.03,
     "entrada": 9424.2,
@@ -6722,7 +6722,7 @@
   {
     "quadra": "2",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 2",
     "tamanho_m2": 207.77,
     "valor_total": 93486.11,
     "entrada": 9348.61,
@@ -6752,7 +6752,7 @@
   {
     "quadra": "2",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 2",
     "tamanho_m2": 206.1,
     "valor_total": 92734.7,
     "entrada": 9273.47,
@@ -6782,7 +6782,7 @@
   {
     "quadra": "2",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 2",
     "tamanho_m2": 204.42,
     "valor_total": 91978.78,
     "entrada": 9197.88,
@@ -6812,7 +6812,7 @@
   {
     "quadra": "2",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 2",
     "tamanho_m2": 214.25,
     "valor_total": 96401.79,
     "entrada": 9640.18,
@@ -6842,7 +6842,7 @@
   {
     "quadra": "4",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 4",
     "tamanho_m2": 218.62,
     "valor_total": 98368.07,
     "entrada": 9836.81,
@@ -6872,7 +6872,7 @@
   {
     "quadra": "4",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6902,7 +6902,7 @@
   {
     "quadra": "4",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6932,7 +6932,7 @@
   {
     "quadra": "4",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6962,7 +6962,7 @@
   {
     "quadra": "4",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -6992,7 +6992,7 @@
   {
     "quadra": "4",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7022,7 +7022,7 @@
   {
     "quadra": "4",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7052,7 +7052,7 @@
   {
     "quadra": "4",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7082,7 +7082,7 @@
   {
     "quadra": "4",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7112,7 +7112,7 @@
   {
     "quadra": "4",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7142,7 +7142,7 @@
   {
     "quadra": "4",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7172,7 +7172,7 @@
   {
     "quadra": "4",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7202,7 +7202,7 @@
   {
     "quadra": "4",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7232,7 +7232,7 @@
   {
     "quadra": "4",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 4",
     "tamanho_m2": 200.54,
     "valor_total": 90232.97,
     "entrada": 9023.3,
@@ -7262,7 +7262,7 @@
   {
     "quadra": "4",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 4",
     "tamanho_m2": 200.26,
     "valor_total": 90106.99,
     "entrada": 9010.7,
@@ -7292,7 +7292,7 @@
   {
     "quadra": "4",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 4",
     "tamanho_m2": 204.48,
     "valor_total": 92005.78,
     "entrada": 9200.58,
@@ -7322,7 +7322,7 @@
   {
     "quadra": "4",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 4",
     "tamanho_m2": 200.15,
     "valor_total": 90057.49,
     "entrada": 9005.75,
@@ -7352,7 +7352,7 @@
   {
     "quadra": "4",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7382,7 +7382,7 @@
   {
     "quadra": "4",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7412,7 +7412,7 @@
   {
     "quadra": "4",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7442,7 +7442,7 @@
   {
     "quadra": "4",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7472,7 +7472,7 @@
   {
     "quadra": "4",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7502,7 +7502,7 @@
   {
     "quadra": "4",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7532,7 +7532,7 @@
   {
     "quadra": "4",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7562,7 +7562,7 @@
   {
     "quadra": "4",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7592,7 +7592,7 @@
   {
     "quadra": "4",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7622,7 +7622,7 @@
   {
     "quadra": "4",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7652,7 +7652,7 @@
   {
     "quadra": "4",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7682,7 +7682,7 @@
   {
     "quadra": "4",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7712,7 +7712,7 @@
   {
     "quadra": "4",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 4",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7742,7 +7742,7 @@
   {
     "quadra": "6",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7772,7 +7772,7 @@
   {
     "quadra": "6",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7802,7 +7802,7 @@
   {
     "quadra": "6",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7832,7 +7832,7 @@
   {
     "quadra": "6",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7862,7 +7862,7 @@
   {
     "quadra": "6",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7892,7 +7892,7 @@
   {
     "quadra": "6",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7922,7 +7922,7 @@
   {
     "quadra": "6",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7952,7 +7952,7 @@
   {
     "quadra": "6",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -7982,7 +7982,7 @@
   {
     "quadra": "6",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8012,7 +8012,7 @@
   {
     "quadra": "6",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8042,7 +8042,7 @@
   {
     "quadra": "6",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8072,7 +8072,7 @@
   {
     "quadra": "6",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8102,7 +8102,7 @@
   {
     "quadra": "6",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8132,7 +8132,7 @@
   {
     "quadra": "6",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 6",
     "tamanho_m2": 203.55,
     "valor_total": 91587.32,
     "entrada": 9158.73,
@@ -8162,7 +8162,7 @@
   {
     "quadra": "6",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 6",
     "tamanho_m2": 206.79,
     "valor_total": 93045.16,
     "entrada": 9304.52,
@@ -8192,7 +8192,7 @@
   {
     "quadra": "6",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 6",
     "tamanho_m2": 204.48,
     "valor_total": 92005.78,
     "entrada": 9200.58,
@@ -8222,7 +8222,7 @@
   {
     "quadra": "6",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 6",
     "tamanho_m2": 200.15,
     "valor_total": 90057.49,
     "entrada": 9005.75,
@@ -8252,7 +8252,7 @@
   {
     "quadra": "6",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8282,7 +8282,7 @@
   {
     "quadra": "6",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8312,7 +8312,7 @@
   {
     "quadra": "6",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8342,7 +8342,7 @@
   {
     "quadra": "6",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8372,7 +8372,7 @@
   {
     "quadra": "6",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8402,7 +8402,7 @@
   {
     "quadra": "6",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8432,7 +8432,7 @@
   {
     "quadra": "6",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8462,7 +8462,7 @@
   {
     "quadra": "6",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8492,7 +8492,7 @@
   {
     "quadra": "6",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8522,7 +8522,7 @@
   {
     "quadra": "6",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8552,7 +8552,7 @@
   {
     "quadra": "6",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8582,7 +8582,7 @@
   {
     "quadra": "6",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8612,7 +8612,7 @@
   {
     "quadra": "6",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 6",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8642,7 +8642,7 @@
   {
     "quadra": "8",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8672,7 +8672,7 @@
   {
     "quadra": "8",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8702,7 +8702,7 @@
   {
     "quadra": "8",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8732,7 +8732,7 @@
   {
     "quadra": "8",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8762,7 +8762,7 @@
   {
     "quadra": "8",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8792,7 +8792,7 @@
   {
     "quadra": "8",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8822,7 +8822,7 @@
   {
     "quadra": "8",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8852,7 +8852,7 @@
   {
     "quadra": "8",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8882,7 +8882,7 @@
   {
     "quadra": "8",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8912,7 +8912,7 @@
   {
     "quadra": "8",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8942,7 +8942,7 @@
   {
     "quadra": "8",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -8972,7 +8972,7 @@
   {
     "quadra": "8",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9002,7 +9002,7 @@
   {
     "quadra": "8",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9032,7 +9032,7 @@
   {
     "quadra": "8",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 8",
     "tamanho_m2": 238.54,
     "valor_total": 107331.07,
     "entrada": 10733.11,
@@ -9062,7 +9062,7 @@
   {
     "quadra": "8",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 8",
     "tamanho_m2": 222.63,
     "valor_total": 100172.37,
     "entrada": 10017.24,
@@ -9092,7 +9092,7 @@
   {
     "quadra": "8",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 8",
     "tamanho_m2": 326.13,
     "valor_total": 146742.19,
     "entrada": 14674.22,
@@ -9122,7 +9122,7 @@
   {
     "quadra": "8",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9152,7 +9152,7 @@
   {
     "quadra": "8",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9182,7 +9182,7 @@
   {
     "quadra": "8",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9212,7 +9212,7 @@
   {
     "quadra": "8",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9242,7 +9242,7 @@
   {
     "quadra": "8",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9272,7 +9272,7 @@
   {
     "quadra": "8",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9302,7 +9302,7 @@
   {
     "quadra": "8",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9332,7 +9332,7 @@
   {
     "quadra": "8",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9362,7 +9362,7 @@
   {
     "quadra": "8",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9392,7 +9392,7 @@
   {
     "quadra": "8",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9422,7 +9422,7 @@
   {
     "quadra": "8",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9452,7 +9452,7 @@
   {
     "quadra": "8",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9482,7 +9482,7 @@
   {
     "quadra": "8",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 8",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9512,7 +9512,7 @@
   {
     "quadra": "10",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9542,7 +9542,7 @@
   {
     "quadra": "10",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9572,7 +9572,7 @@
   {
     "quadra": "10",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9602,7 +9602,7 @@
   {
     "quadra": "10",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9632,7 +9632,7 @@
   {
     "quadra": "10",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9662,7 +9662,7 @@
   {
     "quadra": "10",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9692,7 +9692,7 @@
   {
     "quadra": "10",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9722,7 +9722,7 @@
   {
     "quadra": "10",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9752,7 +9752,7 @@
   {
     "quadra": "10",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9782,7 +9782,7 @@
   {
     "quadra": "10",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9812,7 +9812,7 @@
   {
     "quadra": "10",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9842,7 +9842,7 @@
   {
     "quadra": "10",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9872,7 +9872,7 @@
   {
     "quadra": "10",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -9902,7 +9902,7 @@
   {
     "quadra": "10",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 10",
     "tamanho_m2": 232.22,
     "valor_total": 104487.39,
     "entrada": 10448.74,
@@ -9932,7 +9932,7 @@
   {
     "quadra": "10",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 10",
     "tamanho_m2": 225.46,
     "valor_total": 101445.73,
     "entrada": 10144.57,
@@ -9962,7 +9962,7 @@
   {
     "quadra": "10",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 10",
     "tamanho_m2": 324.5,
     "valor_total": 146008.78,
     "entrada": 14600.88,
@@ -9992,7 +9992,7 @@
   {
     "quadra": "10",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10022,7 +10022,7 @@
   {
     "quadra": "10",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10052,7 +10052,7 @@
   {
     "quadra": "10",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10082,7 +10082,7 @@
   {
     "quadra": "10",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10112,7 +10112,7 @@
   {
     "quadra": "10",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10142,7 +10142,7 @@
   {
     "quadra": "10",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10172,7 +10172,7 @@
   {
     "quadra": "10",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10202,7 +10202,7 @@
   {
     "quadra": "10",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10232,7 +10232,7 @@
   {
     "quadra": "10",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10262,7 +10262,7 @@
   {
     "quadra": "10",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10292,7 +10292,7 @@
   {
     "quadra": "10",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10322,7 +10322,7 @@
   {
     "quadra": "10",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10352,7 +10352,7 @@
   {
     "quadra": "10",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 10",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10382,7 +10382,7 @@
   {
     "quadra": "12",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 12",
     "tamanho_m2": 233.15,
     "valor_total": 104905.84,
     "entrada": 10490.58,
@@ -10412,7 +10412,7 @@
   {
     "quadra": "12",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10442,7 +10442,7 @@
   {
     "quadra": "12",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10472,7 +10472,7 @@
   {
     "quadra": "12",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10502,7 +10502,7 @@
   {
     "quadra": "12",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10532,7 +10532,7 @@
   {
     "quadra": "12",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10562,7 +10562,7 @@
   {
     "quadra": "12",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10592,7 +10592,7 @@
   {
     "quadra": "12",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10622,7 +10622,7 @@
   {
     "quadra": "12",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10652,7 +10652,7 @@
   {
     "quadra": "12",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10682,7 +10682,7 @@
   {
     "quadra": "12",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10712,7 +10712,7 @@
   {
     "quadra": "12",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10742,7 +10742,7 @@
   {
     "quadra": "12",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10772,7 +10772,7 @@
   {
     "quadra": "12",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10802,7 +10802,7 @@
   {
     "quadra": "12",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10832,7 +10832,7 @@
   {
     "quadra": "12",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 12",
     "tamanho_m2": 290.39,
     "valor_total": 130660.98,
     "entrada": 13066.1,
@@ -10862,7 +10862,7 @@
   {
     "quadra": "12",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 12",
     "tamanho_m2": 206.51,
     "valor_total": 92919.17,
     "entrada": 9291.92,
@@ -10892,7 +10892,7 @@
   {
     "quadra": "12",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 12",
     "tamanho_m2": 203.44,
     "valor_total": 91537.83,
     "entrada": 9153.78,
@@ -10922,7 +10922,7 @@
   {
     "quadra": "12",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10952,7 +10952,7 @@
   {
     "quadra": "12",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -10982,7 +10982,7 @@
   {
     "quadra": "12",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11012,7 +11012,7 @@
   {
     "quadra": "12",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11042,7 +11042,7 @@
   {
     "quadra": "12",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11072,7 +11072,7 @@
   {
     "quadra": "12",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11102,7 +11102,7 @@
   {
     "quadra": "12",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11132,7 +11132,7 @@
   {
     "quadra": "12",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11162,7 +11162,7 @@
   {
     "quadra": "12",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11192,7 +11192,7 @@
   {
     "quadra": "12",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11222,7 +11222,7 @@
   {
     "quadra": "12",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11252,7 +11252,7 @@
   {
     "quadra": "12",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11282,7 +11282,7 @@
   {
     "quadra": "12",
     "lote_numero": 31,
-    "identificador": "LOTE 31",
+    "identificador": "LOTE 31 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11312,7 +11312,7 @@
   {
     "quadra": "12",
     "lote_numero": 32,
-    "identificador": "LOTE 32",
+    "identificador": "LOTE 32 - QUADRA 12",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11342,7 +11342,7 @@
   {
     "quadra": "12",
     "lote_numero": 33,
-    "identificador": "LOTE 33",
+    "identificador": "LOTE 33 - QUADRA 12",
     "tamanho_m2": 362.02,
     "valor_total": 162890.9,
     "entrada": 16289.09,
@@ -11372,7 +11372,7 @@
   {
     "quadra": "14",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 14",
     "tamanho_m2": 242.76,
     "valor_total": 109229.86,
     "entrada": 10922.99,
@@ -11402,7 +11402,7 @@
   {
     "quadra": "14",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11432,7 +11432,7 @@
   {
     "quadra": "14",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11462,7 +11462,7 @@
   {
     "quadra": "14",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11492,7 +11492,7 @@
   {
     "quadra": "14",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11522,7 +11522,7 @@
   {
     "quadra": "14",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11552,7 +11552,7 @@
   {
     "quadra": "14",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11582,7 +11582,7 @@
   {
     "quadra": "14",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11612,7 +11612,7 @@
   {
     "quadra": "14",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11642,7 +11642,7 @@
   {
     "quadra": "14",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11672,7 +11672,7 @@
   {
     "quadra": "14",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11702,7 +11702,7 @@
   {
     "quadra": "14",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11732,7 +11732,7 @@
   {
     "quadra": "14",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11762,7 +11762,7 @@
   {
     "quadra": "14",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11792,7 +11792,7 @@
   {
     "quadra": "14",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11822,7 +11822,7 @@
   {
     "quadra": "14",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11852,7 +11852,7 @@
   {
     "quadra": "14",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -11882,7 +11882,7 @@
   {
     "quadra": "14",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 14",
     "tamanho_m2": 260.31,
     "valor_total": 117126.48,
     "entrada": 11712.65,
@@ -11912,7 +11912,7 @@
   {
     "quadra": "14",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 14",
     "tamanho_m2": 220.09,
     "valor_total": 99029.5,
     "entrada": 9902.95,
@@ -11942,7 +11942,7 @@
   {
     "quadra": "14",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 14",
     "tamanho_m2": 217.37,
     "valor_total": 97805.63,
     "entrada": 9780.56,
@@ -11972,7 +11972,7 @@
   {
     "quadra": "14",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12002,7 +12002,7 @@
   {
     "quadra": "14",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12032,7 +12032,7 @@
   {
     "quadra": "14",
     "lote_numero": 23,
-    "identificador": "LOTE 23",
+    "identificador": "LOTE 23 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12062,7 +12062,7 @@
   {
     "quadra": "14",
     "lote_numero": 24,
-    "identificador": "LOTE 24",
+    "identificador": "LOTE 24 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12092,7 +12092,7 @@
   {
     "quadra": "14",
     "lote_numero": 25,
-    "identificador": "LOTE 25",
+    "identificador": "LOTE 25 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12122,7 +12122,7 @@
   {
     "quadra": "14",
     "lote_numero": 26,
-    "identificador": "LOTE 26",
+    "identificador": "LOTE 26 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12152,7 +12152,7 @@
   {
     "quadra": "14",
     "lote_numero": 27,
-    "identificador": "LOTE 27",
+    "identificador": "LOTE 27 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12182,7 +12182,7 @@
   {
     "quadra": "14",
     "lote_numero": 28,
-    "identificador": "LOTE 28",
+    "identificador": "LOTE 28 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12212,7 +12212,7 @@
   {
     "quadra": "14",
     "lote_numero": 29,
-    "identificador": "LOTE 29",
+    "identificador": "LOTE 29 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12242,7 +12242,7 @@
   {
     "quadra": "14",
     "lote_numero": 30,
-    "identificador": "LOTE 30",
+    "identificador": "LOTE 30 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12272,7 +12272,7 @@
   {
     "quadra": "14",
     "lote_numero": 31,
-    "identificador": "LOTE 31",
+    "identificador": "LOTE 31 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12302,7 +12302,7 @@
   {
     "quadra": "14",
     "lote_numero": 32,
-    "identificador": "LOTE 32",
+    "identificador": "LOTE 32 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12332,7 +12332,7 @@
   {
     "quadra": "14",
     "lote_numero": 33,
-    "identificador": "LOTE 33",
+    "identificador": "LOTE 33 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12362,7 +12362,7 @@
   {
     "quadra": "14",
     "lote_numero": 34,
-    "identificador": "LOTE 34",
+    "identificador": "LOTE 34 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12392,7 +12392,7 @@
   {
     "quadra": "14",
     "lote_numero": 35,
-    "identificador": "LOTE 35",
+    "identificador": "LOTE 35 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12422,7 +12422,7 @@
   {
     "quadra": "14",
     "lote_numero": 36,
-    "identificador": "LOTE 36",
+    "identificador": "LOTE 36 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12452,7 +12452,7 @@
   {
     "quadra": "14",
     "lote_numero": 37,
-    "identificador": "LOTE 37",
+    "identificador": "LOTE 37 - QUADRA 14",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12482,7 +12482,7 @@
   {
     "quadra": "14",
     "lote_numero": 38,
-    "identificador": "LOTE 38",
+    "identificador": "LOTE 38 - QUADRA 14",
     "tamanho_m2": 288.03,
     "valor_total": 129599.1,
     "entrada": 12959.91,
@@ -12512,7 +12512,7 @@
   {
     "quadra": "16",
     "lote_numero": 1,
-    "identificador": "LOTE 01",
+    "identificador": "LOTE 01 - QUADRA 16",
     "tamanho_m2": 256.01,
     "valor_total": 115191.7,
     "entrada": 11519.17,
@@ -12542,7 +12542,7 @@
   {
     "quadra": "16",
     "lote_numero": 2,
-    "identificador": "LOTE 02",
+    "identificador": "LOTE 02 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12572,7 +12572,7 @@
   {
     "quadra": "16",
     "lote_numero": 3,
-    "identificador": "LOTE 03",
+    "identificador": "LOTE 03 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12602,7 +12602,7 @@
   {
     "quadra": "16",
     "lote_numero": 4,
-    "identificador": "LOTE 04",
+    "identificador": "LOTE 04 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12632,7 +12632,7 @@
   {
     "quadra": "16",
     "lote_numero": 5,
-    "identificador": "LOTE 05",
+    "identificador": "LOTE 05 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12662,7 +12662,7 @@
   {
     "quadra": "16",
     "lote_numero": 6,
-    "identificador": "LOTE 06",
+    "identificador": "LOTE 06 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12692,7 +12692,7 @@
   {
     "quadra": "16",
     "lote_numero": 7,
-    "identificador": "LOTE 07",
+    "identificador": "LOTE 07 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12722,7 +12722,7 @@
   {
     "quadra": "16",
     "lote_numero": 8,
-    "identificador": "LOTE 08",
+    "identificador": "LOTE 08 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12752,7 +12752,7 @@
   {
     "quadra": "16",
     "lote_numero": 9,
-    "identificador": "LOTE 09",
+    "identificador": "LOTE 09 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12782,7 +12782,7 @@
   {
     "quadra": "16",
     "lote_numero": 10,
-    "identificador": "LOTE 10",
+    "identificador": "LOTE 10 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12812,7 +12812,7 @@
   {
     "quadra": "16",
     "lote_numero": 11,
-    "identificador": "LOTE 11",
+    "identificador": "LOTE 11 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12842,7 +12842,7 @@
   {
     "quadra": "16",
     "lote_numero": 12,
-    "identificador": "LOTE 12",
+    "identificador": "LOTE 12 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12872,7 +12872,7 @@
   {
     "quadra": "16",
     "lote_numero": 13,
-    "identificador": "LOTE 13",
+    "identificador": "LOTE 13 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12902,7 +12902,7 @@
   {
     "quadra": "16",
     "lote_numero": 14,
-    "identificador": "LOTE 14",
+    "identificador": "LOTE 14 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12932,7 +12932,7 @@
   {
     "quadra": "16",
     "lote_numero": 15,
-    "identificador": "LOTE 15",
+    "identificador": "LOTE 15 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12962,7 +12962,7 @@
   {
     "quadra": "16",
     "lote_numero": 16,
-    "identificador": "LOTE 16",
+    "identificador": "LOTE 16 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -12992,7 +12992,7 @@
   {
     "quadra": "16",
     "lote_numero": 17,
-    "identificador": "LOTE 17",
+    "identificador": "LOTE 17 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -13022,7 +13022,7 @@
   {
     "quadra": "16",
     "lote_numero": 18,
-    "identificador": "LOTE 18",
+    "identificador": "LOTE 18 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -13052,7 +13052,7 @@
   {
     "quadra": "16",
     "lote_numero": 19,
-    "identificador": "LOTE 19",
+    "identificador": "LOTE 19 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -13082,7 +13082,7 @@
   {
     "quadra": "16",
     "lote_numero": 20,
-    "identificador": "LOTE 20",
+    "identificador": "LOTE 20 - QUADRA 16",
     "tamanho_m2": 200.0,
     "valor_total": 89990.0,
     "entrada": 8999.0,
@@ -13112,7 +13112,7 @@
   {
     "quadra": "16",
     "lote_numero": 21,
-    "identificador": "LOTE 21",
+    "identificador": "LOTE 21 - QUADRA 16",
     "tamanho_m2": 231.27,
     "valor_total": 104059.94,
     "entrada": 10405.99,
@@ -13142,7 +13142,7 @@
   {
     "quadra": "16",
     "lote_numero": 22,
-    "identificador": "LOTE 22",
+    "identificador": "LOTE 22 - QUADRA 16",
     "tamanho_m2": 241.86,
     "valor_total": 108824.91,
     "entrada": 10882.49,
