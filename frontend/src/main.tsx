@@ -44,7 +44,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="propostas" element={<PainelPropostas />} />
             <Route path="reservas" element={<PainelReservas />} />
             <Route path="qualificacoes" element={<PainelQualificacoes />} />
-            <Route path="lotes" element={<PainelLotes />} />
+            <Route
+              path="lotes"
+              element={
+                <RequireAuth adminOnly>
+                  <PainelLotes />
+                </RequireAuth>
+              }
+            />
             <Route
               path="visao-geral"
               element={

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { api, horasRestantes } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import type { Cliente, LoteComCondominio, Qualificacao, Reserva, ReservaComLote, ReservaStatus } from "../../types";
 
 const STATUS_LABEL: Record<ReservaStatus, string> = {
@@ -22,6 +23,7 @@ const STATUS_PERMITE_LINK: ReservaStatus[] = [
 ];
 
 export default function PainelReservas() {
+  const { perfil } = useAuth();
   const [reservas, setReservas] = useState<ReservaComLote[] | null>(null);
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -106,7 +108,7 @@ export default function PainelReservas() {
                       onChange={(e) => mudarStatus(r, e.target.value as ReservaStatus)}
                     >
                       {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                        <option key={v} value={v}>
+                        <option key={v} value={v} disabled={v === "confirmada" && perfil?.papel !== "admin"}>
                           {label}
                         </option>
                       ))}

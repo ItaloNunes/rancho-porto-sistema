@@ -127,6 +127,12 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
     confirmar mantém o lote 'reservado' até virar venda (atualizada à parte
     no lote, via PATCH /condominios/lotes/{id}/status). Um corretor comum que
     age numa reserva ainda sem dono a "reivindica" automaticamente.
+
+    Confirmar (status='confirmada') exige admin — mesmo padrão de aprovar
+    proposta (ver PATCH /crm/propostas/{id}/status): é a etapa que retém o
+    lote de vez, então passa por uma segunda pessoa antes de valer. O
+    corretor comum continua livre pra criar, editar, cancelar e gerar o link
+    de qualificação normalmente.
     """
     sb = get_supabase()
     reserva = sb.table("reservas").select("*").eq("id", reserva_id).limit(1).execute().data
@@ -135,6 +141,8 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
     reserva = reserva[0]
     if not _pode_mexer_na_reserva(corretor, reserva):
         raise HTTPException(403, "Esta reserva é de outro corretor.")
+    if payload.status == "confirmada" and corretor["papel"] != "admin":
+        raise HTTPException(403, "Só um administrador pode confirmar a reserva.")
 
     updates: dict = {"status": payload.status}
     if payload.corretor_id:

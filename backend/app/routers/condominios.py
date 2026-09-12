@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import get_supabase
 from ..schemas import CondominioDetalhe, CondominioResumo, Lote, LotePoligonoUpdate, LoteStatusUpdate
-from ..security import get_current_corretor, require_admin
+from ..security import require_admin
 
 router = APIRouter(prefix="/condominios", tags=["condominios"])
 
@@ -47,10 +47,10 @@ def obter_condominio(slug: str):
 
 
 @router.patch("/lotes/{lote_id}/status", response_model=Lote)
-def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, _corretor=Depends(get_current_corretor)):
+def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, _admin=Depends(require_admin)):
     """Painel interno: marcar um lote como vendido/reservado/disponível manualmente.
-    Qualquer corretor logado pode fazer isso (não só admin) — é uma ação de
-    vendas do dia a dia, não gestão de conta."""
+    Só admin — o corretor comum controla o estoque indiretamente (reserva +
+    qualificação + proposta aprovada), não editando o status do lote na mão."""
     sb = get_supabase()
     existing = sb.table("lotes").select("id").eq("id", lote_id).limit(1).execute().data
     if not existing:

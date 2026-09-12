@@ -3,15 +3,19 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
+// Corretor comum: cadastra cliente, gera reserva + link de qualificação e
+// acompanha propostas/qualificações (só sem aprovar nada). O resto (mexer
+// direto no estoque de lotes, números consolidados, gestão de outros
+// corretores, marcação da planta) é só admin — ver TABS_ADMIN.
 const TABS_BASE = [
   { to: "/painel/clientes", label: "Clientes" },
   { to: "/painel/propostas", label: "Propostas" },
   { to: "/painel/reservas", label: "Reservas" },
   { to: "/painel/qualificacoes", label: "Qualificações" },
-  { to: "/painel/lotes", label: "Lotes" },
 ];
 
 const TABS_ADMIN = [
+  { to: "/painel/lotes", label: "Lotes" },
   { to: "/painel/visao-geral", label: "Visão geral" },
   { to: "/painel/acompanhamento", label: "Acompanhamento" },
   { to: "/painel/corretores", label: "Corretores" },
