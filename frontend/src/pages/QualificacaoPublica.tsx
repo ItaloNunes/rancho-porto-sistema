@@ -221,20 +221,84 @@ function Formulario({
     [casado],
   );
 
-  function validarPasso(): string | null {
-    if (passo === 0) {
+  /** Valida um endereço completo (usada tanto pro residencial, sempre
+   * obrigatório, quanto pro comercial, obrigatório a menos que a pessoa
+   * marque "não possuo"). Complemento fica de fora — nem todo endereço tem
+   * um, e travar o envio por isso não faz sentido. */
+  function validarEndereco(e: QualificacaoDados["endereco_residencial"], rotulo: string): string | null {
+    if (!e.rua?.trim()) return `Informe a rua/avenida do endereço ${rotulo}.`;
+    if (!e.numero?.trim()) return `Informe o número do endereço ${rotulo}.`;
+    if (!e.bairro?.trim()) return `Informe o bairro do endereço ${rotulo}.`;
+    if (!e.cidade?.trim()) return `Informe a cidade do endereço ${rotulo}.`;
+    if (!e.estado?.trim()) return `Informe o estado (UF) do endereço ${rotulo}.`;
+    if (!e.cep?.trim()) return `Informe o CEP do endereço ${rotulo}.`;
+    return null;
+  }
+
+  /** Todas as validações possíveis antes de gerar a proposta a partir deste
+   * formulário — cada campo aqui vira um dado que entra direto no PDF da
+   * Proposta de Compra/Venda, então nada pode chegar em branco na análise
+   * financeira. Usada tanto por etapa (ao avançar) quanto de uma vez só,
+   * como último cinto de segurança antes de enviar (ver `enviar`). */
+  function validarPasso(p: number): string | null {
+    if (p === 0) {
       if (!dados.proponente.nome?.trim()) return "Informe seu nome completo.";
       if (!dados.proponente.cpf_cnpj?.trim()) return "Informe seu CPF.";
       if (!dados.proponente.rg?.trim()) return "Informe seu RG.";
+      if (!dados.proponente.data_nascimento?.trim()) return "Informe sua data de nascimento.";
+      if (!dados.proponente.nacionalidade?.trim()) return "Informe sua nacionalidade.";
+      if (!dados.proponente.profissao?.trim()) return "Informe sua profissão.";
+      if (!dados.proponente.email?.trim()) return "Informe seu e-mail.";
     }
-    if (passo === 1) {
+    if (p === 1) {
       if (!dados.estado_civil) return "Selecione seu estado civil.";
-      if (casado && !dados.conjuge?.nome?.trim()) return "Informe o nome do cônjuge.";
+      if (casado) {
+        if (!dados.conjuge?.nome?.trim()) return "Informe o nome do cônjuge.";
+        if (!dados.conjuge?.cpf_cnpj?.trim()) return "Informe o CPF do cônjuge.";
+        if (!dados.conjuge?.rg?.trim()) return "Informe o RG do cônjuge.";
+        if (!dados.conjuge?.data_nascimento?.trim()) return "Informe a data de nascimento do cônjuge.";
+        if (!dados.conjuge?.nacionalidade?.trim()) return "Informe a nacionalidade do cônjuge.";
+        if (!dados.conjuge?.profissao?.trim()) return "Informe a profissão do cônjuge.";
+        if (!dados.conjuge?.email?.trim()) return "Informe o e-mail do cônjuge.";
+      }
     }
-    if (passo === 6) {
+    if (p === 2) {
+      const msg = validarEndereco(dados.endereco_residencial, "residencial");
+      if (msg) return msg;
+    }
+    if (p === 3 && !dados.endereco_comercial_nao_possui) {
+      const msg = validarEndereco(dados.endereco_comercial, "comercial");
+      if (msg) return `${msg} Ou marque "não possuo endereço comercial".`;
+    }
+    if (p === 4) {
+      if (!dados.telefone_celular?.trim()) return "Informe um telefone celular pra contato.";
+    }
+    if (p === 5) {
+      const fp = dados.forma_pagamento;
+      if (fp.a_vista === null || fp.a_vista === undefined) return "Selecione se o pagamento é à vista.";
+      if (!fp.renda?.trim()) return "Informe a renda.";
+      if (!fp.valor_proposto || fp.valor_proposto <= 0) return "Informe o valor proposto.";
+      if (fp.a_vista === false) {
+        if (!fp.dividido_em_parcelas || fp.dividido_em_parcelas <= 0) return "Informe em quantas parcelas será dividido.";
+        if (!fp.valor_parcela?.trim()) return "Informe o valor de cada parcela.";
+      }
+    }
+    if (p === 6) {
       const tiposEnviados = new Set(documentos.map((d) => d.tipo));
       const faltando = obrigatorios.filter((t) => !tiposEnviados.has(t));
       if (faltando.length) return `Falta anexar: ${faltando.map((t) => DOCUMENTO_LABEL[t]).join(", ")}.`;
+    }
+    return null;
+  }
+
+  /** Revalida todas as etapas de uma vez — cinto de segurança antes de
+   * enviar (a navegação sequencial já valida etapa por etapa ao avançar,
+   * mas isso cobre qualquer jeito de voltar e mudar algo sem reavançar por
+   * todas de novo). Devolve em qual etapa está o problema, se houver. */
+  function validarTudo(): { passo: number; msg: string } | null {
+    for (let p = 0; p <= 6; p++) {
+      const msg = validarPasso(p);
+      if (msg) return { passo: p, msg };
     }
     return null;
   }
@@ -251,7 +315,7 @@ function Formulario({
   }
 
   async function avancar() {
-    const msg = validarPasso();
+    const msg = validarPasso(passo);
     if (msg) {
       setErro(msg);
       return;
@@ -271,6 +335,13 @@ function Formulario({
   const [enviando, setEnviando] = useState(false);
   async function enviar() {
     setErro(null);
+    const problema = validarTudo();
+    if (problema) {
+      setPasso(problema.passo);
+      setErro(problema.msg);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setEnviando(true);
     try {
       const r = await api.enviarQualificacaoParaAnalise(token);
@@ -317,7 +388,7 @@ function Formulario({
                 onChange={(e) => setDados({ ...dados, proponente: { ...dados.proponente, orgao_expedidor: e.target.value } })}
               />
             </Field>
-            <Field label="Data de nascimento">
+            <Field label="Data de nascimento *">
               <input
                 className="input"
                 type="date"
@@ -327,14 +398,14 @@ function Formulario({
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Nacionalidade">
+            <Field label="Nacionalidade *">
               <input
                 className="input"
                 value={dados.proponente.nacionalidade ?? ""}
                 onChange={(e) => setDados({ ...dados, proponente: { ...dados.proponente, nacionalidade: e.target.value } })}
               />
             </Field>
-            <Field label="Profissão">
+            <Field label="Profissão *">
               <input
                 className="input"
                 value={dados.proponente.profissao ?? ""}
@@ -342,7 +413,7 @@ function Formulario({
               />
             </Field>
           </div>
-          <Field label="E-mail">
+          <Field label="E-mail *">
             <input
               className="input"
               type="email"
@@ -386,14 +457,14 @@ function Formulario({
                 />
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="CPF do cônjuge">
+                <Field label="CPF do cônjuge *">
                   <input
                     className="input"
                     value={dados.conjuge?.cpf_cnpj ?? ""}
                     onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, cpf_cnpj: e.target.value } })}
                   />
                 </Field>
-                <Field label="RG do cônjuge">
+                <Field label="RG do cônjuge *">
                   <input
                     className="input"
                     value={dados.conjuge?.rg ?? ""}
@@ -401,12 +472,45 @@ function Formulario({
                   />
                 </Field>
               </div>
-              <Field label="Data de nascimento do cônjuge">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Órgão expedidor do cônjuge">
+                  <input
+                    className="input"
+                    value={dados.conjuge?.orgao_expedidor ?? ""}
+                    onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, orgao_expedidor: e.target.value } })}
+                  />
+                </Field>
+                <Field label="Data de nascimento do cônjuge *">
+                  <input
+                    className="input"
+                    type="date"
+                    value={dados.conjuge?.data_nascimento ?? ""}
+                    onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, data_nascimento: e.target.value } })}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Nacionalidade do cônjuge *">
+                  <input
+                    className="input"
+                    value={dados.conjuge?.nacionalidade ?? ""}
+                    onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, nacionalidade: e.target.value } })}
+                  />
+                </Field>
+                <Field label="Profissão do cônjuge *">
+                  <input
+                    className="input"
+                    value={dados.conjuge?.profissao ?? ""}
+                    onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, profissao: e.target.value } })}
+                  />
+                </Field>
+              </div>
+              <Field label="E-mail do cônjuge *">
                 <input
                   className="input"
-                  type="date"
-                  value={dados.conjuge?.data_nascimento ?? ""}
-                  onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, data_nascimento: e.target.value } })}
+                  type="email"
+                  value={dados.conjuge?.email ?? ""}
+                  onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, email: e.target.value } })}
                 />
               </Field>
             </>
@@ -423,11 +527,21 @@ function Formulario({
 
       {passo === 3 && (
         <>
-          <p className="text-xs text-ink-soft -mb-1">Opcional — deixe em branco se não tiver.</p>
-          <EnderecoCampos
-            endereco={dados.endereco_comercial}
-            onChange={(endereco_comercial) => setDados({ ...dados, endereco_comercial })}
-          />
+          <label className="flex items-center gap-2 text-sm text-ink -mb-1">
+            <input
+              type="checkbox"
+              checked={dados.endereco_comercial_nao_possui ?? false}
+              onChange={(e) => setDados({ ...dados, endereco_comercial_nao_possui: e.target.checked })}
+            />
+            Não possuo endereço comercial
+          </label>
+          {!dados.endereco_comercial_nao_possui && (
+            <EnderecoCampos
+              endereco={dados.endereco_comercial}
+              onChange={(endereco_comercial) => setDados({ ...dados, endereco_comercial })}
+              obrigatorio
+            />
+          )}
         </>
       )}
 
@@ -450,7 +564,7 @@ function Formulario({
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Celular">
+            <Field label="Celular *">
               <input
                 className="input"
                 value={dados.telefone_celular ?? ""}
@@ -477,23 +591,33 @@ function Formulario({
 
       {passo === 5 && (
         <>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
-              checked={dados.forma_pagamento.a_vista ?? false}
-              onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, a_vista: e.target.checked } })}
-            />
-            Pagamento à vista
-          </label>
+          <Field label="Pagamento à vista? *">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`btn flex-1 !py-2 ${dados.forma_pagamento.a_vista === true ? "btn-primary" : "btn-outline"}`}
+                onClick={() => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, a_vista: true } })}
+              >
+                Sim
+              </button>
+              <button
+                type="button"
+                className={`btn flex-1 !py-2 ${dados.forma_pagamento.a_vista === false ? "btn-primary" : "btn-outline"}`}
+                onClick={() => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, a_vista: false } })}
+              >
+                Não
+              </button>
+            </div>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Renda informada">
+            <Field label="Renda informada *">
               <input
                 className="input"
                 value={dados.forma_pagamento.renda ?? ""}
                 onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, renda: e.target.value } })}
               />
             </Field>
-            <Field label="Valor proposto (R$)">
+            <Field label="Valor proposto (R$) *">
               <input
                 className="input"
                 type="number"
@@ -508,7 +632,7 @@ function Formulario({
               />
             </Field>
           </div>
-          {!dados.forma_pagamento.a_vista && (
+          {dados.forma_pagamento.a_vista === false && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Sinal (R$)">
@@ -527,7 +651,7 @@ function Formulario({
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Dividido em quantas parcelas">
+                <Field label="Dividido em quantas parcelas *">
                   <input
                     className="input"
                     type="number"
@@ -543,7 +667,7 @@ function Formulario({
                     }
                   />
                 </Field>
-                <Field label="Valor de cada parcela">
+                <Field label="Valor de cada parcela *">
                   <input
                     className="input"
                     value={dados.forma_pagamento.valor_parcela ?? ""}
@@ -611,17 +735,22 @@ function Formulario({
 function EnderecoCampos({
   endereco,
   onChange,
+  obrigatorio = true,
 }: {
   endereco: QualificacaoDados["endereco_residencial"];
   onChange: (e: QualificacaoDados["endereco_residencial"]) => void;
+  /** Complemento fica de fora mesmo quando obrigatório — nem todo endereço
+   * tem um, e travar o envio por isso não faz sentido. */
+  obrigatorio?: boolean;
 }) {
+  const m = obrigatorio ? " *" : "";
   return (
     <>
       <div className="grid grid-cols-[1fr_auto] gap-3">
-        <Field label="Rua/Avenida">
+        <Field label={`Rua/Avenida${m}`}>
           <input className="input" value={endereco.rua ?? ""} onChange={(e) => onChange({ ...endereco, rua: e.target.value })} />
         </Field>
-        <Field label="Nº">
+        <Field label={`Nº${m}`}>
           <input
             className="input w-20"
             value={endereco.numero ?? ""}
@@ -637,18 +766,18 @@ function EnderecoCampos({
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Bairro">
+        <Field label={`Bairro${m}`}>
           <input className="input" value={endereco.bairro ?? ""} onChange={(e) => onChange({ ...endereco, bairro: e.target.value })} />
         </Field>
-        <Field label="CEP">
+        <Field label={`CEP${m}`}>
           <input className="input" value={endereco.cep ?? ""} onChange={(e) => onChange({ ...endereco, cep: e.target.value })} />
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Cidade">
+        <Field label={`Cidade${m}`}>
           <input className="input" value={endereco.cidade ?? ""} onChange={(e) => onChange({ ...endereco, cidade: e.target.value })} />
         </Field>
-        <Field label="UF">
+        <Field label={`UF${m}`}>
           <input className="input" maxLength={2} value={endereco.estado ?? ""} onChange={(e) => onChange({ ...endereco, estado: e.target.value.toUpperCase() })} />
         </Field>
       </div>

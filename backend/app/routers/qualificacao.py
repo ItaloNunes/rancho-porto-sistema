@@ -325,11 +325,28 @@ async def enviar_documento(token: str, tipo: str, arquivo: UploadFile = File(...
     return sb.table("documentos_qualificacao").insert(row).execute().data[0]
 
 
+def _endereco_faltando(endereco: dict, rotulo: str) -> list[str]:
+    """Campos de endereço obrigatórios — mesmo conjunto pro residencial e pro
+    comercial. Complemento fica de fora (nem todo endereço tem um)."""
+    faltando = []
+    for campo, nome_campo in [
+        ("rua", "rua/avenida"), ("numero", "número"), ("bairro", "bairro"),
+        ("cidade", "cidade"), ("estado", "estado (UF)"), ("cep", "CEP"),
+    ]:
+        if not (endereco or {}).get(campo):
+            faltando.append(f"{nome_campo} ({rotulo})")
+    return faltando
+
+
 @router.post("/{token}/enviar", response_model=QualificacaoPublica)
 def enviar_para_analise(token: str):
     """Fecha o formulário e manda pra análise financeira — a partir daqui o
-    cliente não pode mais editar. Valida que os campos essenciais e os
-    documentos obrigatórios (mais os do cônjuge, se casado) estão presentes."""
+    cliente não pode mais editar. Valida TODOS os campos que viram dado na
+    Proposta de Compra/Venda gerada a partir disso (não só nome/CPF/RG) — a
+    validação do formulário público (QualificacaoPublica.tsx) já impede isso
+    na maioria dos casos, mas essa é a que vale de verdade: o formulário do
+    navegador dá pra pular chamando a API direto, então nada aqui pode
+    confiar só no que o cliente validou do lado dele."""
     sb = get_supabase()
     q = _buscar_por_token(sb, token)
     if q["status"] != "aguardando_preenchimento":
@@ -337,12 +354,49 @@ def enviar_para_analise(token: str):
 
     dados = q.get("dados") or {}
     proponente = dados.get("proponente") or {}
+    estado_civil = dados.get("estado_civil")
+    forma_pgto = dados.get("forma_pagamento") or {}
     faltando = []
-    for campo, rotulo in [("nome", "nome"), ("cpf_cnpj", "CPF"), ("rg", "RG")]:
+
+    for campo, rotulo in [
+        ("nome", "nome"), ("cpf_cnpj", "CPF"), ("rg", "RG"),
+        ("data_nascimento", "data de nascimento"), ("nacionalidade", "nacionalidade"),
+        ("profissao", "profissão"), ("email", "e-mail"),
+    ]:
         if not proponente.get(campo):
             faltando.append(rotulo)
-    if not dados.get("estado_civil"):
+    if not estado_civil:
         faltando.append("estado civil")
+
+    if estado_civil == "casado":
+        conjuge = dados.get("conjuge") or {}
+        for campo, rotulo in [
+            ("nome", "nome do cônjuge"), ("cpf_cnpj", "CPF do cônjuge"), ("rg", "RG do cônjuge"),
+            ("data_nascimento", "data de nascimento do cônjuge"), ("nacionalidade", "nacionalidade do cônjuge"),
+            ("profissao", "profissão do cônjuge"), ("email", "e-mail do cônjuge"),
+        ]:
+            if not conjuge.get(campo):
+                faltando.append(rotulo)
+
+    faltando += _endereco_faltando(dados.get("endereco_residencial"), "residencial")
+    if not dados.get("endereco_comercial_nao_possui"):
+        faltando += _endereco_faltando(dados.get("endereco_comercial"), "comercial")
+
+    if not dados.get("telefone_celular"):
+        faltando.append("telefone celular")
+
+    a_vista = forma_pgto.get("a_vista")
+    if a_vista is None:
+        faltando.append("se o pagamento é à vista")
+    if not forma_pgto.get("renda"):
+        faltando.append("renda")
+    if not forma_pgto.get("valor_proposto"):
+        faltando.append("valor proposto")
+    if a_vista is False:
+        if not forma_pgto.get("dividido_em_parcelas"):
+            faltando.append("quantidade de parcelas")
+        if not forma_pgto.get("valor_parcela"):
+            faltando.append("valor da parcela")
 
     obrigatorios = list(DOCUMENTOS_OBRIGATORIOS)
     if dados.get("estado_civil") == "casado":

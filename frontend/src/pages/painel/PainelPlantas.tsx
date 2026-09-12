@@ -1,17 +1,65 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import type { CondominioDetalhe, CondominioResumo, Lote } from "../../types";
 
-const ZOOMS = [75, 100, 150, 200, 300];
-const BASE_WIDTH = 760;
+// 100% = exatamente a largura disponível (a planta cabe na tela sem rolar de
+// lado, celular ou computador). Zoom acima disso é pra ganhar precisão ao
+// marcar os cantos — aí sim é esperado rolar dentro da própria moldura.
+const ZOOMS = [100, 150, 200, 300];
 
-/** Ferramenta de marcação manual dos lotes sobre a planta real (só admin):
- * já que a extração automática do polígono a partir do PDF da planta técnica
- * não deu certo (ver decisão do produto — a camada de contorno é feita de
- * milhares de traços curtos e desconectados, não polilinhas fechadas), o
- * jeito confiável é clicar os cantos de cada lote, uma vez, aqui. Uma vez
- * marcado, o lote passa a ser pintado de verdade (por status) em cima da
- * planta, tanto no catálogo público quanto no painel — ver PlantaSVG.tsx. */
+/** Candidatos de contorno pré-calculados por visão computacional a partir da
+ * imagem raster da planta (script backend/scripts/gerar_candidatos_planta.py)
+ * — ver comentário longo lá pro histórico completo. Resumo: tentamos extrair
+ * o polígono automaticamente a partir do PDF vetorial e não deu certo (traços
+ * desconectados); a partir da imagem rasterizada dá certo achar a FORMA do
+ * lote, mas não dá pra confiar em OCR pra saber automaticamente QUAL lote é
+ * cada forma (texto pequeno, rotacionado, comprimido — testado, não é
+ * confiável o bastante pra escrever sozinho em produção). Por isso o modo
+ * "Automático" aqui: a pessoa escolhe o lote (como sempre) e só precisa dar
+ * UM clique dentro dele na planta — a forma é preenchida sozinha a partir do
+ * mapa de candidatos. Nem toda planta tem esses arquivos gerados (só
+ * funciona bem em plantas com lotes grandes o bastante em pixels — Rancho
+ * Texas; Porto Franco tem lotes pequenos demais na resolução da imagem
+ * disponível e cai automaticamente pro modo manual). */
+type MapaCandidatos = {
+  img: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  poligonos: number[][][];
+} | null;
+
+async function carregarMapaCandidatos(slug: string): Promise<MapaCandidatos> {
+  try {
+    const [img, poligonos] = await Promise.all([
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("sem mapa"));
+        el.src = `/brand/${slug}-mapa.png`;
+      }),
+      fetch(`/brand/${slug}-candidatos.json`).then((r) => {
+        if (!r.ok) throw new Error("sem candidatos");
+        return r.json() as Promise<number[][][]>;
+      }),
+    ]);
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+    return { img: canvas, ctx, poligonos };
+  } catch {
+    return null; // planta sem candidatos gerados — cai pro modo manual, normal
+  }
+}
+
+/** Ferramenta de marcação dos lotes sobre a planta real (só admin). Dois
+ * modos: "Automático" (clique 1x dentro do lote — a forma vem do mapa de
+ * candidatos, ver acima) e "Manual" (clique nos cantos, um por um — sempre
+ * disponível, é o jeito de corrigir um lote que o automático acertou errado
+ * ou não tem candidato). Uma vez marcado, o lote passa a ser pintado de
+ * verdade (por status) em cima da planta, tanto no catálogo público quanto
+ * no painel — ver PlantaSVG.tsx. */
 export default function PainelPlantas() {
   const [condominios, setCondominios] = useState<CondominioResumo[]>([]);
   const [slug, setSlug] = useState<string>("");
@@ -22,6 +70,9 @@ export default function PainelPlantas() {
   const [pontos, setPontos] = useState<number[][]>([]);
   const [zoom, setZoom] = useState(100);
   const [salvando, setSalvando] = useState(false);
+  const [mapa, setMapa] = useState<MapaCandidatos>(null);
+  const [modo, setModo] = useState<"auto" | "manual">("auto");
+  const [aviso, setAviso] = useState<string | null>(null);
 
   useEffect(() => {
     api.listarCondominios().then((cs) => {
@@ -47,6 +98,21 @@ export default function PainelPlantas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  useEffect(() => {
+    setMapa(null);
+    if (!slug) return;
+    let cancelado = false;
+    carregarMapaCandidatos(slug).then((m) => {
+      if (!cancelado) {
+        setMapa(m);
+        setModo(m ? "auto" : "manual");
+      }
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [slug]);
+
   const loteAtual = condo?.lotes.find((l) => l.id === loteId) ?? null;
 
   const lotesFiltrados = useMemo(() => {
@@ -59,6 +125,27 @@ export default function PainelPlantas() {
   function selecionarLote(l: Lote) {
     setLoteId(l.id);
     setPontos(l.poligono_definido ? l.poligono : []);
+    setAviso(null);
+  }
+
+  /** Clique dentro da planta em modo automático: olha o pixel no mapa de
+   * candidatos e, se houver um contorno ali, usa ele inteiro como polígono
+   * do lote selecionado — sem precisar clicar cantos. */
+  function tentarPreencherAutomatico(planX: number, planY: number) {
+    if (!mapa) return;
+    const px = Math.round((planX / (condo?.plan_w ?? 1)) * mapa.img.width);
+    const py = Math.round((planY / (condo?.plan_h ?? 1)) * mapa.img.height);
+    if (px < 0 || py < 0 || px >= mapa.img.width || py >= mapa.img.height) return;
+    const [r, g] = mapa.ctx.getImageData(px, py, 1, 1).data;
+    const id = r + g * 256;
+    if (id === 0) {
+      setAviso("Nenhum contorno detectado nesse ponto — clique um pouco mais pro centro do lote, ou marque manualmente.");
+      return;
+    }
+    const poligono = mapa.poligonos[id - 1];
+    if (!poligono) return;
+    setAviso(null);
+    setPontos(poligono);
   }
 
   async function salvar() {
@@ -118,8 +205,9 @@ export default function PainelPlantas() {
         <div>
           <h1 className="text-xl font-bold text-ink">Marcar lotes na planta</h1>
           <p className="text-xs text-ink-soft mt-1">
-            Selecione um lote na lista, clique nos cantos dele sobre a planta (na ordem do contorno) e salve. Depois
-            de marcado, o lote passa a ser pintado de verdade no catálogo e no painel.
+            {mapa
+              ? "Selecione um lote na lista, dê um clique dentro dele na planta (modo Automático) e salve. Se o contorno vier errado, mude pra Manual e clique nos cantos."
+              : "Selecione um lote na lista, clique nos cantos dele sobre a planta (na ordem do contorno) e salve."}
           </p>
         </div>
         <select className="input !w-auto" value={slug} onChange={(e) => setSlug(e.target.value)}>
@@ -138,7 +226,7 @@ export default function PainelPlantas() {
       {erro && <p className="text-rust text-sm mb-3">{erro}</p>}
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
-        <div className="card p-4">
+        <div className="card p-4 order-last lg:order-none">
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <p className="text-sm text-ink">
               {loteAtual ? (
@@ -147,35 +235,78 @@ export default function PainelPlantas() {
                   <span className="text-ink-soft">({pontos.length} ponto{pontos.length === 1 ? "" : "s"})</span>
                 </>
               ) : (
-                "Selecione um lote na lista ao lado"
+                "Selecione um lote na lista abaixo"
               )}
             </p>
-            <select className="input !w-auto !py-1.5 !text-xs" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}>
-              {ZOOMS.map((z) => (
-                <option key={z} value={z}>
-                  {z}%
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              {mapa && (
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+                  <button
+                    className={`px-2.5 py-1.5 font-medium transition-colors ${modo === "auto" ? "bg-primary text-white" : "text-ink-soft hover:bg-surface-alt"}`}
+                    onClick={() => {
+                      setModo("auto");
+                      setAviso(null);
+                    }}
+                  >
+                    Automático
+                  </button>
+                  <button
+                    className={`px-2.5 py-1.5 font-medium transition-colors border-l border-border ${modo === "manual" ? "bg-primary text-white" : "text-ink-soft hover:bg-surface-alt"}`}
+                    onClick={() => {
+                      setModo("manual");
+                      setAviso(null);
+                    }}
+                  >
+                    Manual
+                  </button>
+                </div>
+              )}
+              <select className="input !w-auto !py-1.5 !text-xs" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}>
+                {ZOOMS.map((z) => (
+                  <option key={z} value={z}>
+                    {z}%
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <PlantaClicavel condo={condo} zoom={zoom} loteAtualId={loteId} pontos={pontos} setPontos={setPontos} />
+          {aviso && <p className="text-ochre text-xs mb-2">{aviso}</p>}
+
+          <PlantaClicavel
+            condo={condo}
+            zoom={zoom}
+            loteAtualId={loteId}
+            pontos={pontos}
+            setPontos={setPontos}
+            modo={mapa ? modo : "manual"}
+            onCliqueAutomatico={tentarPreencherAutomatico}
+          />
 
           <div className="flex flex-wrap gap-2 mt-3">
-            <button
-              className="btn btn-outline !py-2 !text-xs"
-              disabled={!loteAtual || pontos.length === 0}
-              onClick={() => setPontos(pontos.slice(0, -1))}
-            >
-              Desfazer último ponto
-            </button>
-            <button
-              className="btn btn-outline !py-2 !text-xs"
-              disabled={!loteAtual || pontos.length === 0}
-              onClick={() => setPontos([])}
-            >
-              Limpar pontos
-            </button>
+            {modo === "manual" && (
+              <>
+                <button
+                  className="btn btn-outline !py-2 !text-xs"
+                  disabled={!loteAtual || pontos.length === 0}
+                  onClick={() => setPontos(pontos.slice(0, -1))}
+                >
+                  Desfazer último ponto
+                </button>
+                <button
+                  className="btn btn-outline !py-2 !text-xs"
+                  disabled={!loteAtual || pontos.length === 0}
+                  onClick={() => setPontos([])}
+                >
+                  Limpar pontos
+                </button>
+              </>
+            )}
+            {modo === "auto" && pontos.length > 0 && (
+              <button className="btn btn-outline !py-2 !text-xs" disabled={!loteAtual} onClick={() => setPontos([])}>
+                Limpar contorno
+              </button>
+            )}
             <button
               className="btn btn-primary !py-2 !text-xs ml-auto"
               disabled={!loteAtual || pontos.length < 3 || salvando}
@@ -219,19 +350,39 @@ function PlantaClicavel({
   loteAtualId,
   pontos,
   setPontos,
+  modo,
+  onCliqueAutomatico,
 }: {
   condo: CondominioDetalhe;
   zoom: number;
   loteAtualId: string | null;
   pontos: number[][];
   setPontos: (p: number[][]) => void;
+  modo: "auto" | "manual";
+  onCliqueAutomatico: (planX: number, planY: number) => void;
 }) {
   const planW = condo.plan_w ?? 1000;
   const planH = condo.plan_h ?? 1000;
   const planMinX = condo.plan_minx ?? 0;
   const planMinY = condo.plan_miny ?? 0;
 
-  const renderedWidth = (BASE_WIDTH * zoom) / 100;
+  // 100% de zoom = a largura que a moldura tem disponível de verdade (medida
+  // com ResizeObserver) — assim a planta cabe certinho tanto num celular
+  // estreito quanto numa tela grande, sem rolagem de página nenhuma. Acima de
+  // 100% ela passa a ficar mais larga que a moldura de propósito, pra dar
+  // precisão ao marcar — aí a rolagem fica contida dentro da moldura mesmo.
+  const molduraRef = useRef<HTMLDivElement>(null);
+  const [larguraDisponivel, setLarguraDisponivel] = useState(320);
+  useEffect(() => {
+    const el = molduraRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setLarguraDisponivel(el.clientWidth));
+    ro.observe(el);
+    setLarguraDisponivel(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const renderedWidth = (larguraDisponivel * zoom) / 100;
   const renderedHeight = renderedWidth * (planH / planW);
 
   function planParaPixel(p: number[]): [number, number] {
@@ -245,14 +396,18 @@ function PlantaClicavel({
     const py = e.clientY - rect.top;
     const x = planMinX + (px / renderedWidth) * planW;
     const y = planMinY + (py / renderedHeight) * planH;
+    if (modo === "auto") {
+      onCliqueAutomatico(x, y);
+      return;
+    }
     setPontos([...pontos, [Math.round(x * 10) / 10, Math.round(y * 10) / 10]]);
   }
 
   return (
-    <div className="overflow-auto border border-border rounded-lg bg-surface-alt/40" style={{ maxHeight: "65vh" }}>
+    <div ref={molduraRef} className="overflow-auto border border-border rounded-lg bg-surface-alt/40" style={{ maxHeight: "65vh" }}>
       <div
-        className="relative cursor-crosshair select-none"
-        style={{ width: renderedWidth, height: renderedHeight }}
+        className="relative select-none"
+        style={{ width: renderedWidth, height: renderedHeight, cursor: loteAtualId ? "crosshair" : "default" }}
         onClick={onClickImagem}
       >
         <img
@@ -283,7 +438,7 @@ function PlantaClicavel({
               />
             ))}
 
-          {/* Polígono em construção do lote selecionado */}
+          {/* Polígono em construção (manual) ou já preenchido (automático) do lote selecionado */}
           {pontos.length > 0 && (
             <polygon
               points={pontos.map((p) => planParaPixel(p).join(",")).join(" ")}
@@ -294,10 +449,11 @@ function PlantaClicavel({
               strokeDasharray={pontos.length < 3 ? "4 4" : undefined}
             />
           )}
-          {pontos.map((p, i) => {
-            const [px, py] = planParaPixel(p);
-            return <circle key={i} cx={px} cy={py} r={5} fill="#C1810B" stroke="#fff" strokeWidth={1.5} />;
-          })}
+          {modo === "manual" &&
+            pontos.map((p, i) => {
+              const [px, py] = planParaPixel(p);
+              return <circle key={i} cx={px} cy={py} r={5} fill="#C1810B" stroke="#fff" strokeWidth={1.5} />;
+            })}
         </svg>
       </div>
     </div>

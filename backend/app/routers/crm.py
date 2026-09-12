@@ -9,10 +9,9 @@ Dois papéis:
   (útil pra reservas feitas direto pelo cliente no catálogo público, sem
   corretor envolvido ainda).
 
-A geração do PDF da proposta de compra e venda ainda não está implementada:
-o texto/modelo do contrato (cláusulas, condições padrão, dados da
-incorporadora) precisa vir da imobiliária antes de existir algo confiável
-para gerar. Por enquanto o endpoint só guarda os dados da proposta.
+O PDF da proposta de compra e venda (gerar_pdf_proposta, abaixo) reproduz o
+layout exato do formulário em papel usado pela imobiliária (Proposta de
+Compra/Venda Castel, operada com a JR Imóveis) — ver app/pdf.py.
 """
 
 from datetime import datetime

@@ -240,6 +240,10 @@ export interface QualificacaoDados {
   conjuge?: PessoaDados | null;
   endereco_residencial: EnderecoDados;
   endereco_comercial: EnderecoDados;
+  // Nem todo proponente tem endereço comercial próprio (autônomo, aposentado
+  // etc.) — sem essa flag não dá pra distinguir "não preencheu ainda" de
+  // "não se aplica" na validação do envio final.
+  endereco_comercial_nao_possui?: boolean | null;
   telefone_residencial?: string | null;
   telefone_comercial?: string | null;
   telefone_celular?: string | null;
@@ -255,6 +259,7 @@ export function qualificacaoDadosVazio(): QualificacaoDados {
     conjuge: null,
     endereco_residencial: {},
     endereco_comercial: {},
+    endereco_comercial_nao_possui: false,
     forma_pagamento: {},
   };
 }

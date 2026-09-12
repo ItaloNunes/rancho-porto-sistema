@@ -409,6 +409,10 @@ class QualificacaoDados(BaseModel):
     conjuge: Optional[PessoaDados] = None
     endereco_residencial: EnderecoDados = Field(default_factory=EnderecoDados)
     endereco_comercial: EnderecoDados = Field(default_factory=EnderecoDados)
+    # Nem todo proponente tem endereço comercial próprio (autônomo, aposentado
+    # etc.) — sem essa flag não dá pra distinguir "não preencheu ainda" de
+    # "não se aplica" na validação do envio final (ver enviar_para_analise).
+    endereco_comercial_nao_possui: Optional[bool] = None
     telefone_residencial: Optional[str] = None
     telefone_comercial: Optional[str] = None
     telefone_celular: Optional[str] = None
