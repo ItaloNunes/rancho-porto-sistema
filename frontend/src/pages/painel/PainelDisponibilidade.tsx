@@ -96,28 +96,38 @@ export default function PainelDisponibilidade() {
     return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
   }, [lotes]);
 
+  // Lotes só do empreendimento escolhido no filtro de cima (sem aplicar ainda
+  // o filtro de status/busca) — é a base tanto da legenda de contagem quanto
+  // do PDF exportado, pra sempre baterem com o que está selecionado ali.
+  const lotesDoEmpreendimento = useMemo(
+    () => (condominioSlug ? (lotes ?? []).filter((l) => l.condominio_slug === condominioSlug) : lotes ?? []),
+    [lotes, condominioSlug],
+  );
+
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return (lotes ?? []).filter((l) => {
-      if (condominioSlug && l.condominio_slug !== condominioSlug) return false;
+    return lotesDoEmpreendimento.filter((l) => {
       if (statusFiltro !== "todos" && l.status !== statusFiltro) return false;
       if (termo && !`${l.identificador} ${l.quadra}`.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [lotes, busca, condominioSlug, statusFiltro]);
+  }, [lotesDoEmpreendimento, busca, statusFiltro]);
 
+  // Reflete o empreendimento selecionado (não trava pelo status escolhido,
+  // senão os outros status da legenda cairiam pra zero ao filtrar por um só).
   const contagem = useMemo(() => {
     const base = { disponivel: 0, reservado: 0, vendido: 0 };
-    for (const l of lotes ?? []) base[l.status]++;
+    for (const l of lotesDoEmpreendimento) base[l.status]++;
     return base;
-  }, [lotes]);
+  }, [lotesDoEmpreendimento]);
 
   // Reaproveita o mesmo PDF (com linha colorida) já usado na Visão geral —
-  // aqui exporta já filtrado pelo empreendimento selecionado em cima, se tiver.
+  // aqui exporta já filtrado pelo empreendimento selecionado no filtro de
+  // cima, se tiver algum selecionado (senão sai com todos).
   async function exportarPdf() {
     setExportando(true);
     try {
-      const condominioId = condominioSlug ? lotes?.find((l) => l.condominio_slug === condominioSlug)?.condominio_id : undefined;
+      const condominioId = condominioSlug ? lotesDoEmpreendimento[0]?.condominio_id : undefined;
       const blob = await api.exportarVisaoGeralPdf(condominioId);
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
@@ -148,8 +158,12 @@ export default function PainelDisponibilidade() {
             ))}
           </div>
           {ehAdmin && (
-            <button className="btn btn-primary" onClick={exportarPdf} disabled={exportando}>
-              {exportando ? "Gerando..." : "Exportar PDF"}
+            <button className="btn btn-primary text-center leading-tight" onClick={exportarPdf} disabled={exportando}>
+              {exportando
+                ? "Gerando..."
+                : condominioSlug
+                  ? `Exportar PDF (${empreendimentos.find((c) => c.slug === condominioSlug)?.nome ?? ""})`
+                  : "Exportar PDF (todos)"}
             </button>
           )}
         </div>

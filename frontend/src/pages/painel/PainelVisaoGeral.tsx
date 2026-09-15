@@ -77,6 +77,17 @@ export default function PainelVisaoGeral() {
     [reservasAtivas],
   );
 
+  // Funil de atendimento — mesma leitura que a antiga aba "Acompanhamento"
+  // dava (novo → em atendimento → confirmado, mais os cancelados à parte),
+  // só que junto do resto dos números em vez de uma tela separada.
+  const funil = useMemo(() => {
+    const base = { pendente: 0, em_atendimento: 0, confirmada: 0, cancelada: 0 };
+    for (const r of reservas ?? []) {
+      if (r.status in base) base[r.status as keyof typeof base]++;
+    }
+    return base;
+  }, [reservas]);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -86,7 +97,7 @@ export default function PainelVisaoGeral() {
             Números consolidados de todos os empreendimentos, atualizados em tempo real.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             className="input !w-auto text-sm"
             value={empreendimentoPdf}
@@ -99,7 +110,7 @@ export default function PainelVisaoGeral() {
               </option>
             ))}
           </select>
-          <button className="btn btn-primary" onClick={exportarPdf} disabled={exportando}>
+          <button className="btn btn-primary whitespace-nowrap" onClick={exportarPdf} disabled={exportando}>
             {exportando ? "Gerando..." : "Exportar PDF"}
           </button>
         </div>
@@ -134,6 +145,18 @@ export default function PainelVisaoGeral() {
               />
               <StatTileMoeda label="Valor vendido" valor={totais.valor_total_vendido} cor="text-primary" />
               <StatTileMoeda label="Ticket médio" valor={ticketMedioGeral} cor="text-ink" />
+            </div>
+          </div>
+
+          {/* Funil de atendimento — substitui a antiga aba "Acompanhamento",
+              agora dentro do próprio dashboard. */}
+          <div className="card p-5 sm:p-6 mb-5">
+            <h2 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Funil de atendimento</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatTile label="Novos" valor={funil.pendente} cor="text-primary" />
+              <StatTile label="Em atendimento" valor={funil.em_atendimento} cor="text-ochre" />
+              <StatTile label="Confirmados" valor={funil.confirmada} cor="text-sage" />
+              <StatTile label="Cancelados" valor={funil.cancelada} cor="text-rust" />
             </div>
           </div>
 

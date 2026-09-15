@@ -9,10 +9,14 @@ import { useAuth } from "../../lib/auth";
 // projeto (PainelClientes.tsx, PainelQualificacoes.tsx e as rotas do
 // backend), só não estão mais roteadas em main.tsx.
 //
+// Mesma coisa com Acompanhamento (o funil que ele mostrava virou uma seção
+// dentro da Visão geral, pra não duplicar com a aba Reservas) e Marcar
+// plantas (não é mais usado no dia a dia) — PainelAcompanhamento.tsx e
+// PainelPlantas.tsx continuam no projeto, só desroteados.
+//
 // Corretor comum: gera reserva e acompanha propostas (só sem aprovar
 // nada). O resto (mexer direto no estoque de lotes, números consolidados,
-// gestão de outros corretores, marcação da planta) é só admin — ver
-// TABS_ADMIN.
+// gestão de outros corretores) é só admin — ver TABS_ADMIN.
 const TABS_BASE = [
   { to: "/painel/reservas", label: "Reservas" },
   { to: "/painel/propostas", label: "Propostas" },
@@ -22,9 +26,7 @@ const TABS_BASE = [
 const TABS_ADMIN = [
   { to: "/painel/lotes", label: "Lotes" },
   { to: "/painel/visao-geral", label: "Visão geral" },
-  { to: "/painel/acompanhamento", label: "Acompanhamento" },
   { to: "/painel/corretores", label: "Corretores" },
-  { to: "/painel/plantas", label: "Marcar plantas" },
 ];
 
 // Intervalo de checagem do indicador de "reserva nova" na aba Reservas —

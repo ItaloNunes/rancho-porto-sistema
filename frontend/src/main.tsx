@@ -14,9 +14,9 @@ import PainelPropostas from "./pages/painel/PainelPropostas";
 import PainelReservas from "./pages/painel/PainelReservas";
 import PainelDisponibilidade from "./pages/painel/PainelDisponibilidade";
 import PainelLotes from "./pages/painel/PainelLotes";
-import PainelPlantas from "./pages/painel/PainelPlantas";
-import PainelAcompanhamento from "./pages/painel/PainelAcompanhamento";
 import PainelVisaoGeral from "./pages/painel/PainelVisaoGeral";
+// PainelPlantas e PainelAcompanhamento saíram da navegação (ver comentário em
+// PainelLayout.tsx) — os arquivos continuam no projeto, só não são mais importados aqui.
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -64,26 +64,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="acompanhamento"
-              element={
-                <RequireAuth adminOnly>
-                  <PainelAcompanhamento />
-                </RequireAuth>
-              }
-            />
-            <Route
               path="corretores"
               element={
                 <RequireAuth adminOnly>
                   <PainelCorretores />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="plantas"
-              element={
-                <RequireAuth adminOnly>
-                  <PainelPlantas />
                 </RequireAuth>
               }
             />
