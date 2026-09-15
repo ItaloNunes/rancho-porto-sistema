@@ -24,51 +24,11 @@
     --rust: #C43C3C;
     --rust-tint: rgba(196,60,60,.10);
     --shadow-card: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -8px rgba(15,23,42,.10);
+    color-scheme: light;
   }
-  :root:not([data-theme="light"]) {
-    @media (prefers-color-scheme: dark) {
-      --bg: #0A0E16;
-      --surface: #121826;
-      --surface-alt: #171F30;
-      --surface-alt-2: #1C2437;
-      --border: #262F45;
-      --ink: #EEF2F8;
-      --ink-soft: #9AA6C0;
-      --muted: #6C7794;
-      --primary: #4A90C2;
-      --primary-dark: #2E6690;
-      --primary-tint: rgba(74,144,194,.14);
-      --accent: #D3B37C;
-      --sage: #3FBE83;
-      --sage-tint: rgba(63,190,131,.14);
-      --ochre: #E0A93A;
-      --ochre-tint: rgba(224,169,58,.14);
-      --rust: #E2685F;
-      --rust-tint: rgba(226,104,95,.14);
-      --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.5);
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0A0E16;
-    --surface: #121826;
-    --surface-alt: #171F30;
-    --surface-alt-2: #1C2437;
-    --border: #262F45;
-    --ink: #EEF2F8;
-    --ink-soft: #9AA6C0;
-    --muted: #6C7794;
-    --primary: #4A90C2;
-    --primary-dark: #2E6690;
-    --primary-tint: rgba(74,144,194,.14);
-    --accent: #D3B37C;
-    --sage: #3FBE83;
-    --sage-tint: rgba(63,190,131,.14);
-    --ochre: #E0A93A;
-    --ochre-tint: rgba(224,169,58,.14);
-    --rust: #E2685F;
-    --rust-tint: rgba(226,104,95,.14);
-    --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.5);
-  }
+  /* Paleta única e fixa — o painel de verdade (rancho-porto-frontend) não tem
+     modo escuro, então essa prévia usa exatamente as mesmas cores dele em
+     qualquer tema do sistema, pra não destoar do resto. */
 
   * { box-sizing: border-box; }
   html, body { background: var(--bg); }
