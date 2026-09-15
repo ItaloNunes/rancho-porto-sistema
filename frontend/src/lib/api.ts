@@ -41,6 +41,46 @@ function extrairErro(body: unknown, fallback: string): string {
   return fallback;
 }
 
+// O backend (Render, plano free) "dorme" depois de ficar um tempo sem
+// requisição e demora até ~50s pra acordar na próxima — sem isso, a
+// primeira chamada do dia falha com "Failed to fetch" (erro de rede puro,
+// o fetch nem chega a ter resposta) e aparece cru pro usuário. As duas
+// camadas que evitam isso: 1) keep-alive (.github/workflows/keep-alive.yml)
+// pinga /health de 10 em 10 min pra reduzir a chance de dormir; 2) o retry
+// abaixo, que refaz a chamada em vez de estourar erro na primeira falha —
+// cobre tanto um cold start que escape do keep-alive quanto uma instabilidade
+// de rede passageira. 502/503/504 (gateway/serviço acordando) entram no
+// mesmo retry; qualquer outro status HTTP (400, 401, 404...) é erro de
+// verdade e não deve ser tentado de novo.
+const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 8000]; // ~23s de espera total
+
+function respostaTemporariamenteIndisponivel(res: Response): boolean {
+  return [502, 503, 504].includes(res.status);
+}
+
+async function fetchComRetry(url: string, init: RequestInit): Promise<Response> {
+  for (let tentativa = 0; ; tentativa++) {
+    let res: Response | null = null;
+    let erroDeRede: unknown = null;
+    try {
+      res = await fetch(url, init);
+    } catch (e) {
+      erroDeRede = e;
+    }
+    const podeTentarDeNovo = tentativa < RETRY_DELAYS_MS.length;
+    const falhouPorRede = erroDeRede !== null;
+    const falhouPorIndisponibilidade = res !== null && respostaTemporariamenteIndisponivel(res);
+    if ((falhouPorRede || falhouPorIndisponibilidade) && podeTentarDeNovo) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[tentativa]));
+      continue;
+    }
+    if (falhouPorRede) {
+      throw new Error("Não foi possível conectar ao servidor. Verifique sua internet e tente novamente em instantes.");
+    }
+    return res as Response;
+  }
+}
+
 /** `auth=true` anexa o token de sessão do painel (login próprio, ver
  * lib/token.ts) — sem isso, os endpoints do painel (/crm/*, /reservas,
  * PATCH de status) respondem 401. O catálogo público nunca precisa disso. */
@@ -53,7 +93,7 @@ async function request<T>(path: string, init?: RequestInit, auth = false): Promi
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const res = await fetchComRetry(`${API_URL}${path}`, { ...init, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(extrairErro(body, `Erro ${res.status} ao chamar a API`));
@@ -67,7 +107,7 @@ async function requestBlob(path: string): Promise<Blob> {
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_URL}${path}`, { headers });
+  const res = await fetchComRetry(`${API_URL}${path}`, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(extrairErro(body, `Erro ${res.status} ao gerar o PDF`));
