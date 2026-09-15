@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 /** Página de destino do link enviado por e-mail (convite de um corretor novo
@@ -41,6 +42,11 @@ export default function DefinirSenha() {
       setErro(error.message);
       return;
     }
+    // Avisa o backend que a senha deixou de ser "o telefone" — assim, se o
+    // admin corrigir o telefone dessa pessoa depois por outro motivo, não
+    // sobrescreve sem avisar a senha que ela acabou de escolher. Melhor
+    // esforço: se falhar, só não impede o login funcionar agora.
+    api.marcarSenhaCustomizada().catch(() => {});
     setSucesso(true);
     setTimeout(() => navigate("/painel", { replace: true }), 1200);
   }

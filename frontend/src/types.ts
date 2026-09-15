@@ -73,6 +73,14 @@ export interface Corretor {
   telefone?: string | null;
   papel: Papel;
   ativo: boolean;
+  /** true assim que o corretor troca a própria senha — editar o telefone
+   * depois não sobrescreve mais a senha automaticamente (ver PATCH
+   * /crm/corretores/{id} e POST /crm/me/senha-customizada no backend). */
+  senha_customizada?: boolean;
+  /** Só vem preenchido na resposta de PATCH quando a senha acabou de ser
+   * (re)sincronizada com o telefone — mesma ideia do `senha` de
+   * CorretorCriado, abaixo. */
+  senha?: string | null;
 }
 
 /** Resposta de POST /crm/corretores — só nessa hora a senha aparece em

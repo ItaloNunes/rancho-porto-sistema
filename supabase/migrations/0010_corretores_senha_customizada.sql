@@ -1,0 +1,12 @@
+-- Corrige o bug em que editar o telefone de um corretor (PATCH /crm/corretores)
+-- só atualizava a linha da tabela, nunca a senha de fato no Supabase Auth —
+-- como a convenção do sistema é "senha = telefone" (ver app/usuarios.py),
+-- corrigir um telefone digitado errado deixava a senha de login desatualizada
+-- e o corretor continuava tomando "usuário ou senha incorretos".
+--
+-- Esta coluna marca quando o próprio corretor já trocou a senha (via "Trocar
+-- senha", ver DefinirSenha.tsx + POST /crm/me/senha-customizada): nesse caso
+-- editar o telefone NÃO deve sobrescrever a senha escolhida por ele sem
+-- avisar. O admin ainda pode forçar isso via o botão "Resetar senha"
+-- (payload.resetar_senha em PATCH /crm/corretores/{id}).
+alter table corretores add column if not exists senha_customizada boolean not null default false;

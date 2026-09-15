@@ -280,6 +280,11 @@ class CorretorUpdate(BaseModel):
     telefone: Optional[str] = None
     papel: Optional[Papel] = None
     ativo: Optional[bool] = None
+    # Força a senha de login de volta pro telefone atual, mesmo que o
+    # corretor já tenha trocado a própria senha (senha_customizada=True) —
+    # via manual do admin pra destravar quem esqueceu a senha. Ver
+    # atualizar_corretor em routers/crm.py.
+    resetar_senha: Optional[bool] = None
 
 
 class Corretor(BaseModel):
@@ -290,6 +295,14 @@ class Corretor(BaseModel):
     telefone: Optional[str] = None
     papel: Papel = "corretor"
     ativo: bool = True
+    # True assim que o corretor troca a própria senha (POST
+    # /crm/me/senha-customizada) — impede que uma correção de telefone
+    # sobrescreva sem avisar uma senha que a pessoa escolheu.
+    senha_customizada: bool = False
+    # Só vem preenchido na resposta de PATCH /crm/corretores/{id} quando a
+    # senha acabou de ser (re)sincronizada com o telefone — mesma ideia do
+    # `senha` de CorretorCriado: única vez que aparece em texto puro.
+    senha: Optional[str] = None
 
 
 class CorretorCriado(Corretor):

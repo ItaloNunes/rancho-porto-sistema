@@ -213,9 +213,43 @@ def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict =
     if not existente:
         raise HTTPException(404, "Corretor não encontrado.")
     existente = existente[0]
-    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    payload_dict = payload.model_dump()
+    resetar_senha = payload_dict.pop("resetar_senha", None)
+    updates = {k: v for k, v in payload_dict.items() if v is not None}
+
+    telefone_novo = updates.get("telefone", existente.get("telefone"))
+    telefone_mudou = "telefone" in updates and updates["telefone"] != existente.get("telefone")
+
+    # Telefone é a senha de login por padrão (ver app/usuarios.py) — se o
+    # admin corrige um telefone digitado errado, a senha de fato no Supabase
+    # Auth precisa acompanhar, senão o corretor continua tomando "usuário ou
+    # senha incorretos" com o telefone (certo) que acabou de receber.
+    #
+    # Exceção: se o corretor já trocou a própria senha (senha_customizada),
+    # um telefone editado por outro motivo qualquer não deve sobrescrever
+    # sem avisar a senha que a pessoa escolheu — nesse caso só sincroniza de
+    # volta se o admin pedir explicitamente via `resetar_senha` (ex.: pra
+    # destravar alguém que esqueceu a senha customizada).
+    deve_sincronizar_senha = bool(existente.get("auth_user_id")) and (
+        (telefone_mudou and not existente.get("senha_customizada")) or resetar_senha
+    )
+
+    nova_senha = None
+    if deve_sincronizar_senha:
+        nova_senha = senha_de_telefone(telefone_novo)
+        if len(nova_senha) < 6:
+            raise HTTPException(400, "Telefone inválido pra gerar a senha (mínimo 6 dígitos).")
+        try:
+            sb.auth.admin.update_user_by_id(existente["auth_user_id"], {"password": nova_senha})
+        except Exception as exc:
+            raise HTTPException(400, f"Não foi possível atualizar a senha de login: {exc}") from exc
+        # Depois de sincronizar (seja pela mudança de telefone, seja por um
+        # reset manual), a senha volta a ser "o telefone" — limpa a marca.
+        updates["senha_customizada"] = False
+
     if not updates:
         return existente
+
     atualizado = sb.table("corretores").update(updates).eq("id", corretor_id).execute().data[0]
     # Ativar/desativar aqui também trava (ou destrava) o login no Supabase
     # Auth de fato — não só a linha desta tabela.
@@ -225,7 +259,30 @@ def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict =
             sb.auth.admin.update_user_by_id(existente["auth_user_id"], {"ban_duration": ban})
         except Exception:
             pass
-    return atualizado
+
+    resposta = dict(atualizado)
+    if nova_senha:
+        # Única vez que essa senha (re)sincronizada aparece em texto puro —
+        # mesma regra de POST /corretores (CorretorCriado.senha).
+        resposta["senha"] = nova_senha
+    return resposta
+
+
+@router.post("/me/senha-customizada", response_model=Corretor)
+def marcar_senha_customizada(corretor: dict = Depends(get_current_corretor)):
+    """Chamado pelo front assim que o próprio corretor troca a senha pelo
+    Supabase Auth (ver DefinirSenha.tsx) — o backend nunca fica sabendo dessa
+    troca sozinho, porque ela acontece direto no cliente. Sem esse aviso,
+    editar o telefone da pessoa depois (por qualquer motivo) sobrescreveria
+    de volta pro telefone a senha que ela escolheu, sem avisar ninguém."""
+    sb = get_supabase()
+    return (
+        sb.table("corretores")
+        .update({"senha_customizada": True})
+        .eq("id", corretor["id"])
+        .execute()
+        .data[0]
+    )
 
 
 @router.delete("/corretores/{corretor_id}", status_code=204)

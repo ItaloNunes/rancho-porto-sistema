@@ -7,7 +7,9 @@ export default function PainelCorretores() {
   const [corretores, setCorretores] = useState<Corretor[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<Corretor | "novo" | null>(null);
-  const [criado, setCriado] = useState<{ usuario: string; senha: string } | null>(null);
+  const [criado, setCriado] = useState<{ usuario: string; senha: string; motivo: "criado" | "resetado" } | null>(
+    null,
+  );
   const [importando, setImportando] = useState(false);
   const [resultadoImportacao, setResultadoImportacao] = useState<CorretorImportadoItem[] | null>(null);
 
@@ -166,7 +168,7 @@ export default function PainelCorretores() {
         <Modal onClose={() => setCriado(null)} labelledBy="login-criado-title">
           <div className="p-6 sm:p-8 grid gap-3">
             <h2 id="login-criado-title" className="text-lg font-bold text-ink mb-1">
-              Login criado
+              {criado.motivo === "resetado" ? "Senha atualizada" : "Login criado"}
             </h2>
             <p className="text-sm text-ink-soft">
               Repasse esses dados pro corretor — a senha não aparece de novo depois que essa janela fechar.
@@ -194,7 +196,7 @@ function CorretorForm({
   onSalvo,
 }: {
   corretor: Corretor | null;
-  onSalvo: (loginCriado?: { usuario: string; senha: string }) => void;
+  onSalvo: (loginCriado?: { usuario: string; senha: string; motivo: "criado" | "resetado" }) => void;
 }) {
   const [nome, setNome] = useState(corretor?.nome ?? "");
   const [usuario, setUsuario] = useState(corretor?.usuario ?? "");
@@ -202,6 +204,7 @@ function CorretorForm({
   const [papel, setPapel] = useState<Papel>(corretor?.papel ?? "corretor");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [resetando, setResetando] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -209,16 +212,43 @@ function CorretorForm({
     setSalvando(true);
     try {
       if (corretor) {
-        await api.atualizarCorretor(corretor.id, { nome, telefone: telefone || null, papel });
-        onSalvo();
+        const atualizado = await api.atualizarCorretor(corretor.id, { nome, telefone: telefone || null, papel });
+        // Backend só devolve `senha` quando ela acabou de ser (re)sincronizada
+        // com o telefone (ex.: telefone mudou e a senha ainda era a padrão) —
+        // se o corretor já tinha customizado a própria senha, nada muda aqui.
+        onSalvo(atualizado.senha ? { usuario: corretor.usuario ?? "", senha: atualizado.senha, motivo: "resetado" } : undefined);
       } else {
         const criado = await api.criarCorretor({ nome, telefone, usuario: usuario || null, papel });
-        onSalvo({ usuario: criado.usuario ?? "", senha: criado.senha });
+        onSalvo({ usuario: criado.usuario ?? "", senha: criado.senha, motivo: "criado" });
       }
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function resetarSenha() {
+    if (!corretor) return;
+    if (
+      !confirm(
+        `Voltar a senha de "${corretor.nome}" pro telefone atual (${corretor.telefone || "—"}, só números)? A senha customizada por ele, se houver, deixa de valer.`,
+      )
+    )
+      return;
+    setErro(null);
+    setResetando(true);
+    try {
+      const atualizado = await api.atualizarCorretor(corretor.id, { resetar_senha: true });
+      if (atualizado.senha) {
+        onSalvo({ usuario: corretor.usuario ?? "", senha: atualizado.senha, motivo: "resetado" });
+      } else {
+        onSalvo();
+      }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResetando(false);
     }
   }
 
@@ -230,6 +260,13 @@ function CorretorForm({
       {!corretor && (
         <p className="text-xs text-ink-soft -mt-1 mb-1">
           A senha inicial é o telefone (só números). Deixe "usuário" em branco pra gerar automático a partir do nome.
+        </p>
+      )}
+      {corretor && (
+        <p className="text-xs text-ink-soft -mt-1 mb-1">
+          {corretor.senha_customizada
+            ? "Esse corretor já trocou a própria senha — mudar o telefone aqui não altera o login dele."
+            : "Mudar o telefone também troca a senha de login pra ele (só números) — avise o corretor."}
         </p>
       )}
       <input className="input" placeholder="Nome *" value={nome} onChange={(e) => setNome(e.target.value)} required />
@@ -252,6 +289,16 @@ function CorretorForm({
         <option value="corretor">Corretor</option>
         <option value="admin">Admin</option>
       </select>
+      {corretor && (
+        <button
+          type="button"
+          className="btn btn-outline text-xs justify-self-start"
+          onClick={resetarSenha}
+          disabled={resetando || salvando}
+        >
+          {resetando ? "Resetando..." : "Resetar senha (usar o telefone atual)"}
+        </button>
+      )}
       {erro && <p className="text-rust text-sm">{erro}</p>}
       <button className="btn btn-primary mt-2" disabled={salvando}>
         {salvando ? "Salvando..." : "Salvar"}

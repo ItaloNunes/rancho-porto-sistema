@@ -125,8 +125,20 @@ export const api = {
     request<CorretorCriado>("/crm/corretores", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarCorretor: (
     id: string,
-    payload: Partial<{ nome: string; telefone: string | null; papel: Papel; ativo: boolean }>,
+    payload: Partial<{
+      nome: string;
+      telefone: string | null;
+      papel: Papel;
+      ativo: boolean;
+      /** Força a senha de volta pro telefone atual mesmo se o corretor já
+       * tiver customizado a própria (ver Corretor.senha_customizada). */
+      resetar_senha: boolean;
+    }>,
   ) => request<Corretor>(`/crm/corretores/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
+  // Avisa o backend que o corretor logado acabou de trocar a própria senha
+  // (ver DefinirSenha.tsx) — sem isso, um telefone corrigido depois
+  // sobrescreveria essa senha de volta pro telefone sem avisar.
+  marcarSenhaCustomizada: () => request<Corretor>("/crm/me/senha-customizada", { method: "POST" }, true),
   // Cadastra de uma vez todos os corretores da planilha inicial (ver
   // backend/app/data/corretores_iniciais.py) — idempotente, dá pra clicar
   // de novo sem duplicar ninguém.
