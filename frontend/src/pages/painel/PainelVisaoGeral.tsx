@@ -10,25 +10,28 @@ const STATUS_ATIVOS: ReservaStatus[] = ["pendente", "em_atendimento", "aguardand
 // Limite pra contar uma reserva ativa como "expirando em breve" no card do topo.
 const LIMITE_EXPIRANDO_HORAS = 3;
 
-type SegmentoEstoque = "disponivel" | "reservado" | "vendido";
+type Segmento = "disponivel" | "reservado" | "vendido";
 
-const SEGMENTO_LABEL: Record<SegmentoEstoque, string> = {
-  disponivel: "Disponíveis",
-  reservado: "Reservados",
-  vendido: "Vendidos",
-};
+const SEG_LABEL: Record<Segmento, string> = { disponivel: "Disponíveis", reservado: "Reservados", vendido: "Vendidos" };
+const SEG_FILL: Record<Segmento, string> = { disponivel: "fill-sage", reservado: "fill-ochre", vendido: "fill-rust" };
+const SEG_BG: Record<Segmento, string> = { disponivel: "bg-sage", reservado: "bg-ochre", vendido: "bg-rust" };
+const SEG_TEXT: Record<Segmento, string> = { disponivel: "text-sage", reservado: "text-ochre", vendido: "text-rust" };
 
-const SEGMENTO_COR: Record<SegmentoEstoque, string> = {
-  disponivel: "bg-sage",
-  reservado: "bg-ochre",
-  vendido: "bg-rust",
-};
+interface Totais {
+  total_lotes: number;
+  disponiveis: number;
+  reservados: number;
+  vendidos: number;
+  valor_total_vendido: number;
+  propostas_abertas: number;
+  valor_em_propostas_abertas: number;
+}
 
-const SEGMENTO_COR_TEXTO: Record<SegmentoEstoque, string> = {
-  disponivel: "text-sage",
-  reservado: "text-ochre",
-  vendido: "text-rust",
-};
+interface TooltipState {
+  x: number;
+  y: number;
+  conteudo: React.ReactNode;
+}
 
 export default function PainelVisaoGeral() {
   const [itens, setItens] = useState<VisaoGeralCondominio[] | null>(null);
@@ -37,9 +40,12 @@ export default function PainelVisaoGeral() {
   const [exportando, setExportando] = useState(false);
   const [empreendimentoPdf, setEmpreendimentoPdf] = useState<string>("todos");
   // Filtro executivo: "todos" ou o id de um empreendimento — recorta o
-  // resumo do topo, o gráfico de estoque e o ranking, tudo junto (ver
-  // dataviz: filtros escopam tudo abaixo deles, nunca por gráfico).
+  // resumo do topo, o gráfico e o ranking, tudo junto (filtros escopam tudo
+  // abaixo deles, nunca por gráfico separado).
   const [filtro, setFiltro] = useState<string>("todos");
+  const [tabelaVisivel, setTabelaVisivel] = useState(false);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [hoverSegmento, setHoverSegmento] = useState<Segmento | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -68,8 +74,8 @@ export default function PainelVisaoGeral() {
     [itens, filtro],
   );
 
-  const totais = useMemo(() => {
-    const base = {
+  const totais = useMemo<Totais>(() => {
+    const base: Totais = {
       total_lotes: 0,
       disponiveis: 0,
       reservados: 0,
@@ -101,10 +107,7 @@ export default function PainelVisaoGeral() {
         : (reservas ?? []).filter((r) => r.lote && condominioIdsEscopo.has(r.lote.condominio_id)),
     [reservas, filtro, condominioIdsEscopo],
   );
-  const reservasAtivas = useMemo(
-    () => reservasEscopo.filter((r) => STATUS_ATIVOS.includes(r.status)),
-    [reservasEscopo],
-  );
+  const reservasAtivas = useMemo(() => reservasEscopo.filter((r) => STATUS_ATIVOS.includes(r.status)), [reservasEscopo]);
   const reservasExpirandoEmBreve = useMemo(
     () =>
       reservasAtivas.filter((r) => {
@@ -116,8 +119,18 @@ export default function PainelVisaoGeral() {
 
   const escopoLabel = filtro === "todos" ? "Todos os empreendimentos" : escopo[0]?.nome ?? "Empreendimento";
 
+  function mostrarTooltip(e: React.MouseEvent, conteudo: React.ReactNode) {
+    setTooltip({ x: e.clientX, y: e.clientY, conteudo });
+  }
+  function moverTooltip(e: React.MouseEvent) {
+    setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : t));
+  }
+  function esconderTooltip() {
+    setTooltip(null);
+  }
+
   return (
-    <div>
+    <div className="relative">
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-ink">Visão geral</h1>
@@ -138,6 +151,13 @@ export default function PainelVisaoGeral() {
               </option>
             ))}
           </select>
+          <button
+            className="btn btn-ghost whitespace-nowrap"
+            aria-pressed={tabelaVisivel}
+            onClick={() => setTabelaVisivel((v) => !v)}
+          >
+            {tabelaVisivel ? "Ocultar tabela" : "Ver tabela"}
+          </button>
           <button className="btn btn-primary whitespace-nowrap" onClick={exportarPdf} disabled={exportando}>
             {exportando ? "Gerando..." : "Exportar PDF"}
           </button>
@@ -150,8 +170,7 @@ export default function PainelVisaoGeral() {
         <p className="text-ink-soft text-sm">Carregando...</p>
       ) : (
         <>
-          {/* Filtro executivo — uma linha só, acima de tudo, recorta o resumo
-              inteiro (ver dataviz: filtros escopam tudo abaixo deles). */}
+          {/* Filtro executivo — uma linha só, acima de tudo. */}
           <div className="flex items-center gap-2 flex-wrap mb-5">
             <FiltroChip label="Todos" ativo={filtro === "todos"} onClick={() => setFiltro("todos")} />
             {itens.map((item) => (
@@ -164,60 +183,69 @@ export default function PainelVisaoGeral() {
             ))}
           </div>
 
-          {/* Resumo executivo — número principal + estoque, tudo recortado
-              pelo filtro selecionado acima. */}
-          <div className="card p-5 sm:p-6 mb-5">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-1">{escopoLabel}</p>
-                <p className="text-5xl font-bold text-ink leading-none">
-                  {pctVendido.toFixed(1)}
-                  <span className="text-2xl text-ink-soft">%</span>
-                </p>
-                <p className="text-xs text-ink-soft mt-1.5">
-                  vendido · {totais.vendidos} de {totais.total_lotes} lotes
-                </p>
+          {/* Faixa de KPIs executivos */}
+          <div className="grid gap-3 xl:grid-cols-[1.3fr_1fr_1fr_1fr_1fr] mb-5">
+            <div className="card p-5 relative overflow-hidden">
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: "linear-gradient(135deg, var(--tw-gradient-from, #E9F0F5), transparent 60%)" }}
+              />
+              <p className="relative text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1">{escopoLabel}</p>
+              <p className="relative text-5xl font-bold text-ink leading-none">
+                {pctVendido.toFixed(1)}
+                <span className="text-2xl text-ink-soft">%</span>
+              </p>
+              <p className="relative text-xs text-ink-soft mt-1.5">
+                vendido · {totais.vendidos} de {totais.total_lotes} lotes
+              </p>
+            </div>
+            <KpiTile label="Valor vendido" valor={formatMoney(totais.valor_total_vendido)} />
+            <KpiTile label="Ticket médio" valor={formatMoney(ticketMedio)} />
+            <KpiTile label={`Em propostas (${totais.propostas_abertas})`} valor={formatMoney(totais.valor_em_propostas_abertas)} />
+            <KpiTile
+              label="Reservas ativas"
+              valor={String(reservasAtivas.length)}
+              alerta={reservasExpirandoEmBreve.length > 0 ? `${reservasExpirandoEmBreve.length} expirando em breve` : undefined}
+            />
+          </div>
+
+          {/* Composição do estoque + ranking entre empreendimentos */}
+          <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr] mb-5 items-stretch">
+            <div className="card p-5 sm:p-6 flex flex-col gap-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-bold text-ink uppercase tracking-wide">Composição do estoque</h2>
+                <span className="text-xs text-muted">{filtro === "todos" ? "todos" : escopoLabel.toLowerCase()}</span>
               </div>
-              <div className="flex gap-6 flex-wrap">
-                <MiniStat label="Valor vendido" valor={formatMoney(totais.valor_total_vendido)} />
-                <MiniStat label="Ticket médio" valor={formatMoney(ticketMedio)} />
-                <MiniStat
-                  label={`Em propostas (${totais.propostas_abertas})`}
-                  valor={formatMoney(totais.valor_em_propostas_abertas)}
+              <div className="flex items-center gap-6 flex-wrap justify-center flex-1">
+                <DonutEstoque
+                  disponiveis={totais.disponiveis}
+                  reservados={totais.reservados}
+                  vendidos={totais.vendidos}
+                  hover={hoverSegmento}
+                  onHoverSeg={setHoverSegmento}
+                  onTooltip={mostrarTooltip}
+                  onMoveTooltip={moverTooltip}
+                  onLeaveTooltip={esconderTooltip}
+                />
+                <LegendaEstoque
+                  disponiveis={totais.disponiveis}
+                  reservados={totais.reservados}
+                  vendidos={totais.vendidos}
+                  hover={hoverSegmento}
+                  onHoverSeg={setHoverSegmento}
+                  onTooltip={mostrarTooltip}
+                  onMoveTooltip={moverTooltip}
+                  onLeaveTooltip={esconderTooltip}
                 />
               </div>
             </div>
 
-            <div className="mt-6">
-              <BarraEstoqueInterativa
-                disponiveis={totais.disponiveis}
-                reservados={totais.reservados}
-                vendidos={totais.vendidos}
-              />
-            </div>
-          </div>
-
-          {/* Reservas ativas — o único indicador operacional que sobrevive
-              aqui (o funil detalhado por status saiu: informação demais pro
-              nível executivo, sem ação direta associada). */}
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 mb-5">
-            <StatTile label="Total de lotes" valor={totais.total_lotes} cor="text-ink" />
-            <StatTile label="Disponíveis" valor={totais.disponiveis} cor="text-sage" />
-            <StatTile label="Reservados" valor={totais.reservados} cor="text-ochre" />
-            <StatTile
-              label="Reservas ativas"
-              valor={reservasAtivas.length}
-              cor="text-primary"
-              destaque={reservasExpirandoEmBreve.length > 0 ? `${reservasExpirandoEmBreve.length} expirando em breve` : undefined}
-            />
-          </div>
-
-          {/* Ranking entre empreendimentos — barras clicáveis: clicar aplica
-              o mesmo filtro dos chips acima. */}
-          {itens.length > 1 && (
-            <div className="card p-5 sm:p-6 mb-5">
-              <h2 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Desempenho por empreendimento</h2>
-              <div className="flex flex-col gap-3">
+            <div className="card p-5 sm:p-6 flex flex-col gap-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-bold text-ink uppercase tracking-wide">Desempenho por empreendimento</h2>
+                <span className="text-xs text-muted">clique numa barra pra filtrar</span>
+              </div>
+              <div className="flex flex-col gap-2 flex-1 justify-center">
                 {[...itens]
                   .sort((a, b) => b.valor_total_vendido - a.valor_total_vendido)
                   .map((item) => (
@@ -230,60 +258,64 @@ export default function PainelVisaoGeral() {
                   ))}
               </div>
             </div>
-          )}
-
-          <div className="grid gap-5 lg:grid-cols-2">
-            {itens.map((item) => {
-              const pct = item.total_lotes > 0 ? (item.vendidos / item.total_lotes) * 100 : 0;
-              const ticket = item.vendidos > 0 ? item.valor_total_vendido / item.vendidos : null;
-              const selecionado = filtro === item.condominio_id;
-              return (
-                <div
-                  key={item.condominio_id}
-                  className={`card p-5 sm:p-6 cursor-pointer transition-shadow ${selecionado ? "ring-2 ring-primary" : ""}`}
-                  onClick={() => setFiltro(selecionado ? "todos" : item.condominio_id)}
-                >
-                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                    <h2 className="text-base font-bold text-ink">{item.nome}</h2>
-                    <span className="text-xs text-ink-soft">{pct.toFixed(1)}% vendido</span>
-                  </div>
-                  <BarraEstoqueInterativa disponiveis={item.disponiveis} reservados={item.reservados} vendidos={item.vendidos} compacta />
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4">
-                    <StatTile label="Total de lotes" valor={item.total_lotes} cor="text-ink" />
-                    <StatTile label="Disponíveis" valor={item.disponiveis} cor="text-sage" />
-                    <StatTile label="Reservados" valor={item.reservados} cor="text-ochre" />
-                    <StatTile label="Vendidos" valor={item.vendidos} cor="text-rust" />
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border">
-                    <div className="col-span-2 sm:col-span-1 min-w-0">
-                      <p className="text-xs text-ink-soft">Valor total vendido</p>
-                      <p className="text-lg font-bold text-primary truncate" title={formatMoney(item.valor_total_vendido)}>
-                        {formatMoney(item.valor_total_vendido)}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-ink-soft">Ticket médio</p>
-                      <p className="text-lg font-bold text-ink truncate" title={formatMoney(ticket)}>
-                        {formatMoney(ticket)}
-                      </p>
-                    </div>
-                    <div className="col-span-2 sm:col-span-2 min-w-0">
-                      <p className="text-xs text-ink-soft">
-                        Propostas em andamento ({item.propostas_abertas})
-                      </p>
-                      <p
-                        className="text-lg font-bold text-ink truncate"
-                        title={formatMoney(item.valor_em_propostas_abertas)}
-                      >
-                        {formatMoney(item.valor_em_propostas_abertas)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
           </div>
+
+          {tabelaVisivel && (
+            <div className="card p-5 sm:p-6 mb-5">
+              <h2 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Detalhe por empreendimento</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[640px]">
+                  <thead>
+                    <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-ink-soft border-b border-border">
+                      <th className="pb-2.5 pr-3">Empreendimento</th>
+                      <th className="pb-2.5 px-3 text-right">Total</th>
+                      <th className="pb-2.5 px-3 text-right">Disponíveis</th>
+                      <th className="pb-2.5 px-3 text-right">Reservados</th>
+                      <th className="pb-2.5 px-3 text-right">Vendidos</th>
+                      <th className="pb-2.5 px-3 text-right">% vendido</th>
+                      <th className="pb-2.5 px-3 text-right">Valor vendido</th>
+                      <th className="pb-2.5 pl-3 text-right">Ticket médio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itens.map((item) => {
+                      const pct = item.total_lotes > 0 ? (item.vendidos / item.total_lotes) * 100 : 0;
+                      const ticket = item.vendidos > 0 ? item.valor_total_vendido / item.vendidos : null;
+                      const selecionado = filtro === item.condominio_id;
+                      return (
+                        <tr
+                          key={item.condominio_id}
+                          onClick={() => setFiltro(selecionado ? "todos" : item.condominio_id)}
+                          className={`cursor-pointer border-b border-border last:border-0 hover:bg-surface-alt transition-colors ${
+                            selecionado ? "bg-primary-tint" : ""
+                          }`}
+                        >
+                          <td className="py-3 pr-3 font-bold text-ink">{item.nome}</td>
+                          <td className="py-3 px-3 text-right">{item.total_lotes}</td>
+                          <td className="py-3 px-3 text-right text-sage font-semibold">{item.disponiveis}</td>
+                          <td className="py-3 px-3 text-right text-ochre font-semibold">{item.reservados}</td>
+                          <td className="py-3 px-3 text-right text-rust font-semibold">{item.vendidos}</td>
+                          <td className="py-3 px-3 text-right">{pct.toFixed(1)}%</td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">{formatMoney(item.valor_total_vendido)}</td>
+                          <td className="py-3 pl-3 text-right whitespace-nowrap">{formatMoney(ticket)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
+      )}
+
+      {tooltip && (
+        <div
+          className="fixed z-50 pointer-events-none bg-ink text-white text-xs leading-relaxed rounded-lg px-3 py-2 shadow-modal max-w-[220px]"
+          style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, calc(-100% - 10px))" }}
+        >
+          {tooltip.conteudo}
+        </div>
       )}
     </div>
   );
@@ -304,79 +336,164 @@ function FiltroChip({ label, ativo, onClick }: { label: string; ativo: boolean; 
   );
 }
 
-function MiniStat({ label, valor }: { label: string; valor: string }) {
+function KpiTile({ label, valor, alerta }: { label: string; valor: string; alerta?: string }) {
   return (
-    <div className="min-w-[7rem]">
-      <p className="text-lg font-bold text-ink truncate" title={valor}>
+    <div className={`card p-4 flex flex-col justify-center gap-0.5 ${alerta ? "bg-ochre/10 !border-ochre" : ""}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className={`text-xl font-bold truncate ${alerta ? "text-ochre" : "text-ink"}`} title={valor}>
         {valor}
       </p>
-      <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
+      {alerta && <p className="text-[11px] font-semibold text-ochre mt-0.5">{alerta}</p>}
     </div>
   );
 }
 
-/** Barra horizontal empilhada com hover por segmento (tooltip com valor e
- * %) e legenda com rótulo direto — a mesma leitura de sempre, só que agora
- * interativa (ver dataviz: hover por marca + legenda sempre presente). */
-function BarraEstoqueInterativa({
-  disponiveis,
-  reservados,
-  vendidos,
-  compacta = false,
-}: {
+// ---- Gráfico de composição do estoque (rosca em SVG, sem dependências) ----
+
+function arcoPath(cx: number, cy: number, rOuter: number, rInner: number, a0: number, a1: number): string {
+  const polar = (r: number, ang: number) => {
+    const rad = ((ang - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+  const largeArc = a1 - a0 > 180 ? 1 : 0;
+  const p0 = polar(rOuter, a0);
+  const p1 = polar(rOuter, a1);
+  const p2 = polar(rInner, a1);
+  const p3 = polar(rInner, a0);
+  return [
+    `M ${p0.x} ${p0.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p1.x} ${p1.y}`,
+    `L ${p2.x} ${p2.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${p3.x} ${p3.y}`,
+    "Z",
+  ].join(" ");
+}
+
+interface EstoqueProps {
   disponiveis: number;
   reservados: number;
   vendidos: number;
-  compacta?: boolean;
-}) {
-  const [hover, setHover] = useState<SegmentoEstoque | null>(null);
+  hover: Segmento | null;
+  onHoverSeg: (s: Segmento | null) => void;
+  onTooltip: (e: React.MouseEvent, conteudo: React.ReactNode) => void;
+  onMoveTooltip: (e: React.MouseEvent) => void;
+  onLeaveTooltip: () => void;
+}
+
+function tooltipSegmento(seg: Segmento, valor: number, pct: number) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`inline-block h-2 w-2 rounded-sm ${SEG_BG[seg]}`} />
+      <span>{SEG_LABEL[seg]}</span>
+      <span className="font-bold ml-auto">
+        {valor} · {pct.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+function DonutEstoque({ disponiveis, reservados, vendidos, hover, onHoverSeg, onTooltip, onMoveTooltip, onLeaveTooltip }: EstoqueProps) {
   const total = disponiveis + reservados + vendidos;
-  const valores: Record<SegmentoEstoque, number> = { disponivel: disponiveis, reservado: reservados, vendido: vendidos };
-  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
-  const segmentos: SegmentoEstoque[] = ["disponivel", "reservado", "vendido"];
+  const dados: { key: Segmento; valor: number }[] = [
+    { key: "disponivel", valor: disponiveis },
+    { key: "reservado", valor: reservados },
+    { key: "vendido", valor: vendidos },
+  ];
+  const cx = 75;
+  const cy = 75;
+  const rOuter = 70;
+  const rInner = 46;
+  let acumulado = 0;
+  const arcos = dados
+    .filter((d) => d.valor > 0)
+    .map((d) => {
+      const sweep = total > 0 ? (d.valor / total) * 360 : 0;
+      const gap = total > 0 ? 1.4 : 0;
+      const a0 = acumulado + gap / 2;
+      const a1 = acumulado + sweep - gap / 2;
+      acumulado += sweep;
+      return { ...d, path: arcoPath(cx, cy, rOuter, rInner, a0, a1), pct: total > 0 ? (d.valor / total) * 100 : 0 };
+    });
 
   return (
-    <div>
-      <div className={`relative w-full rounded-full overflow-hidden bg-surface-alt flex ${compacta ? "h-2" : "h-3"}`}>
-        {segmentos.map((seg) =>
-          valores[seg] > 0 ? (
-            <div
-              key={seg}
-              role="img"
-              aria-label={`${SEGMENTO_LABEL[seg]}: ${valores[seg]} (${pct(valores[seg]).toFixed(1)}%)`}
-              tabIndex={0}
-              onMouseEnter={() => setHover(seg)}
-              onMouseLeave={() => setHover(null)}
-              onFocus={() => setHover(seg)}
-              onBlur={() => setHover(null)}
-              className={`h-full ${SEGMENTO_COR[seg]} transition-opacity outline-none ${
-                hover && hover !== seg ? "opacity-50" : "opacity-100"
-              }`}
-              style={{ width: `${pct(valores[seg])}%` }}
-            />
-          ) : null,
-        )}
-      </div>
-      {!compacta && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2.5">
-          {segmentos.map((seg) => (
-            <div key={seg} className="flex items-center gap-1.5 text-xs">
-              <span className={`inline-block h-2 w-2 rounded-full ${SEGMENTO_COR[seg]}`} />
-              <span className="text-ink-soft">{SEGMENTO_LABEL[seg]}</span>
-              <span className={`font-semibold ${SEGMENTO_COR_TEXTO[seg]}`}>
-                {valores[seg]} ({pct(valores[seg]).toFixed(0)}%)
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+    <svg width={150} height={150} viewBox="0 0 150 150" role="img" aria-label="Composição do estoque por status" className="flex-none">
+      {arcos.map((a) => (
+        <path
+          key={a.key}
+          d={a.path}
+          className={`${SEG_FILL[a.key]} cursor-pointer transition-opacity`}
+          style={{ opacity: hover && hover !== a.key ? 0.35 : 1 }}
+          tabIndex={0}
+          onMouseEnter={(e) => {
+            onHoverSeg(a.key);
+            onTooltip(e, tooltipSegmento(a.key, a.valor, a.pct));
+          }}
+          onMouseMove={onMoveTooltip}
+          onMouseLeave={() => {
+            onHoverSeg(null);
+            onLeaveTooltip();
+          }}
+          onFocus={(e) => {
+            onHoverSeg(a.key);
+            onTooltip(e as unknown as React.MouseEvent, tooltipSegmento(a.key, a.valor, a.pct));
+          }}
+          onBlur={() => {
+            onHoverSeg(null);
+            onLeaveTooltip();
+          }}
+        />
+      ))}
+      <text x={cx} y={cy - 2} textAnchor="middle" className="fill-ink font-bold" style={{ fontSize: 24 }}>
+        {total}
+      </text>
+      <text x={cx} y={cy + 16} textAnchor="middle" className="fill-ink-soft" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        lotes
+      </text>
+    </svg>
+  );
+}
+
+function LegendaEstoque({ disponiveis, reservados, vendidos, hover, onHoverSeg, onTooltip, onMoveTooltip, onLeaveTooltip }: EstoqueProps) {
+  const total = disponiveis + reservados + vendidos;
+  const valores: Record<Segmento, number> = { disponivel: disponiveis, reservado: reservados, vendido: vendidos };
+  const segmentos: Segmento[] = ["disponivel", "reservado", "vendido"];
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[9rem]">
+      {segmentos.map((seg) => {
+        const pct = total > 0 ? (valores[seg] / total) * 100 : 0;
+        return (
+          <div
+            key={seg}
+            className={`flex items-center gap-2 px-2 py-1.5 rounded-sm cursor-pointer transition-colors ${
+              hover === seg ? "bg-surface-alt" : ""
+            }`}
+            onMouseEnter={(e) => {
+              onHoverSeg(seg);
+              onTooltip(e, tooltipSegmento(seg, valores[seg], pct));
+            }}
+            onMouseMove={onMoveTooltip}
+            onMouseLeave={() => {
+              onHoverSeg(null);
+              onLeaveTooltip();
+            }}
+          >
+            <span className={`inline-block h-2.5 w-2.5 rounded-sm flex-none ${SEG_BG[seg]}`} />
+            <span className="text-xs text-ink-soft">{SEG_LABEL[seg]}</span>
+            <span className={`text-sm font-bold ml-auto ${SEG_TEXT[seg]}`}>
+              {valores[seg]} <span className="text-ink-soft font-medium">({pct.toFixed(0)}%)</span>
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 /** Uma linha do ranking entre empreendimentos — barra proporcional ao valor
- * vendido, clicável (aplica o filtro executivo) e com tooltip no hover
- * trazendo a composição completa do estoque. */
+ * vendido, clicável (aplica o filtro executivo) e com o detalhe do estoque
+ * revelado no hover/foco (sem depender de posição de mouse, acessível por
+ * teclado). */
 function BarraRanking({
   item,
   selecionado,
@@ -386,17 +503,14 @@ function BarraRanking({
   selecionado: boolean;
   onClick: () => void;
 }) {
-  const [hover, setHover] = useState(false);
   const maiorValor = item.valor_total_vendido || 1;
   const pctVendido = item.total_lotes > 0 ? (item.vendidos / item.total_lotes) * 100 : 0;
 
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      className={`text-left rounded-sm p-2.5 -mx-2.5 transition-colors ${
-        selecionado ? "bg-primary-tint" : hover ? "bg-surface-alt" : ""
+      className={`text-left rounded-sm p-2.5 -mx-2.5 transition-colors group ${
+        selecionado ? "bg-primary-tint" : "hover:bg-surface-alt"
       }`}
     >
       <div className="flex items-center justify-between gap-3 mb-1.5">
@@ -411,42 +525,20 @@ function BarraRanking({
           style={{ width: `${Math.max(2, (item.valor_total_vendido / maiorValor) * 100)}%` }}
         />
       </div>
-      {hover && (
-        <div className="flex gap-4 mt-2 text-[11px] text-ink-soft">
-          <span>
-            <span className="text-sage font-semibold">{item.disponiveis}</span> disponíveis
-          </span>
-          <span>
-            <span className="text-ochre font-semibold">{item.reservados}</span> reservados
-          </span>
-          <span>
-            <span className="text-rust font-semibold">{item.vendidos}</span> vendidos
-          </span>
-          <span>
-            <span className="text-ink font-semibold">{item.propostas_abertas}</span> propostas em andamento
-          </span>
-        </div>
-      )}
+      <div className="flex gap-4 mt-0 max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 group-focus-within:max-h-8 group-focus-within:opacity-100 transition-all">
+        <span className="text-[11px] text-ink-soft mt-2">
+          <span className="text-sage font-semibold">{item.disponiveis}</span> disponíveis
+        </span>
+        <span className="text-[11px] text-ink-soft mt-2">
+          <span className="text-ochre font-semibold">{item.reservados}</span> reservados
+        </span>
+        <span className="text-[11px] text-ink-soft mt-2">
+          <span className="text-rust font-semibold">{item.vendidos}</span> vendidos
+        </span>
+        <span className="text-[11px] text-ink-soft mt-2">
+          <span className="text-ink font-semibold">{item.propostas_abertas}</span> propostas
+        </span>
+      </div>
     </button>
-  );
-}
-
-function StatTile({
-  label,
-  valor,
-  cor,
-  destaque,
-}: {
-  label: string;
-  valor: number;
-  cor: string;
-  destaque?: string;
-}) {
-  return (
-    <div className="rounded-sm bg-surface-alt p-3 min-w-0">
-      <p className={`text-xl font-bold ${cor} truncate`}>{valor}</p>
-      <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
-      {destaque && <p className="text-[11px] font-semibold text-ochre mt-0.5">{destaque}</p>}
-    </div>
   );
 }
