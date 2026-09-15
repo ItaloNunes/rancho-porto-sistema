@@ -58,6 +58,7 @@ export default function PainelDisponibilidade() {
   const [busca, setBusca] = useState("");
   const [condominioSlug, setCondominioSlug] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
+  const [exportando, setExportando] = useState(false);
 
   const ehAdmin = perfil?.papel === "admin";
 
@@ -111,6 +112,23 @@ export default function PainelDisponibilidade() {
     return base;
   }, [lotes]);
 
+  // Reaproveita o mesmo PDF (com linha colorida) já usado na Visão geral —
+  // aqui exporta já filtrado pelo empreendimento selecionado em cima, se tiver.
+  async function exportarPdf() {
+    setExportando(true);
+    try {
+      const condominioId = condominioSlug ? lotes?.find((l) => l.condominio_slug === condominioSlug)?.condominio_id : undefined;
+      const blob = await api.exportarVisaoGeralPdf(condominioId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -120,13 +138,20 @@ export default function PainelDisponibilidade() {
             Estoque completo dos lotes — a linha inteira segue a cor do status, igual à tabela de preços.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {(["disponivel", "reservado", "vendido"] as const).map((s) => (
-            <span key={s} className="inline-flex items-center gap-1.5 text-xs text-ink-soft">
-              <span className={`h-2.5 w-2.5 rounded-full ${PONTO_COR[s]}`} />
-              {STATUS_LABEL[s]} ({contagem[s]})
-            </span>
-          ))}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {(["disponivel", "reservado", "vendido"] as const).map((s) => (
+              <span key={s} className="inline-flex items-center gap-1.5 text-xs text-ink-soft">
+                <span className={`h-2.5 w-2.5 rounded-full ${PONTO_COR[s]}`} />
+                {STATUS_LABEL[s]} ({contagem[s]})
+              </span>
+            ))}
+          </div>
+          {ehAdmin && (
+            <button className="btn btn-primary" onClick={exportarPdf} disabled={exportando}>
+              {exportando ? "Gerando..." : "Exportar PDF"}
+            </button>
+          )}
         </div>
       </div>
 
