@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { emailInterno } from "../lib/usuarios";
 
 export default function Login() {
   const { session, entrar } = useAuth();
@@ -20,17 +19,11 @@ export default function Login() {
     e.preventDefault();
     setErro(null);
     setEnviando(true);
-    // Login é por "usuário" (ex.: italo.nunes), não por e-mail — por baixo o
-    // Supabase Auth continua usando um e-mail fabricado (ver lib/usuarios.ts),
-    // mas isso é invisível pra quem está logando.
-    const msg = await entrar(emailInterno(usuario), senha);
+    // Login próprio, sem Supabase Auth — o backend já devolve a mensagem
+    // certa ("Usuário ou senha incorretos.") direto (ver POST /crm/login).
+    const msg = await entrar(usuario, senha);
     setEnviando(false);
-    if (msg) {
-      // "Invalid login credentials" é o erro genérico do Supabase pra login/senha
-      // errados. Qualquer outra mensagem (erro de rede, projeto mal configurado
-      // etc.) é mostrada como veio, pra não esconder o problema real.
-      setErro(msg.toLowerCase().includes("invalid login credentials") ? "Usuário ou senha incorretos." : msg);
-    }
+    if (msg) setErro(msg);
   }
 
   return (
