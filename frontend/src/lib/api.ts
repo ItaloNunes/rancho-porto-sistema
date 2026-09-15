@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { getToken } from "./token";
 import type {
   Cliente,
   CondominioDetalhe,
@@ -11,6 +11,7 @@ import type {
   Lote,
   LoteComCondominio,
   LoteStatus,
+  LoginResposta,
   Papel,
   Proposta,
   PropostaDetalhe,
@@ -40,19 +41,17 @@ function extrairErro(body: unknown, fallback: string): string {
   return fallback;
 }
 
-/** `auth=true` anexa o token da sessão Supabase Auth atual (login do painel);
- * sem isso, os endpoints do painel (/crm/*, /reservas, PATCH de status)
- * respondem 401. O catálogo público nunca precisa disso. */
+/** `auth=true` anexa o token de sessão do painel (login próprio, ver
+ * lib/token.ts) — sem isso, os endpoints do painel (/crm/*, /reservas,
+ * PATCH de status) respondem 401. O catálogo público nunca precisa disso. */
 async function request<T>(path: string, init?: RequestInit, auth = false): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((init?.headers as Record<string, string>) ?? {}),
   };
   if (auth) {
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.access_token) {
-      headers["Authorization"] = `Bearer ${data.session.access_token}`;
-    }
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
   }
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!res.ok) {
@@ -66,10 +65,8 @@ async function request<T>(path: string, init?: RequestInit, auth = false): Promi
 /** Como `request`, mas pra respostas binárias (PDF) — sempre autenticado. */
 async function requestBlob(path: string): Promise<Blob> {
   const headers: Record<string, string> = {};
-  const { data } = await supabase.auth.getSession();
-  if (data.session?.access_token) {
-    headers["Authorization"] = `Bearer ${data.session.access_token}`;
-  }
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API_URL}${path}`, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -108,8 +105,18 @@ export const api = {
   enviarQualificacaoParaAnalise: (token: string) =>
     request<QualificacaoPublica>(`/qualificacao/${token}/enviar`, { method: "POST" }),
 
+  // Painel — login próprio (usuário + senha), sem Supabase Auth. Ver lib/auth.tsx.
+  login: (usuario: string, senha: string) =>
+    request<LoginResposta>("/crm/login", { method: "POST", body: JSON.stringify({ usuario, senha }) }),
   // Painel — perfil de quem está logado
   meuPerfil: () => request<Corretor>("/crm/me", undefined, true),
+  // Painel — o próprio corretor logado troca a senha (precisa confirmar a atual)
+  trocarMinhaSenha: (senhaAtual: string, senhaNova: string) =>
+    request<Corretor>(
+      "/crm/me/senha",
+      { method: "POST", body: JSON.stringify({ senha_atual: senhaAtual, senha_nova: senhaNova }) },
+      true,
+    ),
 
   // Painel — lotes (gestão rápida de status, unificada pros dois condomínios)
   listarTodosLotes: () => request<LoteComCondominio[]>("/crm/lotes", undefined, true),
@@ -135,10 +142,6 @@ export const api = {
       resetar_senha: boolean;
     }>,
   ) => request<Corretor>(`/crm/corretores/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
-  // Avisa o backend que o corretor logado acabou de trocar a própria senha
-  // (ver DefinirSenha.tsx) — sem isso, um telefone corrigido depois
-  // sobrescreveria essa senha de volta pro telefone sem avisar.
-  marcarSenhaCustomizada: () => request<Corretor>("/crm/me/senha-customizada", { method: "POST" }, true),
   // Cadastra de uma vez todos os corretores da planilha inicial (ver
   // backend/app/data/corretores_iniciais.py) — idempotente, dá pra clicar
   // de novo sem duplicar ninguém.

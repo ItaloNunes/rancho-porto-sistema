@@ -295,9 +295,9 @@ class Corretor(BaseModel):
     telefone: Optional[str] = None
     papel: Papel = "corretor"
     ativo: bool = True
-    # True assim que o corretor troca a própria senha (POST
-    # /crm/me/senha-customizada) — impede que uma correção de telefone
-    # sobrescreva sem avisar uma senha que a pessoa escolheu.
+    # True assim que o corretor troca a própria senha (POST /crm/me/senha)
+    # — impede que uma correção de telefone sobrescreva sem avisar uma
+    # senha que a pessoa escolheu.
     senha_customizada: bool = False
     # Só vem preenchido na resposta de PATCH /crm/corretores/{id} quando a
     # senha acabou de ser (re)sincronizada com o telefone — mesma ideia do
@@ -312,6 +312,31 @@ class CorretorCriado(Corretor):
     Auth só guarda o hash)."""
 
     senha: str
+
+
+class LoginRequest(BaseModel):
+    """Body de POST /crm/login — login próprio, sem Supabase Auth (ver
+    app/security.py e app/usuarios.py)."""
+
+    usuario: str
+    senha: str
+
+
+class LoginResponse(BaseModel):
+    """Resposta de POST /crm/login — o front guarda `access_token` (JWT) e
+    manda ele em `Authorization: Bearer` nas próximas chamadas."""
+
+    access_token: str
+    corretor: Corretor
+
+
+class TrocarSenhaRequest(BaseModel):
+    """Body de POST /crm/me/senha — o próprio corretor logado troca a
+    senha, precisa confirmar a atual (evita que alguém que ache uma sessão
+    aberta troque a senha sem saber a antiga)."""
+
+    senha_atual: str
+    senha_nova: str
 
 
 class CorretorImportadoItem(BaseModel):

@@ -8,10 +8,15 @@ reserva.
 
 ## Arquitetura
 
-- **Banco**: Supabase (Postgres + Auth + Storage). SQL em `supabase/migrations/`.
+- **Banco**: Supabase (só Postgres + Storage — o login não usa mais o
+  Supabase Auth, ver abaixo). SQL em `supabase/migrations/`.
 - **Backend**: FastAPI (`backend/`), fala com o Supabase pela service role key.
   Expõe o catálogo público (`/condominios`) e o painel interno (`/crm/*`,
-  `/reservas`) protegido por login do Supabase Auth.
+  `/reservas`) protegido por um login próprio (usuário + senha com hash
+  bcrypt, JWT emitido e validado pelo próprio backend — ver
+  `app/security.py` e `app/usuarios.py`). Sem e-mail em nenhuma etapa:
+  criação, troca e reset de senha são todos feitos direto pelo painel ou
+  pelo admin, nunca por link mandado por e-mail.
 - **Frontend**: React + Vite + TypeScript + Tailwind (`frontend/`).
 
 ## Como rodar

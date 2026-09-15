@@ -31,19 +31,56 @@ from ..schemas import (
     CorretorCriado,
     CorretorImportadoItem,
     CorretorUpdate,
+    LoginRequest,
+    LoginResponse,
     LoteComCondominio,
     Proposta,
     PropostaCreate,
     PropostaDetalhe,
     PropostaStatusUpdate,
     PropostaUpdate,
+    TrocarSenhaRequest,
     VisaoGeralCondominio,
 )
-from ..security import get_current_corretor, require_admin
-from ..usuarios import email_interno, gerar_usuario_unico, senha_de_telefone
+from ..security import criar_token, get_current_corretor, require_admin
+from ..usuarios import gerar_usuario_unico, hash_senha, senha_de_telefone, verificar_senha
 from ..usuarios import slug as slug_usuario
 
 router = APIRouter(tags=["crm"])
+
+
+@router.post("/login", response_model=LoginResponse)
+def login(payload: LoginRequest):
+    """Login próprio do painel — usuário + senha, sem Supabase Auth e sem
+    e-mail em nenhuma etapa (ver app/security.py e app/usuarios.py)."""
+    sb = get_supabase()
+    usuario = payload.usuario.strip().lower()
+    corretor = sb.table("corretores").select("*").eq("usuario", usuario).limit(1).execute().data
+    if not corretor or not verificar_senha(payload.senha, corretor[0].get("senha_hash")):
+        raise HTTPException(401, "Usuário ou senha incorretos.")
+    if not corretor[0]["ativo"]:
+        raise HTTPException(403, "Este login não tem acesso ao painel.")
+    token = criar_token(corretor[0]["id"])
+    return {"access_token": token, "corretor": corretor[0]}
+
+
+@router.post("/me/senha", response_model=Corretor)
+def trocar_minha_senha(payload: TrocarSenhaRequest, corretor: dict = Depends(get_current_corretor)):
+    """O próprio corretor logado troca a senha (precisa confirmar a atual).
+    Marca `senha_customizada=True` — daqui pra frente, corrigir o telefone
+    dele não sobrescreve mais essa senha sozinho (ver atualizar_corretor)."""
+    if not verificar_senha(payload.senha_atual, corretor.get("senha_hash")):
+        raise HTTPException(401, "Senha atual incorreta.")
+    if len(payload.senha_nova) < 6:
+        raise HTTPException(400, "A senha nova precisa ter pelo menos 6 caracteres.")
+    sb = get_supabase()
+    return (
+        sb.table("corretores")
+        .update({"senha_hash": hash_senha(payload.senha_nova), "senha_customizada": True})
+        .eq("id", corretor["id"])
+        .execute()
+        .data[0]
+    )
 
 
 @router.get("/me", response_model=Corretor)
@@ -65,10 +102,10 @@ def listar_corretores(_admin: dict = Depends(require_admin)):
 
 @router.post("/corretores", response_model=CorretorCriado)
 def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin)):
-    """Login por usuário (ver app/usuarios.py): sem convite por e-mail — a
-    conta já nasce pronta pra usar, com senha = telefone (só dígitos). O
-    admin repassa usuário+senha pro corretor por fora (WhatsApp, etc.); essa
-    é a única resposta que traz a senha em texto puro."""
+    """Login por usuário (ver app/usuarios.py): a conta já nasce pronta pra
+    usar, com senha = telefone (só dígitos). O admin repassa usuário+senha
+    pro corretor por fora (WhatsApp, etc.); essa é a única resposta que traz
+    a senha em texto puro."""
     sb = get_supabase()
     ja_usados = {
         c["usuario"] for c in sb.table("corretores").select("usuario").execute().data if c.get("usuario")
@@ -83,20 +120,11 @@ def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin
     senha = senha_de_telefone(payload.telefone)
     if len(senha) < 6:
         raise HTTPException(400, "Telefone inválido pra gerar a senha (mínimo 6 dígitos).")
-    email = email_interno(usuario)
-
-    try:
-        criado = sb.auth.admin.create_user(
-            {"email": email, "password": senha, "email_confirm": True}
-        )
-    except Exception as exc:
-        raise HTTPException(400, f"Não foi possível criar o login: {exc}") from exc
 
     row = {
-        "auth_user_id": criado.user.id,
         "nome": payload.nome,
         "usuario": usuario,
-        "email": email,
+        "senha_hash": hash_senha(senha),
         "telefone": payload.telefone,
         "papel": payload.papel,
         "ativo": True,
@@ -167,15 +195,12 @@ def importar_corretores(_admin: dict = Depends(require_admin)):
             )
             continue
 
-        email = email_interno(usuario)
         try:
-            criado = sb.auth.admin.create_user({"email": email, "password": senha, "email_confirm": True})
             sb.table("corretores").insert(
                 {
-                    "auth_user_id": criado.user.id,
                     "nome": nome,
                     "usuario": usuario,
-                    "email": email,
+                    "senha_hash": hash_senha(senha),
                     "telefone": telefone,
                     "papel": "corretor",
                     "ativo": not saiu_do_grupo,
@@ -221,28 +246,23 @@ def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict =
     telefone_mudou = "telefone" in updates and updates["telefone"] != existente.get("telefone")
 
     # Telefone é a senha de login por padrão (ver app/usuarios.py) — se o
-    # admin corrige um telefone digitado errado, a senha de fato no Supabase
-    # Auth precisa acompanhar, senão o corretor continua tomando "usuário ou
-    # senha incorretos" com o telefone (certo) que acabou de receber.
+    # admin corrige um telefone digitado errado, a senha de fato precisa
+    # acompanhar, senão o corretor continua tomando "usuário ou senha
+    # incorretos" com o telefone (certo) que acabou de receber.
     #
     # Exceção: se o corretor já trocou a própria senha (senha_customizada),
     # um telefone editado por outro motivo qualquer não deve sobrescrever
     # sem avisar a senha que a pessoa escolheu — nesse caso só sincroniza de
     # volta se o admin pedir explicitamente via `resetar_senha` (ex.: pra
     # destravar alguém que esqueceu a senha customizada).
-    deve_sincronizar_senha = bool(existente.get("auth_user_id")) and (
-        (telefone_mudou and not existente.get("senha_customizada")) or resetar_senha
-    )
+    deve_sincronizar_senha = (telefone_mudou and not existente.get("senha_customizada")) or resetar_senha
 
     nova_senha = None
     if deve_sincronizar_senha:
         nova_senha = senha_de_telefone(telefone_novo)
         if len(nova_senha) < 6:
             raise HTTPException(400, "Telefone inválido pra gerar a senha (mínimo 6 dígitos).")
-        try:
-            sb.auth.admin.update_user_by_id(existente["auth_user_id"], {"password": nova_senha})
-        except Exception as exc:
-            raise HTTPException(400, f"Não foi possível atualizar a senha de login: {exc}") from exc
+        updates["senha_hash"] = hash_senha(nova_senha)
         # Depois de sincronizar (seja pela mudança de telefone, seja por um
         # reset manual), a senha volta a ser "o telefone" — limpa a marca.
         updates["senha_customizada"] = False
@@ -251,14 +271,6 @@ def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict =
         return existente
 
     atualizado = sb.table("corretores").update(updates).eq("id", corretor_id).execute().data[0]
-    # Ativar/desativar aqui também trava (ou destrava) o login no Supabase
-    # Auth de fato — não só a linha desta tabela.
-    if "ativo" in updates and existente.get("auth_user_id"):
-        ban = "876000h" if updates["ativo"] is False else "none"
-        try:
-            sb.auth.admin.update_user_by_id(existente["auth_user_id"], {"ban_duration": ban})
-        except Exception:
-            pass
 
     resposta = dict(atualizado)
     if nova_senha:
@@ -268,39 +280,18 @@ def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict =
     return resposta
 
 
-@router.post("/me/senha-customizada", response_model=Corretor)
-def marcar_senha_customizada(corretor: dict = Depends(get_current_corretor)):
-    """Chamado pelo front assim que o próprio corretor troca a senha pelo
-    Supabase Auth (ver DefinirSenha.tsx) — o backend nunca fica sabendo dessa
-    troca sozinho, porque ela acontece direto no cliente. Sem esse aviso,
-    editar o telefone da pessoa depois (por qualquer motivo) sobrescreveria
-    de volta pro telefone a senha que ela escolheu, sem avisar ninguém."""
-    sb = get_supabase()
-    return (
-        sb.table("corretores")
-        .update({"senha_customizada": True})
-        .eq("id", corretor["id"])
-        .execute()
-        .data[0]
-    )
-
-
 @router.delete("/corretores/{corretor_id}", status_code=204)
 def desativar_corretor(corretor_id: str, admin: dict = Depends(require_admin)):
     """"Excluir" aqui é desativar: mantém o histórico de clientes/propostas
-    do corretor intacto e bloqueia o login dele no Supabase Auth."""
+    do corretor intacto e bloqueia o login dele (get_current_corretor
+    checa `ativo` a cada request, então basta desligar essa flag)."""
     if corretor_id == admin["id"]:
         raise HTTPException(400, "Você não pode desativar o próprio login.")
     sb = get_supabase()
-    existente = sb.table("corretores").select("auth_user_id").eq("id", corretor_id).limit(1).execute().data
+    existente = sb.table("corretores").select("id").eq("id", corretor_id).limit(1).execute().data
     if not existente:
         raise HTTPException(404, "Corretor não encontrado.")
     sb.table("corretores").update({"ativo": False}).eq("id", corretor_id).execute()
-    if existente[0].get("auth_user_id"):
-        try:
-            sb.auth.admin.update_user_by_id(existente[0]["auth_user_id"], {"ban_duration": "876000h"})
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------

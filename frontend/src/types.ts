@@ -73,9 +73,9 @@ export interface Corretor {
   telefone?: string | null;
   papel: Papel;
   ativo: boolean;
-  /** true assim que o corretor troca a própria senha — editar o telefone
-   * depois não sobrescreve mais a senha automaticamente (ver PATCH
-   * /crm/corretores/{id} e POST /crm/me/senha-customizada no backend). */
+  /** true assim que o corretor troca a própria senha (POST /crm/me/senha) —
+   * editar o telefone depois não sobrescreve mais a senha automaticamente
+   * (ver PATCH /crm/corretores/{id} no backend). */
   senha_customizada?: boolean;
   /** Só vem preenchido na resposta de PATCH quando a senha acabou de ser
    * (re)sincronizada com o telefone — mesma ideia do `senha` de
@@ -87,6 +87,14 @@ export interface Corretor {
  * texto puro, pro admin repassar pro corretor. */
 export interface CorretorCriado extends Corretor {
   senha: string;
+}
+
+/** Resposta de POST /crm/login — login próprio (usuário + senha), sem
+ * Supabase Auth. `access_token` é o JWT guardado em lib/token.ts e mandado
+ * como `Authorization: Bearer` nas próximas chamadas. */
+export interface LoginResposta {
+  access_token: string;
+  corretor: Corretor;
 }
 
 /** Uma linha do resultado de POST /crm/corretores/importar. */

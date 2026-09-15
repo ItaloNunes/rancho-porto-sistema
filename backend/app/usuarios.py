@@ -1,22 +1,22 @@
-"""Geração do login "usuário" dos corretores (ex.: italo.nunes) e da senha
-inicial (o telefone da pessoa, só dígitos).
+"""Geração do login "usuário" dos corretores (ex.: italo.nunes), da senha
+inicial (o telefone da pessoa, só dígitos) e o hash/verificação de senha.
 
-Por que existe: a partir da mudança radical de setembro/2026, corretor não
-loga mais com e-mail — o admin cadastra todo mundo de uma vez a partir da
-planilha de contatos (ver app/data/corretores_iniciais.py), e cada um recebe
-usuário = nome.sobrenome e senha = telefone (sem DDD/traço). A pessoa pode
-trocar a senha depois (opcional, não é obrigatório no primeiro acesso).
+Login próprio, sem Supabase Auth: a senha nunca é guardada em texto puro —
+só o hash (bcrypt) na coluna `corretores.senha_hash`. O token de sessão (JWT)
+é emitido e validado pelo próprio backend (ver app/security.py), sem
+depender de e-mail em nenhuma etapa — nem pra criar login, nem pra recuperar
+senha (isso é feito pelo admin, ver PainelCorretores.tsx > "Resetar senha").
 
-O Supabase Auth continua exigindo um e-mail por baixo de cada usuário — a
-gente fabrica um com DOMINIO_LOGIN, que o corretor nunca vê. Esse domínio
-tem que ser IDÊNTICO ao usado no frontend (frontend/src/lib/usuarios.ts) —
-mudou aqui, muda lá também, senão o login para de bater.
+O admin cadastra todo mundo a partir da planilha de contatos (ver
+app/data/corretores_iniciais.py), e cada um recebe usuário = nome.sobrenome
+e senha = telefone (sem DDD/traço). A pessoa pode trocar a senha depois
+(opcional, não é obrigatório no primeiro acesso) — ver POST /crm/me/senha.
 """
 
 import re
 import unicodedata
 
-DOMINIO_LOGIN = "corretor.login"
+import bcrypt
 
 
 def slug(texto: str) -> str:
@@ -36,10 +36,24 @@ def senha_de_telefone(telefone: str) -> str:
     return re.sub(r"\D", "", telefone or "")
 
 
-def email_interno(usuario: str) -> str:
-    """E-mail fabricado que satisfaz o Supabase Auth por baixo do login por
-    usuário. Nunca é mostrado nem usado pelo corretor."""
-    return f"{usuario}@{DOMINIO_LOGIN}"
+def hash_senha(senha: str) -> str:
+    """Hash bcrypt da senha em texto puro — é isso (nunca a senha em si) que
+    vai pra coluna `corretores.senha_hash`."""
+    return bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verificar_senha(senha: str, senha_hash: str | None) -> bool:
+    """Confere a senha em texto puro (digitada no login) contra o hash
+    guardado. `senha_hash` pode vir None (corretor antigo migrado sem senha
+    definida ainda) — nesse caso nunca autentica, só retorna False."""
+    if not senha_hash:
+        return False
+    try:
+        return bcrypt.checkpw(senha.encode("utf-8"), senha_hash.encode("utf-8"))
+    except ValueError:
+        # hash corrompido/formato inesperado — trata como senha errada, não
+        # como erro 500.
+        return False
 
 
 def gerar_usuario_unico(nome: str, ja_usados: set[str]) -> str:

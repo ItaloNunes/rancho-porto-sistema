@@ -1,69 +1,67 @@
-import type { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "./api";
-import { supabase } from "./supabase";
+import { getToken, setToken } from "./token";
 import type { Corretor } from "../types";
 
 interface AuthState {
-  /** Sessão do Supabase Auth (token bruto). null = não logado. */
-  session: Session | null;
+  /** Token da sessão do painel (JWT emitido por POST /crm/login). null =
+   * não logado. Login próprio, sem Supabase Auth — ver backend/app/security.py. */
+  session: string | null;
   /** Perfil do corretor (nome, papel) vindo de GET /crm/me. null enquanto
    * carrega ou se o login não tiver um cadastro de corretor correspondente. */
   perfil: Corretor | null;
   carregando: boolean;
-  entrar: (email: string, senha: string) => Promise<string | null>;
-  sair: () => Promise<void>;
+  entrar: (usuario: string, senha: string) => Promise<string | null>;
+  sair: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<string | null>(() => getToken());
   const [perfil, setPerfil] = useState<Corretor | null>(null);
-  const [carregandoSessao, setCarregandoSessao] = useState(true);
-  const [carregandoPerfil, setCarregandoPerfil] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setCarregandoSessao(false);
-    });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, novaSessao) => {
-      setSession(novaSessao);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
     if (!session) {
       setPerfil(null);
+      setCarregando(false);
       return;
     }
-    setCarregandoPerfil(true);
+    setCarregando(true);
     api
       .meuPerfil()
       .then(setPerfil)
-      .catch(() => setPerfil(null))
-      .finally(() => setCarregandoPerfil(false));
+      .catch(() => {
+        // token inválido/expirado — encerra a sessão local em vez de deixar
+        // o painel preso numa tela de "carregando" pra sempre.
+        setToken(null);
+        setSession(null);
+        setPerfil(null);
+      })
+      .finally(() => setCarregando(false));
   }, [session]);
 
-  async function entrar(email: string, senha: string): Promise<string | null> {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    return error ? error.message : null;
+  async function entrar(usuario: string, senha: string): Promise<string | null> {
+    try {
+      const resposta = await api.login(usuario, senha);
+      setToken(resposta.access_token);
+      setSession(resposta.access_token);
+      setPerfil(resposta.corretor);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
   }
 
-  async function sair() {
-    await supabase.auth.signOut();
+  function sair() {
+    setToken(null);
+    setSession(null);
+    setPerfil(null);
   }
 
   return (
-    <AuthContext.Provider
-      value={{ session, perfil, carregando: carregandoSessao || carregandoPerfil, entrar, sair }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ session, perfil, carregando, entrar, sair }}>{children}</AuthContext.Provider>
   );
 }
 

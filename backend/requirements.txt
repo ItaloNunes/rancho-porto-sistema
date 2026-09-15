@@ -6,3 +6,7 @@ pydantic-settings==2.5.2
 python-dotenv==1.0.1
 fpdf2==2.8.8
 python-multipart==0.0.12
+# Login próprio (usuário + senha), sem Supabase Auth: hash de senha e o JWT
+# que o backend emite e valida sozinho — ver app/usuarios.py e app/security.py.
+bcrypt==4.2.0
+PyJWT==2.9.0

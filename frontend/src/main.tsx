@@ -26,7 +26,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/" element={<Home />} />
           <Route path="/condominios/:slug" element={<Condominio />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/definir-senha" element={<DefinirSenha />} />
+          <Route
+            path="/definir-senha"
+            element={
+              <RequireAuth>
+                <DefinirSenha />
+              </RequireAuth>
+            }
+          />
           {/* Qualificação de leads (link público + upload de documentos) saiu
               de circulação em set/2026 — rota removida, mas o componente
               QualificacaoPublica.tsx e o router do backend continuam no
