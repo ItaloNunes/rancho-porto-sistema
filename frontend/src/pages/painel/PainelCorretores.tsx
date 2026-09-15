@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { api } from "../../lib/api";
-import type { Corretor, Papel } from "../../types";
+import type { Corretor, CorretorImportadoItem, Papel } from "../../types";
 
 export default function PainelCorretores() {
   const [corretores, setCorretores] = useState<Corretor[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<Corretor | "novo" | null>(null);
+  const [criado, setCriado] = useState<{ usuario: string; senha: string } | null>(null);
+  const [importando, setImportando] = useState(false);
+  const [resultadoImportacao, setResultadoImportacao] = useState<CorretorImportadoItem[] | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -26,16 +29,85 @@ export default function PainelCorretores() {
     }
   }
 
+  async function importarDaPlanilha() {
+    if (
+      !confirm(
+        "Isso cadastra de uma vez todos os corretores da planilha inicial (quem já tem login é pulado — pode rodar de novo com segurança). Continuar?",
+      )
+    )
+      return;
+    setImportando(true);
+    setErro(null);
+    try {
+      const resultado = await api.importarCorretores();
+      setResultadoImportacao(resultado);
+      recarregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  function baixarCsvImportacao() {
+    if (!resultadoImportacao) return;
+    const linhas = [
+      ["nome", "usuario", "senha", "ativo", "status"],
+      ...resultadoImportacao.map((r) => [r.nome, r.usuario, r.senha ?? "", r.ativo ? "sim" : "não", r.status]),
+    ];
+    const csv = linhas.map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "corretores-login.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const criadosNaImportacao = resultadoImportacao?.filter((r) => r.status === "criado") ?? [];
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-5 gap-3">
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <h1 className="text-xl font-bold text-ink">Corretores</h1>
-        <button className="btn btn-primary" onClick={() => setEditando("novo")}>
-          + Novo login
-        </button>
+        <div className="flex gap-2">
+          <button className="btn btn-outline" onClick={importarDaPlanilha} disabled={importando}>
+            {importando ? "Importando..." : "Importar da planilha"}
+          </button>
+          <button className="btn btn-primary" onClick={() => setEditando("novo")}>
+            + Novo login
+          </button>
+        </div>
       </div>
 
       {erro && <p className="text-rust text-sm mb-4">{erro}</p>}
+
+      {resultadoImportacao && (
+        <div className="card p-4 mb-5">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-sm text-ink">
+              Importação concluída: <strong>{criadosNaImportacao.length}</strong> login(s) criado(s) de{" "}
+              {resultadoImportacao.length} linha(s) ({resultadoImportacao.filter((r) => r.status === "ja_existia").length} já
+              existiam, {resultadoImportacao.filter((r) => r.status === "erro").length} com erro).
+            </p>
+            <div className="flex gap-2 shrink-0">
+              <button className="btn btn-outline !py-1.5 !px-3 text-xs" onClick={baixarCsvImportacao}>
+                Baixar tabela (CSV)
+              </button>
+              <button className="text-ink-soft text-xs hover:text-ink" onClick={() => setResultadoImportacao(null)}>
+                fechar
+              </button>
+            </div>
+          </div>
+          {criadosNaImportacao.length > 0 && (
+            <p className="text-xs text-ink-soft">
+              Usuário = login; senha inicial = telefone da pessoa (só números). Baixe a tabela agora — essa é a única
+              vez que as senhas aparecem em texto puro.
+            </p>
+          )}
+        </div>
+      )}
 
       {!corretores ? (
         <p className="text-ink-soft text-sm">Carregando...</p>
@@ -45,7 +117,7 @@ export default function PainelCorretores() {
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 font-medium">Nome</th>
-                <th className="px-4 py-3 font-medium">E-mail</th>
+                <th className="px-4 py-3 font-medium">Usuário</th>
                 <th className="px-4 py-3 font-medium">Papel</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium" />
@@ -55,7 +127,7 @@ export default function PainelCorretores() {
               {corretores.map((c) => (
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
                   <td className="px-4 py-3 font-medium text-ink">{c.nome}</td>
-                  <td className="px-4 py-3 text-ink-soft">{c.email || "—"}</td>
+                  <td className="px-4 py-3 text-ink-soft font-mono text-xs">{c.usuario || "—"}</td>
                   <td className="px-4 py-3 text-ink-soft uppercase text-xs">{c.papel}</td>
                   <td className="px-4 py-3">
                     <span className={`badge ${c.ativo ? "badge-disponivel" : "badge-vendido"}`}>
@@ -81,20 +153,51 @@ export default function PainelCorretores() {
         <Modal onClose={() => setEditando(null)} labelledBy="corretor-modal-title">
           <CorretorForm
             corretor={editando === "novo" ? null : editando}
-            onSalvo={() => {
+            onSalvo={(loginCriado) => {
               setEditando(null);
+              if (loginCriado) setCriado(loginCriado);
               recarregar();
             }}
           />
+        </Modal>
+      )}
+
+      {criado && (
+        <Modal onClose={() => setCriado(null)} labelledBy="login-criado-title">
+          <div className="p-6 sm:p-8 grid gap-3">
+            <h2 id="login-criado-title" className="text-lg font-bold text-ink mb-1">
+              Login criado
+            </h2>
+            <p className="text-sm text-ink-soft">
+              Repasse esses dados pro corretor — a senha não aparece de novo depois que essa janela fechar.
+            </p>
+            <div className="card p-4 grid gap-1 font-mono text-sm">
+              <span>
+                usuário: <strong>{criado.usuario}</strong>
+              </span>
+              <span>
+                senha: <strong>{criado.senha}</strong>
+              </span>
+            </div>
+            <button className="btn btn-primary mt-2" onClick={() => setCriado(null)}>
+              Entendi
+            </button>
+          </div>
         </Modal>
       )}
     </div>
   );
 }
 
-function CorretorForm({ corretor, onSalvo }: { corretor: Corretor | null; onSalvo: () => void }) {
+function CorretorForm({
+  corretor,
+  onSalvo,
+}: {
+  corretor: Corretor | null;
+  onSalvo: (loginCriado?: { usuario: string; senha: string }) => void;
+}) {
   const [nome, setNome] = useState(corretor?.nome ?? "");
-  const [email, setEmail] = useState(corretor?.email ?? "");
+  const [usuario, setUsuario] = useState(corretor?.usuario ?? "");
   const [telefone, setTelefone] = useState(corretor?.telefone ?? "");
   const [papel, setPapel] = useState<Papel>(corretor?.papel ?? "corretor");
   const [erro, setErro] = useState<string | null>(null);
@@ -107,10 +210,11 @@ function CorretorForm({ corretor, onSalvo }: { corretor: Corretor | null; onSalv
     try {
       if (corretor) {
         await api.atualizarCorretor(corretor.id, { nome, telefone: telefone || null, papel });
+        onSalvo();
       } else {
-        await api.criarCorretor({ nome, email, telefone: telefone || null, papel });
+        const criado = await api.criarCorretor({ nome, telefone, usuario: usuario || null, papel });
+        onSalvo({ usuario: criado.usuario ?? "", senha: criado.senha });
       }
-      onSalvo();
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
@@ -125,20 +229,25 @@ function CorretorForm({ corretor, onSalvo }: { corretor: Corretor | null; onSalv
       </h2>
       {!corretor && (
         <p className="text-xs text-ink-soft -mt-1 mb-1">
-          A pessoa recebe um e-mail de convite com um link pra definir a própria senha.
+          A senha inicial é o telefone (só números). Deixe "usuário" em branco pra gerar automático a partir do nome.
         </p>
       )}
       <input className="input" placeholder="Nome *" value={nome} onChange={(e) => setNome(e.target.value)} required />
+      {!corretor && (
+        <input
+          className="input"
+          placeholder="Usuário (opcional — ex.: italo.nunes)"
+          value={usuario}
+          onChange={(e) => setUsuario(e.target.value)}
+        />
+      )}
       <input
         className="input"
-        type="email"
-        placeholder="E-mail *"
-        value={email ?? ""}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        disabled={!!corretor}
+        placeholder={corretor ? "Telefone" : "Telefone * (vira a senha)"}
+        value={telefone ?? ""}
+        onChange={(e) => setTelefone(e.target.value)}
+        required={!corretor}
       />
-      <input className="input" placeholder="Telefone" value={telefone ?? ""} onChange={(e) => setTelefone(e.target.value)} />
       <select className="input" value={papel} onChange={(e) => setPapel(e.target.value as Papel)}>
         <option value="corretor">Corretor</option>
         <option value="admin">Admin</option>

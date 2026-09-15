@@ -19,7 +19,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
-from ..config import settings
+from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf
 from ..schemas import (
@@ -28,6 +28,8 @@ from ..schemas import (
     ClienteUpdate,
     Corretor,
     CorretorCreate,
+    CorretorCriado,
+    CorretorImportadoItem,
     CorretorUpdate,
     LoteComCondominio,
     Proposta,
@@ -38,6 +40,8 @@ from ..schemas import (
     VisaoGeralCondominio,
 )
 from ..security import get_current_corretor, require_admin
+from ..usuarios import email_interno, gerar_usuario_unico, senha_de_telefone
+from ..usuarios import slug as slug_usuario
 
 router = APIRouter(tags=["crm"])
 
@@ -59,28 +63,147 @@ def listar_corretores(_admin: dict = Depends(require_admin)):
     return get_supabase().table("corretores").select("*").order("nome").execute().data
 
 
-@router.post("/corretores", response_model=Corretor)
+@router.post("/corretores", response_model=CorretorCriado)
 def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin)):
+    """Login por usuário (ver app/usuarios.py): sem convite por e-mail — a
+    conta já nasce pronta pra usar, com senha = telefone (só dígitos). O
+    admin repassa usuário+senha pro corretor por fora (WhatsApp, etc.); essa
+    é a única resposta que traz a senha em texto puro."""
     sb = get_supabase()
-    existente = sb.table("corretores").select("id").eq("email", payload.email).limit(1).execute().data
-    if existente:
-        raise HTTPException(409, "Já existe um login com esse e-mail.")
+    ja_usados = {
+        c["usuario"] for c in sb.table("corretores").select("usuario").execute().data if c.get("usuario")
+    }
+    usuario = payload.usuario.strip().lower() if payload.usuario else None
+    if usuario:
+        if usuario in ja_usados:
+            raise HTTPException(409, "Já existe um login com esse usuário.")
+    else:
+        usuario = gerar_usuario_unico(payload.nome, ja_usados)
+
+    senha = senha_de_telefone(payload.telefone)
+    if len(senha) < 6:
+        raise HTTPException(400, "Telefone inválido pra gerar a senha (mínimo 6 dígitos).")
+    email = email_interno(usuario)
+
     try:
-        convite = sb.auth.admin.invite_user_by_email(
-            payload.email,
-            {"redirect_to": f"{settings.frontend_url}/definir-senha"},
+        criado = sb.auth.admin.create_user(
+            {"email": email, "password": senha, "email_confirm": True}
         )
-    except Exception as exc:  # e-mail inválido, SMTP não configurado, etc.
-        raise HTTPException(400, f"Não foi possível enviar o convite: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(400, f"Não foi possível criar o login: {exc}") from exc
+
     row = {
-        "auth_user_id": convite.user.id,
+        "auth_user_id": criado.user.id,
         "nome": payload.nome,
-        "email": payload.email,
+        "usuario": usuario,
+        "email": email,
         "telefone": payload.telefone,
         "papel": payload.papel,
         "ativo": True,
     }
-    return sb.table("corretores").insert(row).execute().data[0]
+    inserido = sb.table("corretores").insert(row).execute().data[0]
+    return {**inserido, "senha": senha}
+
+
+@router.post("/corretores/importar", response_model=list[CorretorImportadoItem])
+def importar_corretores(_admin: dict = Depends(require_admin)):
+    """Cadastra de uma vez todos os corretores da planilha inicial (ver
+    app/data/corretores_iniciais.py) — usuário = nome.sobrenome, senha =
+    telefone (só dígitos). Quem estava marcado como "saiu do grupo" na
+    planilha é cadastrado mesmo assim, mas já `ativo=False` (não some o
+    registro, só não consegue logar até o admin reativar).
+
+    Idempotente: roda de novo com segurança — usuário que já existe é
+    pulado (status "ja_existia", sem repetir a criação nem reexibir a
+    senha, que só sai uma vez, na hora da criação)."""
+    sb = get_supabase()
+    ja_usados = {
+        c["usuario"] for c in sb.table("corretores").select("usuario").execute().data if c.get("usuario")
+    }
+    vistos_na_planilha: set[tuple[str, str]] = set()
+    resultado: list[dict] = []
+
+    for nome, telefone, saiu_do_grupo in CORRETORES_INICIAIS:
+        chave = (nome.strip().lower(), telefone.strip())
+        if chave in vistos_na_planilha:
+            continue  # linha idêntica repetida na planilha original
+        vistos_na_planilha.add(chave)
+
+        # se já existe alguém com o mesmo "slug base" (com ou sem sufixo
+        # numérico de desempate), pula por segurança em vez de arriscar
+        # recriar/duplicar — é o que torna essa rota idempotente
+        base = slug_usuario(nome)
+        ja_importado = base in ja_usados or any(
+            u == base or (u.startswith(base) and u[len(base) :].isdigit()) for u in ja_usados
+        )
+        if ja_importado:
+            # provavelmente já importado numa rodada anterior — não dá pra
+            # saber com 100% de certeza qual usuário exato ficou pra esse
+            # nome sem guardar de-para, então só registra como "ja_existia"
+            resultado.append(
+                {
+                    "nome": nome,
+                    "usuario": base,
+                    "senha": None,
+                    "ativo": not saiu_do_grupo,
+                    "status": "ja_existia",
+                    "erro": None,
+                }
+            )
+            continue
+
+        usuario = gerar_usuario_unico(nome, ja_usados)
+        senha = senha_de_telefone(telefone)
+        if len(senha) < 6:
+            resultado.append(
+                {
+                    "nome": nome,
+                    "usuario": usuario,
+                    "senha": None,
+                    "ativo": False,
+                    "status": "erro",
+                    "erro": "Telefone inválido pra gerar senha.",
+                }
+            )
+            continue
+
+        email = email_interno(usuario)
+        try:
+            criado = sb.auth.admin.create_user({"email": email, "password": senha, "email_confirm": True})
+            sb.table("corretores").insert(
+                {
+                    "auth_user_id": criado.user.id,
+                    "nome": nome,
+                    "usuario": usuario,
+                    "email": email,
+                    "telefone": telefone,
+                    "papel": "corretor",
+                    "ativo": not saiu_do_grupo,
+                }
+            ).execute()
+            resultado.append(
+                {
+                    "nome": nome,
+                    "usuario": usuario,
+                    "senha": senha,
+                    "ativo": not saiu_do_grupo,
+                    "status": "criado",
+                    "erro": None,
+                }
+            )
+        except Exception as exc:
+            resultado.append(
+                {
+                    "nome": nome,
+                    "usuario": usuario,
+                    "senha": None,
+                    "ativo": False,
+                    "status": "erro",
+                    "erro": str(exc),
+                }
+            )
+
+    return resultado
 
 
 @router.patch("/corretores/{corretor_id}", response_model=Corretor)

@@ -68,10 +68,27 @@ export type Papel = "admin" | "corretor";
 export interface Corretor {
   id: string;
   nome: string;
+  usuario?: string | null;
   email?: string | null;
   telefone?: string | null;
   papel: Papel;
   ativo: boolean;
+}
+
+/** Resposta de POST /crm/corretores — só nessa hora a senha aparece em
+ * texto puro, pro admin repassar pro corretor. */
+export interface CorretorCriado extends Corretor {
+  senha: string;
+}
+
+/** Uma linha do resultado de POST /crm/corretores/importar. */
+export interface CorretorImportadoItem {
+  nome: string;
+  usuario: string;
+  senha?: string | null;
+  ativo: boolean;
+  status: "criado" | "ja_existia" | "erro";
+  erro?: string | null;
 }
 
 export interface Cliente {
@@ -126,6 +143,7 @@ export interface Reserva {
   lote_id: string;
   nome?: string | null;
   contato?: string | null;
+  cpf?: string | null;
   observacao?: string | null;
   status: ReservaStatus;
   cliente_id?: string | null;
@@ -133,6 +151,9 @@ export interface Reserva {
   /** Preenchido quando a reserva entra em "em_analise_financeira" (now + 48h) —
    * só um alerta/contador no painel, ninguém libera o lote sozinho por causa disso. */
   analise_prazo_em?: string | null;
+  /** Prazo duro de 24h — passou disso sem confirmar a compra, o backend expira a
+   * reserva sozinho e libera o lote (ver _expirar_vencidas no backend). */
+  expira_em?: string | null;
   created_at: string;
 }
 

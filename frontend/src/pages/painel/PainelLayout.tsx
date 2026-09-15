@@ -3,15 +3,19 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
-// Corretor comum: cadastra cliente, gera reserva + link de qualificação e
-// acompanha propostas/qualificações (só sem aprovar nada). O resto (mexer
-// direto no estoque de lotes, números consolidados, gestão de outros
-// corretores, marcação da planta) é só admin — ver TABS_ADMIN.
+// Mudança de setembro/2026: não tem mais Cadastro de Cliente nem
+// Qualificação de Leads (o corretor informa nome/CPF direto no pedido de
+// reserva) — as duas telas saíram da navegação, mas o código continua no
+// projeto (PainelClientes.tsx, PainelQualificacoes.tsx e as rotas do
+// backend), só não estão mais roteadas em main.tsx.
+//
+// Corretor comum: gera reserva e acompanha propostas (só sem aprovar
+// nada). O resto (mexer direto no estoque de lotes, números consolidados,
+// gestão de outros corretores, marcação da planta) é só admin — ver
+// TABS_ADMIN.
 const TABS_BASE = [
-  { to: "/painel/clientes", label: "Clientes" },
-  { to: "/painel/propostas", label: "Propostas" },
   { to: "/painel/reservas", label: "Reservas" },
-  { to: "/painel/qualificacoes", label: "Qualificações" },
+  { to: "/painel/propostas", label: "Propostas" },
 ];
 
 const TABS_ADMIN = [
@@ -32,7 +36,6 @@ export default function PainelLayout() {
   const tabs = perfil?.papel === "admin" ? [...TABS_BASE, ...TABS_ADMIN] : TABS_BASE;
   const [menuAberto, setMenuAberto] = useState(false);
   const [reservasPendentes, setReservasPendentes] = useState(0);
-  const [qualificacoesPendentes, setQualificacoesPendentes] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
@@ -44,14 +47,6 @@ export default function PainelLayout() {
         })
         .catch(() => {
           /* falha silenciosa — é só um indicador, não vale interromper o painel por isso */
-        });
-      api
-        .listarQualificacoes()
-        .then((qs) => {
-          if (!cancelado) setQualificacoesPendentes(qs.filter((q) => q.status === "em_analise").length);
-        })
-        .catch(() => {
-          /* idem — falha silenciosa */
         });
     }
     carregar();
@@ -99,6 +94,9 @@ export default function PainelLayout() {
               {perfil?.nome}{" "}
               <span className="text-[11px] uppercase tracking-wide text-ink-soft/70">({perfil?.papel})</span>
             </span>
+            <Link to="/definir-senha" className="btn btn-ghost hidden sm:inline-flex">
+              Trocar senha
+            </Link>
             <button onClick={() => sair()} className="btn btn-ghost">
               Sair
             </button>
@@ -109,7 +107,7 @@ export default function PainelLayout() {
       <nav className="hidden sm:block border-b border-border bg-surface min-w-0 overflow-x-auto">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 flex gap-1">
           {tabs.map((t) => (
-            <TabLink key={t.to} to={t.to} label={t.label} badge={badgeDe(t.to, reservasPendentes, qualificacoesPendentes)} />
+            <TabLink key={t.to} to={t.to} label={t.label} badge={badgeDe(t.to, reservasPendentes)} />
           ))}
         </div>
       </nav>
@@ -141,17 +139,20 @@ export default function PainelLayout() {
                   key={t.to}
                   to={t.to}
                   label={t.label}
-                  badge={badgeDe(t.to, reservasPendentes, qualificacoesPendentes)}
+                  badge={badgeDe(t.to, reservasPendentes)}
                   vertical
                   onClick={() => setMenuAberto(false)}
                 />
               ))}
             </div>
-            <div className="px-5 py-4 border-t border-border mt-2">
+            <div className="px-5 py-4 border-t border-border mt-2 grid gap-2">
               <p className="text-sm text-ink-soft">
                 {perfil?.nome}{" "}
                 <span className="text-[11px] uppercase tracking-wide text-ink-soft/70">({perfil?.papel})</span>
               </p>
+              <Link to="/definir-senha" className="text-xs font-medium text-primary hover:underline w-fit" onClick={() => setMenuAberto(false)}>
+                Trocar senha
+              </Link>
             </div>
           </div>
         </div>
@@ -164,9 +165,8 @@ export default function PainelLayout() {
   );
 }
 
-function badgeDe(to: string, reservasPendentes: number, qualificacoesPendentes: number): number {
+function badgeDe(to: string, reservasPendentes: number): number {
   if (to === "/painel/reservas") return reservasPendentes;
-  if (to === "/painel/qualificacoes") return qualificacoesPendentes;
   return 0;
 }
 

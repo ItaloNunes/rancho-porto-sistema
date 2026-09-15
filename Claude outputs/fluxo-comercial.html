@@ -1,0 +1,429 @@
+<title>Fluxo Comercial Rancho Porto</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#eef0f3;
+    --surface:#ffffff;
+    --ink:#1b2430;
+    --ink-soft:#5b6472;
+    --border:#c7cdd6;
+    --lane-a:#ffffff;
+    --lane-b:#e9ecf1;
+    --accent:#33538f;
+    --pos:#1f7a5c;
+    --neg:#b3432b;
+    --tag-bg:#eef1f6;
+    --tag-border:#aab3c0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12151a;
+      --surface:#1a1e25;
+      --ink:#e7e9ec;
+      --ink-soft:#98a1ad;
+      --border:#333a44;
+      --lane-a:#1a1e25;
+      --lane-b:#20242c;
+      --accent:#8fa8dd;
+      --pos:#57c39c;
+      --neg:#e0836a;
+      --tag-bg:#232833;
+      --tag-border:#454e5c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12151a;
+    --surface:#1a1e25;
+    --ink:#e7e9ec;
+    --ink-soft:#98a1ad;
+    --border:#333a44;
+    --lane-a:#1a1e25;
+    --lane-b:#20242c;
+    --accent:#8fa8dd;
+    --pos:#57c39c;
+    --neg:#e0836a;
+    --tag-bg:#232833;
+    --tag-border:#454e5c;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding:28px 20px 48px;
+    max-width:1180px;
+    margin:0 auto;
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:12px;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 6px;
+  }
+  h1{
+    font-size:clamp(22px,3.4vw,30px);
+    margin:0 0 10px;
+    text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  .lede{
+    color:var(--ink-soft);
+    font-size:14.5px;
+    line-height:1.55;
+    max-width:64ch;
+    margin:0 0 26px;
+  }
+  figure{margin:0;}
+  .diagram-frame{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 14px 6px;
+    overflow-x:auto;
+  }
+  svg{
+    display:block;
+    width:100%;
+    height:auto;
+    min-width:920px;
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+  figcaption{
+    color:var(--ink-soft);
+    font-size:12.5px;
+    line-height:1.5;
+    padding:10px 4px 4px;
+  }
+  .notes{
+    margin-top:22px;
+    display:grid;
+    gap:8px;
+  }
+  .notes h2{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    color:var(--ink-soft);
+    margin:0 0 2px;
+    font-weight:600;
+  }
+  .notes ul{
+    margin:0;
+    padding-left:18px;
+    font-size:13.5px;
+    line-height:1.65;
+    color:var(--ink);
+  }
+  .notes li{margin-bottom:4px;}
+  .notes li b{font-weight:600;}
+  code{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:.92em;
+    background:var(--tag-bg);
+    border:1px solid var(--tag-border);
+    border-radius:4px;
+    padding:1px 5px;
+  }
+
+  /* --- diagram element styles --- */
+  .lane-bg-a{fill:var(--lane-a);}
+  .lane-bg-b{fill:var(--lane-b);}
+  .lane-line{stroke:var(--border); stroke-width:1;}
+  .pool-strip{fill:var(--accent);}
+  .pool-title{fill:var(--surface); font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.08em;}
+  .lane-strip{fill:var(--lane-b); stroke:var(--border); stroke-width:1;}
+  .lane-title{fill:var(--ink-soft); font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:500; letter-spacing:.09em;}
+
+  .flow{ fill:none; stroke:var(--ink); stroke-width:2; }
+  .flow-pos{ fill:none; stroke:var(--pos); stroke-width:2.25; }
+  .flow-neg{ fill:none; stroke:var(--neg); stroke-width:2.25; }
+  .flow-assoc{ fill:none; stroke:var(--ink-soft); stroke-width:1.3; stroke-dasharray:2.5 3; }
+  .flow-label{ fill:var(--ink-soft); font-size:11px; }
+  .flow-label-pos{ fill:var(--pos); font-size:11px; font-weight:600; }
+  .flow-label-neg{ fill:var(--neg); font-size:11px; font-weight:600; }
+
+  .task rect{ fill:var(--surface); stroke:var(--ink); stroke-width:1.6; }
+  .task text{ fill:var(--ink); font-size:12.5px; }
+  .gw polygon{ fill:var(--surface); stroke:var(--ink); stroke-width:1.6; }
+  .gw-x{ fill:var(--ink-soft); font-size:15px; font-weight:600; }
+  .gw-label{ fill:var(--ink); font-size:11.5px; }
+  .evt-start circle{ fill:var(--surface); stroke:var(--ink); stroke-width:2; }
+  .evt-end circle{ fill:var(--surface); stroke:var(--ink); stroke-width:3.5; }
+  .evt-end.pos circle{ stroke:var(--pos); }
+  .evt-end.neg circle{ stroke:var(--neg); }
+  .evt text{ fill:var(--ink-soft); font-size:11px; }
+  .evt-end.pos text, .evt-end.neg text{ fill:var(--ink); font-weight:600; }
+
+  .tag rect{ fill:var(--tag-bg); stroke:var(--tag-border); stroke-width:1; stroke-dasharray:3 2.5; }
+  .tag text{ fill:var(--ink-soft); font-family:"IBM Plex Mono",monospace; font-size:9.5px; }
+
+  path.annot{ fill:none; stroke:var(--ink-soft); stroke-width:1.4; }
+  .annot text{ fill:var(--ink-soft); font-size:10.5px; }
+
+  .lock{ fill:none; stroke:var(--accent); stroke-width:1.6; }
+
+  .legend-item{ fill:var(--ink-soft); font-size:10.5px; }
+  .legend-title{ fill:var(--ink-soft); font-size:10px; letter-spacing:.08em; font-weight:600; }
+</style>
+
+<p class="eyebrow">Rancho Porto &middot; painel comercial</p>
+<h1>Do pedido de reserva à venda concluída</h1>
+<p class="lede">Fluxo atual do painel, com as travas de permissão de hoje: o que o corretor comum resolve sozinho, e o que só passa com um admin.</p>
+
+<figure class="diagram-frame">
+<svg viewBox="0 0 1800 780" role="img" aria-label="Diagrama BPMN do processo de venda de lotes: cliente reserva no catálogo, corretor atende e gera o link de qualificação, o cliente preenche o formulário, o admin aprova ou reprova, e o corretor conduz a proposta até a venda ou recusa.">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto-start-reverse">
+      <polygon points="0,0 8,4 0,8" fill="var(--ink)"/>
+    </marker>
+    <marker id="arrow-pos" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto-start-reverse">
+      <polygon points="0,0 8,4 0,8" fill="var(--pos)"/>
+    </marker>
+    <marker id="arrow-neg" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto-start-reverse">
+      <polygon points="0,0 8,4 0,8" fill="var(--neg)"/>
+    </marker>
+  </defs>
+
+  <!-- ================= POOL / LANES ================= -->
+  <!-- pool title strip -->
+  <rect class="pool-strip" x="8" y="54" width="26" height="616"/>
+  <text class="pool-title" transform="rotate(-90 24 362)" x="24" y="362" text-anchor="middle">VENDA DE LOTES — RANCHO PORTO</text>
+
+  <!-- lane backgrounds -->
+  <rect class="lane-bg-a" x="34" y="54" width="1758" height="180"/>
+  <rect class="lane-bg-b" x="34" y="234" width="1758" height="230"/>
+  <rect class="lane-bg-a" x="34" y="464" width="1758" height="210"/>
+  <line class="lane-line" x1="34" y1="234" x2="1792" y2="234"/>
+  <line class="lane-line" x1="34" y1="464" x2="1792" y2="464"/>
+  <rect x="34" y="54" width="1758" height="620" fill="none" stroke="var(--border)" stroke-width="1"/>
+
+  <!-- lane label strips -->
+  <rect class="lane-strip" x="34" y="54" width="116" height="180"/>
+  <rect class="lane-strip" x="34" y="234" width="116" height="230"/>
+  <rect class="lane-strip" x="34" y="464" width="116" height="210"/>
+  <text class="lane-title" transform="rotate(-90 92 144)" x="92" y="144" text-anchor="middle">CLIENTE FINAL</text>
+  <text class="lane-title" transform="rotate(-90 92 349)" x="92" y="349" text-anchor="middle">CORRETOR</text>
+  <text class="lane-title" transform="rotate(-90 92 569)" x="92" y="569" text-anchor="middle">FINANCEIRO / ADMIN</text>
+
+  <!-- ================= LANE 1 — CLIENTE ================= -->
+  <!-- start event -->
+  <g class="evt-start">
+    <circle cx="210" cy="140" r="18"/>
+  </g>
+  <text class="evt" x="210" y="168" text-anchor="middle" fill="var(--ink-soft)" font-size="11">acessa o catálogo</text>
+
+  <!-- reserva o lote -->
+  <line class="flow" x1="228" y1="140" x2="278" y2="140" marker-end="url(#arrow)"/>
+  <g class="task">
+    <rect x="280" y="112" width="140" height="56" rx="9"/>
+    <text x="350" y="145" text-anchor="middle">Reserva o lote</text>
+  </g>
+  <g class="tag">
+    <rect x="292" y="183" width="116" height="26" rx="4"/>
+    <text x="350" y="200" text-anchor="middle">Lote → Reservado</text>
+  </g>
+  <path class="flow-assoc" d="M350,168 L350,183"/>
+
+  <!-- ================= LANE 2 — CORRETOR (linha principal) ================= -->
+  <path class="flow" d="M420,155 L490,296" marker-end="url(#arrow)"/>
+  <g class="task">
+    <rect x="430" y="282" width="140" height="56" rx="9"/>
+    <text x="500" y="306" text-anchor="middle">Atende o pedido</text>
+    <text x="500" y="322" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">(aba Reservas)</text>
+  </g>
+
+  <!-- gateway: segue? -->
+  <path class="flow" d="M570,310 L618,310" marker-end="url(#arrow)"/>
+  <g class="gw">
+    <polygon points="650,282 678,310 650,338 622,310"/>
+    <text class="gw-x" x="650" y="315" text-anchor="middle">✕</text>
+  </g>
+  <text class="gw-label" x="650" y="270" text-anchor="middle" fill="var(--ink)">Segue?</text>
+
+  <!-- gateway -> cancela (não) -->
+  <path class="flow" d="M650,338 L650,382" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="662" y="365">não</text>
+  <g class="task">
+    <rect x="580" y="382" width="140" height="56" rx="9"/>
+    <text x="650" y="415" text-anchor="middle">Cancela reserva</text>
+  </g>
+  <path class="flow" d="M720,410 L772,410" marker-end="url(#arrow)"/>
+  <g class="evt-end">
+    <circle cx="800" cy="410" r="18"/>
+  </g>
+  <text class="evt" x="800" y="438" text-anchor="middle" fill="var(--ink-soft)" font-size="11">Lote liberado</text>
+  <g class="tag">
+    <rect x="672" y="350" width="118" height="26" rx="4"/>
+    <text x="731" y="367" text-anchor="middle">Lote → Disponível</text>
+  </g>
+  <path class="flow-assoc" d="M660,382 L700,376"/>
+
+  <!-- gateway -> gera link (sim) -->
+  <path class="flow" d="M678,310 L728,310" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="690" y="298">sim</text>
+  <g class="task">
+    <rect x="730" y="282" width="140" height="56" rx="9"/>
+    <text x="800" y="303" text-anchor="middle">Gera link de</text>
+    <text x="800" y="319" text-anchor="middle">qualificação</text>
+  </g>
+
+  <!-- annotation: atalho da proposta manual -->
+  <path class="annot" d="M890,394 L890,436"/>
+  <path class="flow-assoc" d="M870,320 L888,394"/>
+  <g class="annot">
+    <text x="902" y="406">Atalho: corretor cria uma Proposta</text>
+    <text x="902" y="419">manual direto (sem link) — mesma</text>
+    <text x="902" y="432">aprovação de admin antes do PDF.</text>
+  </g>
+
+  <!-- ================= LANE 1 — preenche formulário ================= -->
+  <path class="flow" d="M810,282 L945,168" marker-end="url(#arrow)"/>
+  <g class="task">
+    <rect x="880" y="112" width="140" height="56" rx="9"/>
+    <text x="950" y="136" text-anchor="middle">Preenche formulário</text>
+    <text x="950" y="152" text-anchor="middle">+ documentos</text>
+  </g>
+  <!-- self loop: incompleto -->
+  <path class="flow" d="M910,112 C900,78 990,70 1010,104" marker-end="url(#arrow)" fill="none"/>
+  <text class="flow-label" x="955" y="78" text-anchor="middle">incompleto</text>
+
+  <path class="flow" d="M1020,140 L1078,140" marker-end="url(#arrow)"/>
+  <g class="gw">
+    <polygon points="1100,112 1128,140 1100,168 1072,140"/>
+    <text class="gw-x" x="1100" y="145" text-anchor="middle">✕</text>
+  </g>
+  <text class="gw-label" x="1100" y="98" text-anchor="middle">Completo?</text>
+
+  <!-- ================= LANE 3 — ADMIN ================= -->
+  <path class="flow" d="M1100,168 L1100,518" marker-end="url(#arrow)"/>
+  <text class="flow-label" x="1112" y="345">sim — envia p/ análise</text>
+  <g class="tag">
+    <rect x="1112" y="358" width="150" height="26" rx="4"/>
+    <text x="1187" y="375" text-anchor="middle">Reserva → Análise financeira (48h)</text>
+  </g>
+  <path class="flow-assoc" d="M1100,368 L1112,371"/>
+
+  <g class="gw">
+    <polygon points="1100,522 1128,550 1100,578 1072,550"/>
+    <text class="gw-x" x="1100" y="555" text-anchor="middle">✕</text>
+  </g>
+  <text class="gw-label" x="1100" y="506" text-anchor="middle">Aprova qualificação?</text>
+
+  <!-- não -> reprova -->
+  <path class="flow-neg" d="M1100,578 L1100,630 L990,630" marker-end="url(#arrow-neg)"/>
+  <text class="flow-label-neg" x="1112" y="605">não</text>
+  <g class="task">
+    <rect x="850" y="602" width="140" height="56" rx="9"/>
+    <text x="920" y="635" text-anchor="middle">Reprova</text>
+  </g>
+  <g class="tag">
+    <rect x="800" y="490" width="140" height="38" rx="4"/>
+    <text x="870" y="505" text-anchor="middle">Reserva → Cancelada</text>
+    <text x="870" y="518" text-anchor="middle">Lote → Disponível</text>
+  </g>
+  <path class="flow-assoc" d="M870,528 L890,602"/>
+  <g class="evt-end neg">
+    <circle cx="780" cy="630" r="18"/>
+  </g>
+  <path class="flow-neg" d="M850,630 L800,630" marker-end="url(#arrow-neg)"/>
+  <text class="evt" x="780" y="658" text-anchor="middle" fill="var(--neg)" font-size="11">Reprovada</text>
+
+  <!-- sim -> cria proposta -->
+  <path class="flow-pos" d="M1128,550 L1210,550" marker-end="url(#arrow-pos)"/>
+  <text class="flow-label-pos" x="1140" y="538">sim</text>
+  <g class="task">
+    <rect x="1212" y="522" width="150" height="56" rx="9"/>
+    <text x="1287" y="546" text-anchor="middle">Cria proposta (Aprovada)</text>
+    <text x="1287" y="562" text-anchor="middle">+ confirma reserva</text>
+  </g>
+  <g class="tag">
+    <rect x="1257" y="472" width="150" height="38" rx="4"/>
+    <text x="1332" y="487" text-anchor="middle">Proposta → Aprovada</text>
+    <text x="1332" y="500" text-anchor="middle">Reserva → Confirmada</text>
+  </g>
+  <path class="flow-assoc" d="M1287,522 L1332,510"/>
+
+  <!-- ================= LANE 2 — retorno: PDF / assinatura ================= -->
+  <path class="flow" d="M1362,522 L1375,338" marker-end="url(#arrow)"/>
+  <g class="task">
+    <rect x="1375" y="282" width="140" height="56" rx="9"/>
+    <text x="1445" y="303" text-anchor="middle">Gera PDF e envia</text>
+    <text x="1445" y="319" text-anchor="middle">pra assinatura</text>
+  </g>
+
+  <path class="flow" d="M1515,310 L1563,310" marker-end="url(#arrow)"/>
+  <g class="gw">
+    <polygon points="1595,282 1623,310 1595,338 1567,310"/>
+    <text class="gw-x" x="1595" y="315" text-anchor="middle">✕</text>
+  </g>
+  <text class="gw-label" x="1595" y="270" text-anchor="middle">Cliente aceita?</text>
+
+  <!-- sim -> venda concluída -->
+  <path class="flow-pos" d="M1623,310 L1690,310" marker-end="url(#arrow-pos)"/>
+  <text class="flow-label-pos" x="1640" y="298">sim</text>
+  <g class="evt-end pos">
+    <circle cx="1718" cy="310" r="18"/>
+  </g>
+  <text class="evt" x="1718" y="338" text-anchor="middle" fill="var(--pos)" font-size="11">Venda concluída</text>
+  <g class="tag">
+    <rect x="1655" y="352" width="126" height="26" rx="4"/>
+    <text x="1718" y="369" text-anchor="middle">Lote → Vendido</text>
+  </g>
+  <path class="flow-assoc" d="M1718,328 L1718,352"/>
+
+  <!-- não -> recusada/cancelada -->
+  <path class="flow-neg" d="M1595,338 L1595,382" marker-end="url(#arrow-neg)"/>
+  <text class="flow-label-neg" x="1607" y="365">não</text>
+  <g class="task">
+    <rect x="1525" y="382" width="140" height="56" rx="9"/>
+    <text x="1595" y="406" text-anchor="middle">Marca recusada</text>
+    <text x="1595" y="422" text-anchor="middle">/ cancelada</text>
+  </g>
+  <path class="flow-neg" d="M1665,410 L1690,410" marker-end="url(#arrow-neg)"/>
+  <g class="evt-end neg">
+    <circle cx="1718" cy="410" r="18"/>
+  </g>
+  <text class="evt" x="1718" y="438" text-anchor="middle" fill="var(--neg)" font-size="11">Não concluída</text>
+
+  <!-- ================= LEGEND ================= -->
+  <g transform="translate(48,706)">
+    <text class="legend-title" x="0" y="0">LEGENDA</text>
+
+    <circle cx="10" cy="24" r="10" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+    <text class="legend-item" x="28" y="28">início / fim</text>
+
+    <rect x="118" y="14" width="46" height="20" rx="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+    <text class="legend-item" x="172" y="28">tarefa</text>
+
+    <polygon points="238,14 258,24 238,34 218,24" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+    <text class="legend-item" x="266" y="28">decisão (✕ = exclusiva)</text>
+
+    <rect x="418" y="16" width="56" height="17" rx="3" fill="var(--tag-bg)" stroke="var(--tag-border)" stroke-width="1" stroke-dasharray="3 2.5"/>
+    <text class="legend-item" x="482" y="28">estado que muda</text>
+
+    <path d="M636,14 L636,34 L660,34" fill="none" stroke="var(--ink-soft)" stroke-width="1.4"/>
+    <text class="legend-item" x="666" y="28">observação (atalho)</text>
+
+    <circle cx="826" cy="24" r="9" fill="var(--surface)" stroke="var(--pos)" stroke-width="3"/>
+    <text class="legend-item" x="843" y="28">encerra bem</text>
+
+    <circle cx="946" cy="24" r="9" fill="var(--surface)" stroke="var(--neg)" stroke-width="3"/>
+    <text class="legend-item" x="963" y="28">encerra sem venda</text>
+
+    <text class="legend-item" x="1140" y="28" font-weight="600">🔒 = só admin decide</text>
+  </g>
+</svg>
+</figure>
+<figcaption>As três raias mostram quem faz o quê hoje. O corretor conduz reserva → link → proposta do início ao fim; o admin entra só pra confirmar a reserva e aprovar/reprovar a qualificação — daí em diante o corretor retoma sozinho até a venda.</figcaption>
+
+<div class="notes">
+  <h2>O que o desenho simplifica</h2>
+  <ul>
+    <li>"Atende o pedido" esconde os status intermediários da reserva (<code>pendente → em atendimento → aguardando cliente</code>) — só o desfecho que importa (segue ou cancela) virou decisão no diagrama.</li>
+    <li>Se a proposta for <b>recusada</b> ou <b>cancelada</b> depois de aprovada, o lote não volta sozinho pra "Disponível" — hoje isso precisa de uma mudança manual de status, e a aba Lotes agora é só admin.</li>
+    <li>O admin sempre pode agir em qualquer registro (mesmo os de outro corretor); o corretor comum só nos seus e nos ainda sem dono.</li>
+  </ul>
+</div>

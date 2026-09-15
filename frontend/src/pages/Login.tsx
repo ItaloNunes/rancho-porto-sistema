@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { emailInterno } from "../lib/usuarios";
 
 export default function Login() {
   const { session, entrar } = useAuth();
   const location = useLocation();
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -19,13 +20,16 @@ export default function Login() {
     e.preventDefault();
     setErro(null);
     setEnviando(true);
-    const msg = await entrar(email, senha);
+    // Login é por "usuário" (ex.: italo.nunes), não por e-mail — por baixo o
+    // Supabase Auth continua usando um e-mail fabricado (ver lib/usuarios.ts),
+    // mas isso é invisível pra quem está logando.
+    const msg = await entrar(emailInterno(usuario), senha);
     setEnviando(false);
     if (msg) {
-      // "Invalid login credentials" é o erro genérico do Supabase pra e-mail/senha
+      // "Invalid login credentials" é o erro genérico do Supabase pra login/senha
       // errados. Qualquer outra mensagem (erro de rede, projeto mal configurado
       // etc.) é mostrada como veio, pra não esconder o problema real.
-      setErro(msg.toLowerCase().includes("invalid login credentials") ? "E-mail ou senha incorretos." : msg);
+      setErro(msg.toLowerCase().includes("invalid login credentials") ? "Usuário ou senha incorretos." : msg);
     }
   }
 
@@ -49,14 +53,15 @@ export default function Login() {
           />
         </Link>
         <h1 className="text-xl font-bold text-ink mb-1">Painel interno</h1>
-        <p className="text-sm text-ink-soft mb-6">Entre com o login que o administrador criou pra você.</p>
+        <p className="text-sm text-ink-soft mb-6">Entre com o usuário e a senha que o administrador criou pra você.</p>
         <form onSubmit={onSubmit} className="grid gap-3">
           <input
             className="input"
-            type="email"
-            placeholder="E-mail"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Usuário"
+            value={usuario}
+            onChange={(e) => setUsuario(e.target.value)}
+            autoComplete="username"
             required
             autoFocus
           />

@@ -123,10 +123,15 @@ class LotePoligonoUpdate(BaseModel):
 class ReservaCreate(BaseModel):
     """Pedido de reserva feito pelo cliente no catálogo público — contato é
     obrigatório (telefone ou e-mail) pra evitar leads sem nenhum jeito de
-    retorno; nome fica opcional."""
+    retorno; nome fica opcional.
+
+    `cpf` existe pra suportar o fluxo novo (corretor loga, informa nome
+    completo + CPF opcional + lote na hora de reservar, sem precisar de um
+    Cadastro de Cliente separado) — nunca obrigatório."""
 
     nome: Optional[str] = None
     contato: str
+    cpf: Optional[str] = None
     observacao: Optional[str] = None
 
     @field_validator("contato")
@@ -174,6 +179,7 @@ class ReservaUpdate(BaseModel):
 
     nome: Optional[str] = None
     contato: Optional[str] = None
+    cpf: Optional[str] = None
     observacao: Optional[str] = None
 
     @field_validator("contato")
@@ -188,11 +194,16 @@ class Reserva(BaseModel):
     lote_id: str
     nome: Optional[str] = None
     contato: Optional[str] = None
+    cpf: Optional[str] = None
     observacao: Optional[str] = None
     status: ReservaStatus
     cliente_id: Optional[str] = None
     corretor_id: Optional[str] = None
     analise_prazo_em: Optional[datetime] = None
+    # Prazo duro de 24h — passou disso sem confirmar, a reserva expira
+    # sozinha (ver _expirar_vencidas em routers/reservas.py). Só None em
+    # reserva já 'confirmada'/'cancelada' criada antes desta regra existir.
+    expira_em: Optional[datetime] = None
     created_at: datetime
 
 
@@ -253,9 +264,14 @@ Papel = Literal["admin", "corretor"]
 
 
 class CorretorCreate(BaseModel):
+    """Login por usuário (não mais convite por e-mail — ver
+    routers/crm.py::criar_corretor e app/usuarios.py). `telefone` é
+    obrigatório porque vira a senha inicial (só os dígitos); `usuario` é
+    opcional — se não vier, é gerado a partir do nome (nome.sobrenome)."""
+
     nome: str
-    email: str
-    telefone: Optional[str] = None
+    telefone: str
+    usuario: Optional[str] = None
     papel: Papel = "corretor"
 
 
@@ -269,10 +285,31 @@ class CorretorUpdate(BaseModel):
 class Corretor(BaseModel):
     id: str
     nome: str
+    usuario: Optional[str] = None
     email: Optional[str] = None
     telefone: Optional[str] = None
     papel: Papel = "corretor"
     ativo: bool = True
+
+
+class CorretorCriado(Corretor):
+    """Resposta de POST /crm/corretores — a única vez que a senha inicial
+    (texto puro) aparece em algum lugar, pro admin poder repassar pro
+    corretor. Depois disso ninguém mais consegue ver essa senha (o Supabase
+    Auth só guarda o hash)."""
+
+    senha: str
+
+
+class CorretorImportadoItem(BaseModel):
+    """Uma linha do resultado de POST /crm/corretores/importar."""
+
+    nome: str
+    usuario: str
+    senha: Optional[str] = None
+    ativo: bool
+    status: Literal["criado", "ja_existia", "erro"]
+    erro: Optional[str] = None
 
 
 class PropostaCreate(BaseModel):

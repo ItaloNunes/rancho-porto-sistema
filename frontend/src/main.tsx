@@ -6,15 +6,12 @@ import Home from "./pages/Home";
 import Condominio from "./pages/Condominio";
 import Login from "./pages/Login";
 import DefinirSenha from "./pages/DefinirSenha";
-import QualificacaoPublica from "./pages/QualificacaoPublica";
 import { AuthProvider } from "./lib/auth";
 import RequireAuth from "./components/RequireAuth";
 import PainelLayout from "./pages/painel/PainelLayout";
-import PainelClientes from "./pages/painel/PainelClientes";
 import PainelCorretores from "./pages/painel/PainelCorretores";
 import PainelPropostas from "./pages/painel/PainelPropostas";
 import PainelReservas from "./pages/painel/PainelReservas";
-import PainelQualificacoes from "./pages/painel/PainelQualificacoes";
 import PainelLotes from "./pages/painel/PainelLotes";
 import PainelPlantas from "./pages/painel/PainelPlantas";
 import PainelAcompanhamento from "./pages/painel/PainelAcompanhamento";
@@ -29,7 +26,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/condominios/:slug" element={<Condominio />} />
           <Route path="/login" element={<Login />} />
           <Route path="/definir-senha" element={<DefinirSenha />} />
-          <Route path="/qualificacao/:token" element={<QualificacaoPublica />} />
+          {/* Qualificação de leads (link público + upload de documentos) saiu
+              de circulação em set/2026 — rota removida, mas o componente
+              QualificacaoPublica.tsx e o router do backend continuam no
+              projeto, só não estão mais acessíveis. */}
 
           <Route
             path="/painel"
@@ -39,11 +39,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               </RequireAuth>
             }
           >
-            <Route index element={<Navigate to="clientes" replace />} />
-            <Route path="clientes" element={<PainelClientes />} />
+            {/* Cadastro de Cliente e Qualificações saíram da navegação pelo
+                mesmo motivo — PainelClientes.tsx e PainelQualificacoes.tsx
+                continuam no projeto, só desroteados. */}
+            <Route index element={<Navigate to="reservas" replace />} />
             <Route path="propostas" element={<PainelPropostas />} />
             <Route path="reservas" element={<PainelReservas />} />
-            <Route path="qualificacoes" element={<PainelQualificacoes />} />
             <Route
               path="lotes"
               element={

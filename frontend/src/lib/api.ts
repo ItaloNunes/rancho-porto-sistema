@@ -4,6 +4,8 @@ import type {
   CondominioDetalhe,
   CondominioResumo,
   Corretor,
+  CorretorCriado,
+  CorretorImportadoItem,
   DocumentoQualificacao,
   DocumentoTipo,
   Lote,
@@ -119,12 +121,17 @@ export const api = {
 
   // Painel — corretores (logins); CRUD restrito a admin no backend
   listarCorretores: () => request<Corretor[]>("/crm/corretores", undefined, true),
-  criarCorretor: (payload: { nome: string; email: string; telefone?: string | null; papel: Papel }) =>
-    request<Corretor>("/crm/corretores", { method: "POST", body: JSON.stringify(payload) }, true),
+  criarCorretor: (payload: { nome: string; telefone: string; usuario?: string | null; papel: Papel }) =>
+    request<CorretorCriado>("/crm/corretores", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarCorretor: (
     id: string,
     payload: Partial<{ nome: string; telefone: string | null; papel: Papel; ativo: boolean }>,
   ) => request<Corretor>(`/crm/corretores/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
+  // Cadastra de uma vez todos os corretores da planilha inicial (ver
+  // backend/app/data/corretores_iniciais.py) — idempotente, dá pra clicar
+  // de novo sem duplicar ninguém.
+  importarCorretores: () =>
+    request<CorretorImportadoItem[]>("/crm/corretores/importar", { method: "POST" }, true),
 
   // Painel — clientes/leads
   listarClientes: () => request<Cliente[]>("/crm/clientes", undefined, true),
@@ -149,11 +156,16 @@ export const api = {
 
   // Painel — fila de pedidos de reserva vindos do catálogo público (+ os criados manualmente)
   listarReservas: () => request<ReservaComLote[]>("/reservas", undefined, true),
-  criarReserva: (payload: { lote_id: string; nome?: string | null; contato?: string | null; observacao?: string | null }) =>
-    request<Reserva>("/reservas", { method: "POST", body: JSON.stringify(payload) }, true),
+  criarReserva: (payload: {
+    lote_id: string;
+    nome?: string | null;
+    contato?: string | null;
+    cpf?: string | null;
+    observacao?: string | null;
+  }) => request<Reserva>("/reservas", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarReserva: (
     id: string,
-    payload: Partial<{ nome: string | null; contato: string | null; observacao: string | null }>,
+    payload: Partial<{ nome: string | null; contato: string | null; cpf: string | null; observacao: string | null }>,
   ) => request<Reserva>(`/reservas/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
   excluirReserva: (id: string) => request<void>(`/reservas/${id}`, { method: "DELETE" }, true),
   atualizarStatusReserva: (id: string, status: ReservaStatus) =>

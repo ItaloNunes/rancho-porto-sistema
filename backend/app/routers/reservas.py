@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..antispam import checar_honeypot, checar_rate_limit, checar_tempo_minimo, client_ip
@@ -15,9 +17,35 @@ from ..security import get_current_corretor
 router = APIRouter(prefix="/lotes", tags=["reservas"])
 admin_router = APIRouter(prefix="/reservas", tags=["reservas"])
 
+# Status que ainda estão "vivos" — só esses entram na checagem de expiração.
+# Confirmada/cancelada já são estados finais, não vencem mais.
+_STATUS_ATIVOS = ["pendente", "em_atendimento", "aguardando_qualificacao", "em_analise_financeira"]
+
 
 def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
     return corretor["papel"] == "admin" or reserva.get("corretor_id") in (None, corretor["id"])
+
+
+def _expirar_vencidas(sb) -> int:
+    """Regra de negócio: reserva que passou de 24h sem confirmar a compra
+    expira sozinha e libera o lote de volta pra 'disponivel' (só admin pode
+    confirmar — ver atualizar_status_reserva). Chamada em toda listagem
+    (checagem "preguiçosa" — não depende de ninguém ter o painel aberto);
+    POST /reservas/expirar-vencidas existe à parte pra um cron externo
+    reforçar isso mesmo sem ninguém abrir o painel."""
+    agora = datetime.now(timezone.utc).isoformat()
+    vencidas = (
+        sb.table("reservas")
+        .select("id, lote_id")
+        .in_("status", _STATUS_ATIVOS)
+        .lt("expira_em", agora)
+        .execute()
+        .data
+    )
+    for r in vencidas:
+        sb.table("reservas").update({"status": "cancelada"}).eq("id", r["id"]).execute()
+        sb.table("lotes").update({"status": "disponivel"}).eq("id", r["lote_id"]).execute()
+    return len(vencidas)
 
 
 @router.post("/{lote_id}/reservar", response_model=Reserva)
@@ -60,10 +88,21 @@ def listar_reservas(corretor: dict = Depends(get_current_corretor)):
     sem corretor responsável (leads novos vindos do catálogo público, que
     qualquer um pode assumir)."""
     sb = get_supabase()
+    _expirar_vencidas(sb)
     query = sb.table("reservas").select("*, lote:lotes(*)").order("created_at", desc=True)
     if corretor["papel"] != "admin":
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     return query.execute().data
+
+
+@admin_router.post("/expirar-vencidas")
+def expirar_vencidas_endpoint():
+    """Reforço da regra de 24h pra fora do painel: sem login de propósito,
+    pra dar pra apontar um cron externo gratuito (ex.: cron-job.org) direto
+    nessa URL a cada 15-30min e liberar lotes vencidos mesmo sem ninguém com
+    o painel aberto. Não expõe nada sensível — só devolve quantas expiraram."""
+    sb = get_supabase()
+    return {"expiradas": _expirar_vencidas(sb)}
 
 
 @admin_router.post("", response_model=Reserva)
