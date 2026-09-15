@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../../components/Modal";
 import { api, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -169,12 +169,24 @@ function ReservaForm({
   onSalvo: () => void;
 }) {
   const [loteId, setLoteId] = useState(reserva?.lote_id ?? "");
+  const [condominioSlug, setCondominioSlug] = useState("");
   const [nome, setNome] = useState(reserva?.nome ?? "");
   const [contato, setContato] = useState(reserva?.contato ?? "");
   const [cpf, setCpf] = useState(reserva?.cpf ?? "");
   const [observacao, setObservacao] = useState(reserva?.observacao ?? "");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  const empreendimentos = useMemo(() => {
+    const vistos = new Map<string, string>();
+    for (const l of lotes) vistos.set(l.condominio_slug, l.condominio_nome);
+    return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
+  }, [lotes]);
+
+  const lotesDoEmpreendimento = useMemo(
+    () => (condominioSlug ? lotes.filter((l) => l.condominio_slug === condominioSlug) : lotes),
+    [lotes, condominioSlug],
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -208,14 +220,26 @@ function ReservaForm({
         {reserva ? "Editar pedido" : "Novo pedido de reserva"}
       </h2>
       {!reserva && (
-        <select className="input" value={loteId} onChange={(e) => setLoteId(e.target.value)} required>
-          <option value="">Selecione o lote...</option>
-          {lotes.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.condominio_nome} — {l.identificador} ({l.status})
-            </option>
-          ))}
-        </select>
+        <>
+          {empreendimentos.length > 1 && (
+            <select
+              className="input"
+              value={condominioSlug}
+              onChange={(e) => {
+                setCondominioSlug(e.target.value);
+                setLoteId("");
+              }}
+            >
+              <option value="">Todos os empreendimentos</option>
+              {empreendimentos.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          )}
+          <LoteCombobox key={condominioSlug} lotes={lotesDoEmpreendimento} value={loteId} onChange={setLoteId} />
+        </>
       )}
       <input className="input" placeholder="Nome completo do cliente" value={nome ?? ""} onChange={(e) => setNome(e.target.value)} />
       <div className="grid grid-cols-2 gap-3">
@@ -239,5 +263,78 @@ function ReservaForm({
         {salvando ? "Salvando..." : "Salvar"}
       </button>
     </form>
+  );
+}
+
+function rotuloLote(l: LoteComCondominio): string {
+  return `${l.condominio_nome} — ${l.identificador} (${l.status})`;
+}
+
+/** Campo de lote com busca — em vez de rolar um <select> gigante, a pessoa
+ * digita (quadra, número, o que aparecer no rótulo) e escolhe da lista
+ * filtrada. `key={condominioSlug}` no ponto de uso (ReservaForm) remonta
+ * este componente do zero sempre que o filtro de empreendimento muda, então
+ * não precisa sincronizar busca/lista aqui. */
+function LoteCombobox({
+  lotes,
+  value,
+  onChange,
+}: {
+  lotes: LoteComCondominio[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const selecionado = lotes.find((l) => l.id === value) ?? null;
+  const [busca, setBusca] = useState(selecionado ? rotuloLote(selecionado) : "");
+  const [aberto, setAberto] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickFora(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setAberto(false);
+    }
+    document.addEventListener("mousedown", onClickFora);
+    return () => document.removeEventListener("mousedown", onClickFora);
+  }, []);
+
+  const termo = busca.trim().toLowerCase();
+  const filtrados = (termo ? lotes.filter((l) => rotuloLote(l).toLowerCase().includes(termo)) : lotes).slice(0, 60);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <input
+        className="input"
+        placeholder="Digite pra buscar o lote (quadra, número...)"
+        value={busca}
+        onFocus={() => setAberto(true)}
+        onChange={(e) => {
+          setBusca(e.target.value);
+          setAberto(true);
+          if (value) onChange("");
+        }}
+      />
+      {aberto && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto card p-1 shadow-lg">
+          {filtrados.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-ink-soft">Nenhum lote encontrado.</p>
+          ) : (
+            filtrados.map((l) => (
+              <button
+                type="button"
+                key={l.id}
+                className="w-full text-left px-3 py-2 text-sm rounded hover:bg-surface-alt"
+                onClick={() => {
+                  onChange(l.id);
+                  setBusca(rotuloLote(l));
+                  setAberto(false);
+                }}
+              >
+                {rotuloLote(l)}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }
