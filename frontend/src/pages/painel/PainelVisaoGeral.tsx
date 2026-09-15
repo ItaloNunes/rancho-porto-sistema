@@ -121,7 +121,7 @@ export default function PainelVisaoGeral() {
               </span>
             </div>
             <BarraEstoque disponiveis={totais.disponiveis} reservados={totais.reservados} vendidos={totais.vendidos} />
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 mt-4">
               <StatTile label="Total de lotes" valor={totais.total_lotes} cor="text-ink" />
               <StatTile label="Disponíveis" valor={totais.disponiveis} cor="text-sage" />
               <StatTile label="Reservados" valor={totais.reservados} cor="text-ochre" />
@@ -155,19 +155,28 @@ export default function PainelVisaoGeral() {
                     <StatTile label="Vendidos" valor={item.vendidos} cor="text-rust" />
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border">
-                    <div className="col-span-2 sm:col-span-1">
+                    <div className="col-span-2 sm:col-span-1 min-w-0">
                       <p className="text-xs text-ink-soft">Valor total vendido</p>
-                      <p className="text-lg font-bold text-primary">{formatMoney(item.valor_total_vendido)}</p>
+                      <p className="text-lg font-bold text-primary truncate" title={formatMoney(item.valor_total_vendido)}>
+                        {formatMoney(item.valor_total_vendido)}
+                      </p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-ink-soft">Ticket médio</p>
-                      <p className="text-lg font-bold text-ink">{formatMoney(ticketMedio)}</p>
+                      <p className="text-lg font-bold text-ink truncate" title={formatMoney(ticketMedio)}>
+                        {formatMoney(ticketMedio)}
+                      </p>
                     </div>
-                    <div className="col-span-2 sm:col-span-2">
+                    <div className="col-span-2 sm:col-span-2 min-w-0">
                       <p className="text-xs text-ink-soft">
                         Propostas em andamento ({item.propostas_abertas})
                       </p>
-                      <p className="text-lg font-bold text-ink">{formatMoney(item.valor_em_propostas_abertas)}</p>
+                      <p
+                        className="text-lg font-bold text-ink truncate"
+                        title={formatMoney(item.valor_em_propostas_abertas)}
+                      >
+                        {formatMoney(item.valor_em_propostas_abertas)}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -216,8 +225,8 @@ function StatTile({
   destaque?: string;
 }) {
   return (
-    <div className="rounded-sm bg-surface-alt p-3">
-      <p className={`text-xl font-bold ${cor}`}>{valor}</p>
+    <div className="rounded-sm bg-surface-alt p-3 min-w-0">
+      <p className={`text-xl font-bold ${cor} truncate`}>{valor}</p>
       <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
       {destaque && <p className="text-[11px] font-semibold text-ochre mt-0.5">{destaque}</p>}
     </div>
@@ -225,9 +234,12 @@ function StatTile({
 }
 
 function StatTileMoeda({ label, valor, cor }: { label: string; valor: number | null; cor: string }) {
+  const texto = formatMoney(valor);
   return (
-    <div className="rounded-sm bg-surface-alt p-3">
-      <p className={`text-xl font-bold ${cor}`}>{formatMoney(valor)}</p>
+    <div className="rounded-sm bg-surface-alt p-3 min-w-0">
+      <p className={`text-lg font-bold ${cor} truncate`} title={texto}>
+        {texto}
+      </p>
       <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
     </div>
   );
