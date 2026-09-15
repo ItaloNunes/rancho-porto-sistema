@@ -1,6 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, formatMoney } from "../../lib/api";
-import type { LoteComCondominio, LoteStatus } from "../../types";
+import { useAuth } from "../../lib/auth";
+import type { Corretor, LoteComCondominio, LoteStatus, ReservaComLote } from "../../types";
+
+// Reserva ainda conta como responsável pela indisponibilidade do lote em
+// qualquer status que não seja "cancelada" — cancelar é o único que libera o
+// lote de volta pra disponível (mesma regra do backend, ver reservas.py).
+const STATUS_RESERVA_QUE_SEGURA_LOTE = ["pendente", "em_atendimento", "aguardando_qualificacao", "em_analise_financeira", "confirmada"];
+
+/** "há 3 dias", "há 5h", "há 20min" — tempo corrido desde a criação da reserva. */
+function tempoDesde(iso?: string | null): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "agora";
+  const minutos = ms / 60_000;
+  if (minutos < 60) return `há ${Math.max(1, Math.round(minutos))}min`;
+  const horas = minutos / 60;
+  if (horas < 24) return `há ${Math.round(horas)}h`;
+  const dias = Math.round(horas / 24);
+  return `há ${dias} dia${dias === 1 ? "" : "s"}`;
+}
 
 const STATUS_LABEL: Record<LoteStatus, string> = {
   disponivel: "Disponível",
@@ -31,18 +50,44 @@ const PONTO_COR: Record<LoteStatus, string> = {
 const STATUS_FILTROS: (LoteStatus | "todos")[] = ["todos", "disponivel", "reservado", "vendido"];
 
 export default function PainelDisponibilidade() {
+  const { perfil } = useAuth();
   const [lotes, setLotes] = useState<LoteComCondominio[] | null>(null);
+  const [reservas, setReservas] = useState<ReservaComLote[]>([]);
+  const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [condominioSlug, setCondominioSlug] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
 
+  const ehAdmin = perfil?.papel === "admin";
+
   function recarregar() {
     setErro(null);
     api.listarTodosLotes().then(setLotes).catch((e) => setErro(e.message));
+    // Quem reservou e há quanto tempo só faz sentido pro admin: um corretor
+    // comum só enxerga as próprias reservas + leads sem dono (ver GET
+    // /reservas), então a lista ficaria incompleta/enganosa pra ele.
+    if (ehAdmin) {
+      api.listarReservas().then(setReservas).catch(() => {});
+      api.listarCorretores().then(setCorretores).catch(() => {});
+    }
   }
 
-  useEffect(recarregar, []);
+  useEffect(recarregar, [ehAdmin]);
+
+  // Pra cada lote reservado, a reserva mais recente (não cancelada) que ainda
+  // está "segurando" ele — dá o nome do corretor e desde quando.
+  const reservaPorLote = useMemo(() => {
+    const mapa = new Map<string, ReservaComLote>();
+    for (const r of reservas) {
+      if (!STATUS_RESERVA_QUE_SEGURA_LOTE.includes(r.status)) continue;
+      const atual = mapa.get(r.lote_id);
+      if (!atual || new Date(r.created_at) > new Date(atual.created_at)) mapa.set(r.lote_id, r);
+    }
+    return mapa;
+  }, [reservas]);
+
+  const corretorPorId = useMemo(() => new Map(corretores.map((c) => [c.id, c.nome])), [corretores]);
 
   const empreendimentos = useMemo(() => {
     const vistos = new Map<string, string>();
@@ -150,6 +195,9 @@ export default function PainelDisponibilidade() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`badge badge-${l.status}`}>{STATUS_LABEL[l.status]}</span>
+                    {ehAdmin && l.status === "reservado" && (
+                      <ReservadoPor reserva={reservaPorLote.get(l.id)} nomeCorretor={corretorPorId} />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -158,5 +206,18 @@ export default function PainelDisponibilidade() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Sub-linha discreta embaixo do badge "Reservado", só pro admin: quem
+ * reservou e há quanto tempo. Some sozinha se a reserva não for encontrada
+ * (ex.: lote marcado reservado manualmente pelo admin, sem reserva vinculada). */
+function ReservadoPor({ reserva, nomeCorretor }: { reserva?: ReservaComLote; nomeCorretor: Map<string, string> }) {
+  if (!reserva) return null;
+  const nome = reserva.corretor_id ? nomeCorretor.get(reserva.corretor_id) : null;
+  return (
+    <p className="text-[11px] text-ink-soft mt-1">
+      {nome ?? "Sem corretor definido"} · {tempoDesde(reserva.created_at)}
+    </p>
   );
 }

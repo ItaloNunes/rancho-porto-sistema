@@ -495,7 +495,17 @@ def gerar_proposta_pdf(
 # ---------------------------------------------------------------------------
 
 STATUS_LOTE_LABEL = {"disponivel": "Disponível", "reservado": "Reservado", "vendido": "Vendido"}
-STATUS_LOTE_COR = {"disponivel": (31, 138, 87), "reservado": (193, 129, 11), "vendido": CINZA}
+# Mesma paleta sage/ochre/rust do painel (ver frontend/tailwind.config.js) —
+# "vendido" também virou rust aqui pra bater com a tela (antes era cinza).
+STATUS_LOTE_COR = {"disponivel": (31, 138, 87), "reservado": (193, 129, 11), "vendido": (196, 60, 60)}
+# Fundo de linha inteira — a mesma cor do status acima, só que bem clareada
+# (equivalente ao bg-{cor}/10 do CSS), pra reproduzir no PDF a mesma leitura
+# visual "linha toda colorida" que a tabela de preços original tinha.
+STATUS_LOTE_FUNDO = {
+    "disponivel": (233, 243, 238),
+    "reservado": (249, 242, 231),
+    "vendido": (249, 236, 236),
+}
 
 
 class _RelatorioPDF(_CastelPDF):
@@ -541,13 +551,14 @@ class _RelatorioPDF(_CastelPDF):
 
     def tabela_lotes(self, lotes: list[dict]):
         self._linha_cabecalho()
-        for i, lote in enumerate(sorted(lotes, key=lambda l: l.get("identificador", ""))):
+        for lote in sorted(lotes, key=lambda l: l.get("identificador", "")):
             if self.get_y() > self.h - 32:
                 self.add_page()
                 self._linha_cabecalho()
-            fill = i % 2 == 0
-            if fill:
-                self.set_fill_color(*CINZA_CLARO)
+            # Linha inteira tingida pela cor do status (não mais zebra cinza/branco) —
+            # mesma convenção visual da tela de Disponibilidade e da tabela de preços original.
+            fundo = STATUS_LOTE_FUNDO.get(lote.get("status"), (255, 255, 255))
+            self.set_fill_color(*fundo)
             self.set_text_color(30, 30, 35)
             parcelamento = (
                 f"{lote.get('qtd_parcelas')}x de {_fmt_money(lote.get('parcela_mensal'))}"
@@ -566,10 +577,10 @@ class _RelatorioPDF(_CastelPDF):
                 prazo,
             ]
             for w, valor, titulo in zip(self._LARGURAS, valores, self._CABECALHO):
-                self.cell(w, 6.5, valor, fill=fill, align="L" if titulo in ("Quadra", "Lote") else "C")
+                self.cell(w, 6.5, valor, fill=True, align="L" if titulo in ("Quadra", "Lote") else "C")
             self.set_text_color(*STATUS_LOTE_COR.get(lote.get("status"), (30, 30, 35)))
             self.set_font("Helvetica", "B", 8)
-            self.cell(self._LARGURAS[-1], 6.5, STATUS_LOTE_LABEL.get(lote.get("status"), "-"), fill=fill, align="C")
+            self.cell(self._LARGURAS[-1], 6.5, STATUS_LOTE_LABEL.get(lote.get("status"), "-"), fill=True, align="C")
             self.set_font("Helvetica", "", 8)
             self.ln(6.5)
 
