@@ -1,0 +1,162 @@
+import { useEffect, useMemo, useState } from "react";
+import { api, formatMoney } from "../../lib/api";
+import type { LoteComCondominio, LoteStatus } from "../../types";
+
+const STATUS_LABEL: Record<LoteStatus, string> = {
+  disponivel: "Disponível",
+  reservado: "Reservado",
+  vendido: "Vendido",
+};
+
+// Linha inteira tingida pela cor do status — mesma paleta dos badges usados
+// no resto do painel (ver badge-disponivel/reservado/vendido em index.css),
+// só que aplicada de leve na linha toda em vez de só num selo, pra dar de
+// relance a mesma leitura visual da tabela de preços original em Excel.
+const LINHA_COR: Record<LoteStatus, string> = {
+  disponivel: "bg-sage/10 hover:bg-sage/15",
+  reservado: "bg-ochre/10 hover:bg-ochre/15",
+  vendido: "bg-rust/10 hover:bg-rust/15",
+};
+
+// Mapa literal separado pro pontinho da legenda — o Tailwind só gera a
+// classe CSS de uma cor se ela aparecer como texto completo em algum lugar
+// do arquivo; derivar "bg-sage" a partir de LINHA_COR em tempo de execução
+// (split/replace) nunca aparece como literal e nunca seria gerado.
+const PONTO_COR: Record<LoteStatus, string> = {
+  disponivel: "bg-sage",
+  reservado: "bg-ochre",
+  vendido: "bg-rust",
+};
+
+const STATUS_FILTROS: (LoteStatus | "todos")[] = ["todos", "disponivel", "reservado", "vendido"];
+
+export default function PainelDisponibilidade() {
+  const [lotes, setLotes] = useState<LoteComCondominio[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [condominioSlug, setCondominioSlug] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
+
+  function recarregar() {
+    setErro(null);
+    api.listarTodosLotes().then(setLotes).catch((e) => setErro(e.message));
+  }
+
+  useEffect(recarregar, []);
+
+  const empreendimentos = useMemo(() => {
+    const vistos = new Map<string, string>();
+    for (const l of lotes ?? []) vistos.set(l.condominio_slug, l.condominio_nome);
+    return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
+  }, [lotes]);
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return (lotes ?? []).filter((l) => {
+      if (condominioSlug && l.condominio_slug !== condominioSlug) return false;
+      if (statusFiltro !== "todos" && l.status !== statusFiltro) return false;
+      if (termo && !`${l.identificador} ${l.quadra}`.toLowerCase().includes(termo)) return false;
+      return true;
+    });
+  }, [lotes, busca, condominioSlug, statusFiltro]);
+
+  const contagem = useMemo(() => {
+    const base = { disponivel: 0, reservado: 0, vendido: 0 };
+    for (const l of lotes ?? []) base[l.status]++;
+    return base;
+  }, [lotes]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-ink">Disponibilidade</h1>
+          <p className="text-xs text-ink-soft mt-1">
+            Estoque completo dos lotes — a linha inteira segue a cor do status, igual à tabela de preços.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(["disponivel", "reservado", "vendido"] as const).map((s) => (
+            <span key={s} className="inline-flex items-center gap-1.5 text-xs text-ink-soft">
+              <span className={`h-2.5 w-2.5 rounded-full ${PONTO_COR[s]}`} />
+              {STATUS_LABEL[s]} ({contagem[s]})
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          className="input sm:w-64"
+          placeholder="Buscar por lote ou quadra..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+        {empreendimentos.length > 1 && (
+          <select className="input !w-auto" value={condominioSlug} onChange={(e) => setCondominioSlug(e.target.value)}>
+            <option value="">Todos os empreendimentos</option>
+            {empreendimentos.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        )}
+        <select
+          className="input !w-auto"
+          value={statusFiltro}
+          onChange={(e) => setStatusFiltro(e.target.value as LoteStatus | "todos")}
+        >
+          {STATUS_FILTROS.map((s) => (
+            <option key={s} value={s}>
+              {s === "todos" ? "Todos os status" : STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {erro && <p className="text-rust text-sm mb-4">{erro}</p>}
+
+      {!lotes ? (
+        <p className="text-ink-soft text-sm">Carregando...</p>
+      ) : filtrados.length === 0 ? (
+        <p className="text-ink-soft text-sm">Nenhum lote encontrado.</p>
+      ) : (
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead>
+              <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
+                <th className="px-4 py-3 font-medium">Empreendimento</th>
+                <th className="px-4 py-3 font-medium">Quadra</th>
+                <th className="px-4 py-3 font-medium">Lote</th>
+                <th className="px-4 py-3 font-medium">Tamanho</th>
+                <th className="px-4 py-3 font-medium">Valor total</th>
+                <th className="px-4 py-3 font-medium">Entrada</th>
+                <th className="px-4 py-3 font-medium">Parcela</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map((l) => (
+                <tr key={l.id} className={`border-b border-border last:border-0 transition-colors ${LINHA_COR[l.status]}`}>
+                  <td className="px-4 py-3 text-ink-soft">{l.condominio_nome}</td>
+                  <td className="px-4 py-3 text-ink-soft">{l.quadra}</td>
+                  <td className="px-4 py-3 font-medium text-ink">{l.identificador}</td>
+                  <td className="px-4 py-3 text-ink-soft">{l.tamanho_m2.toLocaleString("pt-BR")} m²</td>
+                  <td className="px-4 py-3 text-ink">{l.valor_total ? formatMoney(l.valor_total) : "—"}</td>
+                  <td className="px-4 py-3 text-ink-soft">{l.entrada ? formatMoney(l.entrada) : "—"}</td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {l.parcela_mensal ? `${formatMoney(l.parcela_mensal)}${l.qtd_parcelas ? ` × ${l.qtd_parcelas}` : ""}` : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`badge badge-${l.status}`}>{STATUS_LABEL[l.status]}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -16,6 +16,7 @@ import { useAuth } from "../../lib/auth";
 const TABS_BASE = [
   { to: "/painel/reservas", label: "Reservas" },
   { to: "/painel/propostas", label: "Propostas" },
+  { to: "/painel/disponibilidade", label: "Disponibilidade" },
 ];
 
 const TABS_ADMIN = [

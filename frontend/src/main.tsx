@@ -12,6 +12,7 @@ import PainelLayout from "./pages/painel/PainelLayout";
 import PainelCorretores from "./pages/painel/PainelCorretores";
 import PainelPropostas from "./pages/painel/PainelPropostas";
 import PainelReservas from "./pages/painel/PainelReservas";
+import PainelDisponibilidade from "./pages/painel/PainelDisponibilidade";
 import PainelLotes from "./pages/painel/PainelLotes";
 import PainelPlantas from "./pages/painel/PainelPlantas";
 import PainelAcompanhamento from "./pages/painel/PainelAcompanhamento";
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route index element={<Navigate to="reservas" replace />} />
             <Route path="propostas" element={<PainelPropostas />} />
             <Route path="reservas" element={<PainelReservas />} />
+            <Route path="disponibilidade" element={<PainelDisponibilidade />} />
             <Route
               path="lotes"
               element={
