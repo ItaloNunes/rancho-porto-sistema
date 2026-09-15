@@ -1,0 +1,612 @@
+<title>Console Executivo</title>
+<meta name="description" content="Prévia de layout para o novo dashboard de Visão Geral — dados ilustrativos para aprovação." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EEF1F5;
+    --surface: #FFFFFF;
+    --surface-alt: #F6F8FA;
+    --surface-alt-2: #EEF2F6;
+    --border: #E2E6EC;
+    --ink: #0F172A;
+    --ink-soft: #54607A;
+    --muted: #8791A6;
+    --primary: #0B3D5C;
+    --primary-dark: #082A40;
+    --primary-tint: #E9F0F5;
+    --accent: #B08D57;
+    --sage: #1F8A57;
+    --sage-tint: rgba(31,138,87,.10);
+    --ochre: #C1810B;
+    --ochre-tint: rgba(193,129,11,.10);
+    --rust: #C43C3C;
+    --rust-tint: rgba(196,60,60,.10);
+    --shadow-card: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -8px rgba(15,23,42,.10);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0A0E16;
+      --surface: #121826;
+      --surface-alt: #171F30;
+      --surface-alt-2: #1C2437;
+      --border: #262F45;
+      --ink: #EEF2F8;
+      --ink-soft: #9AA6C0;
+      --muted: #6C7794;
+      --primary: #4A90C2;
+      --primary-dark: #2E6690;
+      --primary-tint: rgba(74,144,194,.14);
+      --accent: #D3B37C;
+      --sage: #3FBE83;
+      --sage-tint: rgba(63,190,131,.14);
+      --ochre: #E0A93A;
+      --ochre-tint: rgba(224,169,58,.14);
+      --rust: #E2685F;
+      --rust-tint: rgba(226,104,95,.14);
+      --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0A0E16;
+    --surface: #121826;
+    --surface-alt: #171F30;
+    --surface-alt-2: #1C2437;
+    --border: #262F45;
+    --ink: #EEF2F8;
+    --ink-soft: #9AA6C0;
+    --muted: #6C7794;
+    --primary: #4A90C2;
+    --primary-dark: #2E6690;
+    --primary-tint: rgba(74,144,194,.14);
+    --accent: #D3B37C;
+    --sage: #3FBE83;
+    --sage-tint: rgba(63,190,131,.14);
+    --ochre: #E0A93A;
+    --ochre-tint: rgba(224,169,58,.14);
+    --rust: #E2685F;
+    --rust-tint: rgba(226,104,95,.14);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); }
+  body {
+    margin: 0;
+    padding: 20px 20px 48px;
+    font-family: "Inter", -apple-system, "Segoe UI", Arial, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  .num { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Preview banner ---------- */
+  .preview-banner {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ochre-tint); color: var(--ochre);
+    border: 1px solid var(--ochre); border-style: dashed;
+    border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 600;
+  }
+  .preview-banner svg { flex: none; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { margin: 0; font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
+  .topbar p { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .chips { display: flex; gap: 6px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .chip {
+    appearance: none; border: none; background: transparent; cursor: pointer;
+    font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+    padding: 7px 13px; border-radius: 8px; transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  .chip:hover { color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--primary); color: #fff; }
+
+  .btn {
+    appearance: none; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
+    border-radius: 9px; padding: 9px 15px; border: 1px solid transparent; white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-ghost { background: var(--surface); color: var(--ink-soft); border-color: var(--border); }
+  .btn-ghost:hover { color: var(--ink); border-color: var(--ink-soft); }
+  .btn-ghost[aria-pressed="true"] { color: var(--primary); border-color: var(--primary); }
+
+  /* ---------- Card ---------- */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-card); }
+
+  /* ---------- KPI band ---------- */
+  .kpi-band { display: grid; grid-template-columns: 1.3fr repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 920px) { .kpi-band { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .kpi-band { grid-template-columns: 1fr; } }
+
+  .kpi-hero { padding: 20px 22px; display: flex; flex-direction: column; justify-content: center; gap: 6px; position: relative; overflow: hidden; }
+  .kpi-hero::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(135deg, var(--primary-tint), transparent 60%);
+  }
+  .kpi-hero .eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); position: relative; }
+  .kpi-hero .value { font-size: 46px; font-weight: 700; line-height: 1; position: relative; }
+  .kpi-hero .value small { font-size: 22px; font-weight: 600; color: var(--ink-soft); }
+  .kpi-hero .sub { font-size: 12.5px; color: var(--ink-soft); position: relative; }
+
+  .kpi-tile { padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+  .kpi-tile .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+  .kpi-tile .value { font-size: 21px; font-weight: 700; line-height: 1.15; }
+  .kpi-tile .delta { font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; }
+  .kpi-tile.alert { background: var(--ochre-tint); border-color: var(--ochre); }
+  .kpi-tile.alert .value { color: var(--ochre); }
+
+  /* ---------- Charts row ---------- */
+  .charts-row { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,1.4fr); gap: 12px; align-items: stretch; }
+  @media (max-width: 860px) { .charts-row { grid-template-columns: 1fr; } }
+
+  .panel { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .panel-head h2 { margin: 0; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); }
+  .panel-head .scope { font-size: 11.5px; color: var(--muted); }
+
+  /* Donut */
+  .donut-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; flex: 1; }
+  .donut-svg { flex: none; }
+  .donut-svg path { cursor: pointer; transition: opacity .12s; }
+  .donut-center-value { font-size: 24px; font-weight: 700; font-family: "JetBrains Mono", monospace; }
+  .donut-center-label { font-size: 10px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+
+  .legend { display: flex; flex-direction: column; gap: 9px; min-width: 168px; }
+  .legend-row { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+  .legend-row:hover, .legend-row.hovered { background: var(--surface-alt); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend-text { display: flex; flex-direction: column; line-height: 1.25; }
+  .legend-label { font-size: 12px; color: var(--ink-soft); }
+  .legend-value { font-size: 13.5px; font-weight: 700; font-family: "JetBrains Mono", monospace; }
+
+  /* Ranking bars */
+  .rank-list { display: flex; flex-direction: column; gap: 14px; flex: 1; justify-content: center; }
+  .rank-item { cursor: pointer; border-radius: 10px; padding: 10px 12px; margin: 0 -12px; transition: background .12s; position: relative; }
+  .rank-item:hover, .rank-item.selected { background: var(--surface-alt); }
+  .rank-item.selected .rank-track > i { background: var(--primary); }
+  .rank-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+  .rank-name { font-size: 13.5px; font-weight: 700; }
+  .rank-item.selected .rank-name { color: var(--primary); }
+  .rank-figs { font-size: 11.5px; color: var(--ink-soft); font-family: "JetBrains Mono", monospace; white-space: nowrap; }
+  .rank-track { position: relative; height: 10px; border-radius: 6px; background: var(--surface-alt-2); overflow: hidden; }
+  .rank-track > i { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--accent); display: block; transition: width .35s cubic-bezier(.16,1,.3,1), background .15s; }
+  .rank-detail {
+    display: grid; grid-template-columns: repeat(4, auto); gap: 14px; margin-top: 9px;
+    font-size: 11px; color: var(--ink-soft); max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height .18s ease, opacity .18s ease;
+  }
+  .rank-item:hover .rank-detail, .rank-item.selected .rank-detail { max-height: 40px; opacity: 1; }
+  .rank-detail b { font-family: "JetBrains Mono", monospace; }
+
+  /* ---------- Table ---------- */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+  thead th {
+    text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-soft); padding: 0 14px 10px; border-bottom: 1px solid var(--border);
+  }
+  thead th.num-col, tbody td.num-col { text-align: right; }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: var(--surface-alt); }
+  tbody tr.selected { background: var(--primary-tint); }
+  td.num-col { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+  .proj-name { font-weight: 700; }
+  .proj-name span { display: block; font-weight: 500; font-size: 11px; color: var(--muted); font-family: "Inter", sans-serif; }
+  .mini-bar { display: inline-flex; height: 6px; width: 80px; border-radius: 4px; overflow: hidden; background: var(--surface-alt-2); vertical-align: middle; margin-right: 8px; }
+  .mini-bar i { display: block; height: 100%; }
+  .pct-cell { display: inline-flex; align-items: center; }
+
+  /* ---------- Tooltip ---------- */
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 50; background: var(--ink); color: #fff;
+    padding: 8px 11px; border-radius: 8px; font-size: 12px; line-height: 1.45; box-shadow: 0 8px 24px -6px rgba(0,0,0,.35);
+    opacity: 0; transform: translate(-50%, calc(-100% - 10px)); transition: opacity .1s;
+    max-width: 220px;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .t-title { font-weight: 700; margin-bottom: 3px; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
+  .tooltip .t-key { display: inline-block; width: 8px; height: 2px; border-radius: 1px; }
+  .tooltip .t-val { font-family: "JetBrains Mono", monospace; font-weight: 700; margin-left: auto; }
+
+  .foot-note { font-size: 11px; color: var(--muted); text-align: right; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="preview-banner">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Prévia de layout para aprovação — números ilustrativos, não são os dados ao vivo do painel.
+  </div>
+
+  <div class="topbar">
+    <div>
+      <h1>Visão geral</h1>
+      <p>Console executivo — Rancho Texas &amp; Porto Franco Residencial, tempo real.</p>
+    </div>
+    <div class="toolbar">
+      <div class="chips" id="chips" role="tablist" aria-label="Filtrar por empreendimento"></div>
+      <button class="btn btn-ghost" id="tableToggle" aria-pressed="false">Ver tabela</button>
+      <button class="btn btn-primary" id="exportBtn">Exportar PDF</button>
+    </div>
+  </div>
+
+  <div class="kpi-band">
+    <div class="card kpi-hero">
+      <span class="eyebrow" id="heroScope">Todos os empreendimentos</span>
+      <span class="value num" id="heroPct">29.5<small>%</small></span>
+      <span class="sub" id="heroSub">vendido · 195 de 661 lotes</span>
+    </div>
+    <div class="card kpi-tile">
+      <span class="label">Valor vendido</span>
+      <span class="value num" id="kpiValorVendido">R$ 28,69M</span>
+    </div>
+    <div class="card kpi-tile">
+      <span class="label">Ticket médio</span>
+      <span class="value num" id="kpiTicket">R$ 147.124</span>
+    </div>
+    <div class="card kpi-tile">
+      <span class="label">Em propostas</span>
+      <span class="value num" id="kpiPropostas">R$ 1,00M</span>
+      <span class="delta" style="color:var(--ink-soft)" id="kpiPropostasSub">1 em andamento</span>
+    </div>
+    <div class="card kpi-tile" id="kpiReservasTile">
+      <span class="label">Reservas ativas</span>
+      <span class="value num" id="kpiReservas">7</span>
+      <span class="delta" id="kpiReservasAlerta" style="color:var(--ochre)"></span>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card panel">
+      <div class="panel-head">
+        <h2>Composição do estoque</h2>
+        <span class="scope" id="donutScope">todos</span>
+      </div>
+      <div class="donut-row">
+        <svg class="donut-svg" id="donutSvg" width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="Composição do estoque por status"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+    </div>
+
+    <div class="card panel">
+      <div class="panel-head">
+        <h2>Desempenho por empreendimento</h2>
+        <span class="scope">clique numa barra para filtrar</span>
+      </div>
+      <div class="rank-list" id="rankList"></div>
+    </div>
+  </div>
+
+  <div class="card panel" id="tablePanel" hidden>
+    <div class="panel-head">
+      <h2>Detalhe por empreendimento</h2>
+      <span class="scope">todos os números, lado a lado</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Empreendimento</th>
+            <th class="num-col">Total</th>
+            <th class="num-col">Disponíveis</th>
+            <th class="num-col">Reservados</th>
+            <th class="num-col">Vendidos</th>
+            <th class="num-col">% vendido</th>
+            <th class="num-col">Valor vendido</th>
+            <th class="num-col">Ticket médio</th>
+            <th class="num-col">Propostas</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="foot-note">Prévia estática — sem conexão com a API. Layout pra aprovar antes de eu portar pro painel de verdade.</p>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- dados ilustrativos (baseados nas ordens de grandeza reais vistas no painel) ----
+  var DATA = [
+    {
+      id: "porto-franco",
+      nome: "Porto Franco Residencial",
+      total: 439, disponiveis: 276, reservados: 27, vendidos: 136,
+      valorVendido: 12529960, ticketMedio: 92132.06,
+      propostasAbertas: 1, valorPropostas: 1000000,
+    },
+    {
+      id: "rancho-texas",
+      nome: "Rancho Texas",
+      total: 222, disponiveis: 157, reservados: 6, vendidos: 59,
+      valorVendido: 16159700, ticketMedio: 273893.22,
+      propostasAbertas: 0, valorPropostas: 0,
+    },
+  ];
+  var RESERVAS_ATIVAS_TOTAL = 7;
+  var RESERVAS_EXPIRANDO_TOTAL = 2;
+
+  var COR = { disponivel: "var(--sage)", reservado: "var(--ochre)", vendido: "var(--rust)" };
+  var COR_HEX_LIGHT = { disponivel: "#1F8A57", reservado: "#C1810B", vendido: "#C43C3C" };
+  var LABEL = { disponivel: "Disponíveis", reservado: "Reservados", vendido: "Vendidos" };
+
+  var filtro = "todos"; // "todos" | condominio id
+
+  function fmtMoneyFull(v) {
+    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  }
+  function fmtMoneyCompact(v) {
+    if (v >= 1000000) return "R$ " + (v / 1000000).toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + "M";
+    if (v >= 1000) return "R$ " + (v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + "mil";
+    return fmtMoneyFull(v);
+  }
+
+  function escopo() {
+    return filtro === "todos" ? DATA : DATA.filter(function (d) { return d.id === filtro; });
+  }
+
+  function totais(lista) {
+    return lista.reduce(function (acc, d) {
+      acc.total += d.total; acc.disponiveis += d.disponiveis; acc.reservados += d.reservados; acc.vendidos += d.vendidos;
+      acc.valorVendido += d.valorVendido; acc.propostasAbertas += d.propostasAbertas; acc.valorPropostas += d.valorPropostas;
+      return acc;
+    }, { total: 0, disponiveis: 0, reservados: 0, vendidos: 0, valorVendido: 0, propostasAbertas: 0, valorPropostas: 0 });
+  }
+
+  // ---------- Chips ----------
+  var chipsEl = document.getElementById("chips");
+  function renderChips() {
+    var items = [{ id: "todos", nome: "Todos" }].concat(DATA.map(function (d) { return { id: d.id, nome: d.nome }; }));
+    chipsEl.innerHTML = "";
+    items.forEach(function (it) {
+      var b = document.createElement("button");
+      b.className = "chip"; b.type = "button"; b.textContent = it.nome;
+      b.setAttribute("aria-pressed", String(filtro === it.id));
+      b.addEventListener("click", function () { setFiltro(it.id); });
+      chipsEl.appendChild(b);
+    });
+  }
+
+  function setFiltro(novo) {
+    filtro = novo;
+    render();
+  }
+
+  // ---------- Tooltip ----------
+  var tooltipEl = document.getElementById("tooltip");
+  function showTooltip(x, y, html) {
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.left = x + "px";
+    tooltipEl.style.top = y + "px";
+    tooltipEl.classList.add("show");
+  }
+  function hideTooltip() { tooltipEl.classList.remove("show"); }
+
+  // ---------- KPI band ----------
+  function renderKpis(t) {
+    var pct = t.total > 0 ? (t.vendidos / t.total) * 100 : 0;
+    var ticket = t.vendidos > 0 ? t.valorVendido / t.vendidos : 0;
+    document.getElementById("heroScope").textContent = filtro === "todos" ? "Todos os empreendimentos" : escopo()[0].nome;
+    document.getElementById("heroPct").innerHTML = pct.toFixed(1) + "<small>%</small>";
+    document.getElementById("heroSub").textContent = "vendido · " + t.vendidos + " de " + t.total + " lotes";
+    document.getElementById("kpiValorVendido").textContent = fmtMoneyCompact(t.valorVendido);
+    document.getElementById("kpiValorVendido").title = fmtMoneyFull(t.valorVendido);
+    document.getElementById("kpiTicket").textContent = fmtMoneyCompact(ticket);
+    document.getElementById("kpiTicket").title = fmtMoneyFull(ticket);
+    document.getElementById("kpiPropostas").textContent = fmtMoneyCompact(t.valorPropostas);
+    document.getElementById("kpiPropostasSub").textContent = t.propostasAbertas + " em andamento";
+
+    var ra = filtro === "todos" ? RESERVAS_ATIVAS_TOTAL : Math.round(RESERVAS_ATIVAS_TOTAL * (t.total / totais(DATA).total));
+    var re = filtro === "todos" ? RESERVAS_EXPIRANDO_TOTAL : Math.min(ra, RESERVAS_EXPIRANDO_TOTAL);
+    document.getElementById("kpiReservas").textContent = ra;
+    var tile = document.getElementById("kpiReservasTile");
+    var alertaEl = document.getElementById("kpiReservasAlerta");
+    if (re > 0) { tile.classList.add("alert"); alertaEl.textContent = re + " expirando em breve"; }
+    else { tile.classList.remove("alert"); alertaEl.textContent = ""; }
+  }
+
+  // ---------- Donut ----------
+  var donutSvg = document.getElementById("donutSvg");
+  var legendEl = document.getElementById("legend");
+
+  function polar(cx, cy, r, angle) {
+    var rad = (angle - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+  function arcPath(cx, cy, rOuter, rInner, a0, a1) {
+    var largeArc = a1 - a0 > 180 ? 1 : 0;
+    var p0 = polar(cx, cy, rOuter, a0), p1 = polar(cx, cy, rOuter, a1);
+    var p2 = polar(cx, cy, rInner, a1), p3 = polar(cx, cy, rInner, a0);
+    return [
+      "M", p0.x, p0.y,
+      "A", rOuter, rOuter, 0, largeArc, 1, p1.x, p1.y,
+      "L", p2.x, p2.y,
+      "A", rInner, rInner, 0, largeArc, 0, p3.x, p3.y,
+      "Z",
+    ].join(" ");
+  }
+
+  function renderDonut(t) {
+    document.getElementById("donutScope").textContent = filtro === "todos" ? "todos" : escopo()[0].nome.toLowerCase();
+    var segs = [
+      { key: "disponivel", v: t.disponiveis },
+      { key: "reservado", v: t.reservados },
+      { key: "vendido", v: t.vendidos },
+    ];
+    var total = t.total || 1;
+    var cx = 75, cy = 75, rOuter = 70, rInner = 46;
+    var a = 0;
+    donutSvg.innerHTML = "";
+
+    segs.forEach(function (seg) {
+      if (seg.v <= 0) return;
+      var sweep = (seg.v / total) * 360;
+      var gap = total > 0 ? 1.4 : 0;
+      var a0 = a + gap / 2, a1 = a + sweep - gap / 2;
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", arcPath(cx, cy, rOuter, rInner, Math.max(a0, a), Math.min(a1, a + sweep)));
+      path.setAttribute("fill", COR_HEX_LIGHT[seg.key]);
+      path.setAttribute("data-key", seg.key);
+      path.style.opacity = "1";
+      var pct = (seg.v / total) * 100;
+      path.addEventListener("mouseenter", function (e) { hoverSegmento(seg.key, e.clientX, e.clientY, seg.v, pct); });
+      path.addEventListener("mousemove", function (e) { moveTooltip(e.clientX, e.clientY); });
+      path.addEventListener("mouseleave", function () { unhoverSegmento(); });
+      donutSvg.appendChild(path);
+      a += sweep;
+    });
+
+    var centerVal = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    centerVal.setAttribute("x", cx); centerVal.setAttribute("y", cy - 2);
+    centerVal.setAttribute("text-anchor", "middle");
+    centerVal.setAttribute("class", "donut-center-value");
+    centerVal.setAttribute("fill", "var(--ink)");
+    centerVal.textContent = t.total;
+    donutSvg.appendChild(centerVal);
+
+    var centerLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    centerLabel.setAttribute("x", cx); centerLabel.setAttribute("y", cy + 16);
+    centerLabel.setAttribute("text-anchor", "middle");
+    centerLabel.setAttribute("class", "donut-center-label");
+    centerLabel.setAttribute("fill", "var(--ink-soft)");
+    centerLabel.textContent = "lotes";
+    donutSvg.appendChild(centerLabel);
+
+    // legend
+    legendEl.innerHTML = "";
+    segs.forEach(function (seg) {
+      var pct = total > 0 ? (seg.v / total) * 100 : 0;
+      var row = document.createElement("div");
+      row.className = "legend-row"; row.dataset.key = seg.key;
+      row.innerHTML =
+        '<span class="legend-dot" style="background:' + COR[seg.key] + '"></span>' +
+        '<span class="legend-text"><span class="legend-label">' + LABEL[seg.key] + '</span>' +
+        '<span class="legend-value">' + seg.v + ' <span style="color:var(--ink-soft);font-weight:500">(' + pct.toFixed(0) + '%)</span></span></span>';
+      row.addEventListener("mouseenter", function (e) { hoverSegmento(seg.key, e.clientX, e.clientY, seg.v, pct); });
+      row.addEventListener("mousemove", function (e) { moveTooltip(e.clientX, e.clientY); });
+      row.addEventListener("mouseleave", function () { unhoverSegmento(); });
+      legendEl.appendChild(row);
+    });
+  }
+
+  function hoverSegmento(key, x, y, v, pct) {
+    Array.prototype.forEach.call(donutSvg.querySelectorAll("path"), function (p) {
+      p.style.opacity = p.dataset.key === key ? "1" : "0.35";
+    });
+    Array.prototype.forEach.call(legendEl.querySelectorAll(".legend-row"), function (r) {
+      r.classList.toggle("hovered", r.dataset.key === key);
+    });
+    showTooltip(x, y, '<div class="t-row"><span class="t-key" style="background:' + COR[key] + '"></span>' +
+      '<span>' + LABEL[key] + '</span><span class="t-val">' + v + ' · ' + pct.toFixed(1) + '%</span></div>');
+  }
+  function moveTooltip(x, y) { tooltipEl.style.left = x + "px"; tooltipEl.style.top = y + "px"; }
+  function unhoverSegmento() {
+    Array.prototype.forEach.call(donutSvg.querySelectorAll("path"), function (p) { p.style.opacity = "1"; });
+    Array.prototype.forEach.call(legendEl.querySelectorAll(".legend-row"), function (r) { r.classList.remove("hovered"); });
+    hideTooltip();
+  }
+
+  // ---------- Ranking ----------
+  var rankListEl = document.getElementById("rankList");
+  function renderRanking() {
+    var ordenado = DATA.slice().sort(function (a, b) { return b.valorVendido - a.valorVendido; });
+    var maior = Math.max.apply(null, ordenado.map(function (d) { return d.valorVendido; })) || 1;
+    rankListEl.innerHTML = "";
+    ordenado.forEach(function (d) {
+      var pct = d.total > 0 ? (d.vendidos / d.total) * 100 : 0;
+      var item = document.createElement("div");
+      item.className = "rank-item" + (filtro === d.id ? " selected" : "");
+      item.innerHTML =
+        '<div class="rank-top"><span class="rank-name">' + d.nome + '</span>' +
+        '<span class="rank-figs">' + fmtMoneyCompact(d.valorVendido) + ' · ' + pct.toFixed(1) + '% vendido</span></div>' +
+        '<div class="rank-track"><i style="width:' + Math.max(3, (d.valorVendido / maior) * 100) + '%"></i></div>' +
+        '<div class="rank-detail">' +
+        '<span style="color:var(--sage)"><b>' + d.disponiveis + '</b> disp.</span>' +
+        '<span style="color:var(--ochre)"><b>' + d.reservados + '</b> reserv.</span>' +
+        '<span style="color:var(--rust)"><b>' + d.vendidos + '</b> vend.</span>' +
+        '<span><b>' + d.propostasAbertas + '</b> propostas</span>' +
+        '</div>';
+      item.addEventListener("click", function () { setFiltro(filtro === d.id ? "todos" : d.id); });
+      item.addEventListener("mousemove", function (e) {
+        showTooltip(e.clientX, e.clientY,
+          '<div class="t-title">' + d.nome + '</div>' +
+          '<div class="t-row"><span>Vendido</span><span class="t-val">' + fmtMoneyFull(d.valorVendido) + '</span></div>' +
+          '<div class="t-row"><span>Ticket médio</span><span class="t-val">' + fmtMoneyFull(d.ticketMedio) + '</span></div>');
+      });
+      item.addEventListener("mouseleave", hideTooltip);
+      rankListEl.appendChild(item);
+    });
+  }
+
+  // ---------- Table ----------
+  var tableBody = document.getElementById("tableBody");
+  function renderTable() {
+    tableBody.innerHTML = "";
+    DATA.forEach(function (d) {
+      var pct = d.total > 0 ? (d.vendidos / d.total) * 100 : 0;
+      var tr = document.createElement("tr");
+      tr.className = filtro === d.id ? "selected" : "";
+      tr.style.cursor = "pointer";
+      tr.innerHTML =
+        '<td class="proj-name">' + d.nome + '<span>' + d.total + ' lotes ao todo</span></td>' +
+        '<td class="num-col">' + d.total + '</td>' +
+        '<td class="num-col" style="color:var(--sage)">' + d.disponiveis + '</td>' +
+        '<td class="num-col" style="color:var(--ochre)">' + d.reservados + '</td>' +
+        '<td class="num-col" style="color:var(--rust)">' + d.vendidos + '</td>' +
+        '<td class="num-col"><span class="pct-cell"><span class="mini-bar"><i style="width:' + pct.toFixed(0) + '%;background:var(--rust)"></i></span>' + pct.toFixed(1) + '%</span></td>' +
+        '<td class="num-col">' + fmtMoneyCompact(d.valorVendido) + '</td>' +
+        '<td class="num-col">' + fmtMoneyCompact(d.ticketMedio) + '</td>' +
+        '<td class="num-col">' + d.propostasAbertas + '</td>';
+      tr.addEventListener("click", function () { setFiltro(filtro === d.id ? "todos" : d.id); });
+      tableBody.appendChild(tr);
+    });
+  }
+
+  // ---------- Table toggle ----------
+  var tableToggle = document.getElementById("tableToggle");
+  var tablePanel = document.getElementById("tablePanel");
+  tableToggle.addEventListener("click", function () {
+    var showing = tablePanel.hasAttribute("hidden") === false;
+    if (showing) { tablePanel.setAttribute("hidden", ""); tableToggle.setAttribute("aria-pressed", "false"); tableToggle.textContent = "Ver tabela"; }
+    else { tablePanel.removeAttribute("hidden"); tableToggle.setAttribute("aria-pressed", "true"); tableToggle.textContent = "Ocultar tabela"; }
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    alert("Prévia de layout — o botão \"Exportar PDF\" fica funcional igual ao atual quando isso for pro painel de verdade.");
+  });
+
+  // ---------- Render orchestrator ----------
+  function render() {
+    renderChips();
+    var t = totais(escopo());
+    renderKpis(t);
+    renderDonut(t);
+    renderRanking();
+    renderTable();
+  }
+
+  render();
+})();
+</script>
