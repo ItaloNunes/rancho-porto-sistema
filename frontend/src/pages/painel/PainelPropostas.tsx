@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../../components/Modal";
 import { api, formatMoney } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import type { Cliente, LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
+import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
 const STATUS_LABEL: Record<PropostaStatus, string> = {
   rascunho: "Rascunho",
@@ -23,7 +23,6 @@ export default function PainelPropostas() {
   const [propostas, setPropostas] = useState<PropostaDetalhe[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
 
   function recarregar() {
@@ -33,7 +32,6 @@ export default function PainelPropostas() {
 
   useEffect(() => {
     recarregar();
-    api.listarClientes().then(setClientes).catch(() => {});
     api.listarTodosLotes().then(setLotes).catch(() => {});
   }, []);
 
@@ -134,7 +132,6 @@ export default function PainelPropostas() {
       {criando && (
         <Modal onClose={() => setCriando(false)} labelledBy="proposta-modal-title">
           <PropostaForm
-            clientes={clientes}
             lotes={lotes}
             onSalvo={() => {
               setCriando(false);
@@ -147,35 +144,50 @@ export default function PainelPropostas() {
   );
 }
 
-function PropostaForm({
-  clientes,
-  lotes,
-  onSalvo,
-}: {
-  clientes: Cliente[];
-  lotes: LoteComCondominio[];
-  onSalvo: () => void;
-}) {
+function PropostaForm({ lotes, onSalvo }: { lotes: LoteComCondominio[]; onSalvo: () => void }) {
   const [loteId, setLoteId] = useState("");
-  const [clienteId, setClienteId] = useState("");
+  const [condominioSlug, setCondominioSlug] = useState("");
+  const [nomeCliente, setNomeCliente] = useState("");
+  const [contatoCliente, setContatoCliente] = useState("");
+  const [cpfCliente, setCpfCliente] = useState("");
   const [valor, setValor] = useState("");
   const [condicoes, setCondicoes] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  const empreendimentos = useMemo(() => {
+    const vistos = new Map<string, string>();
+    for (const l of lotes) vistos.set(l.condominio_slug, l.condominio_nome);
+    return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
+  }, [lotes]);
+
+  const lotesDoEmpreendimento = useMemo(
+    () => (condominioSlug ? lotes.filter((l) => l.condominio_slug === condominioSlug) : lotes),
+    [lotes, condominioSlug],
+  );
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!loteId || !clienteId || !valor) {
-      setErro("Preencha lote, cliente e valor.");
+    if (!loteId || !nomeCliente.trim() || !valor) {
+      setErro("Selecione o lote, informe o nome do cliente e o valor proposto.");
       return;
     }
     setErro(null);
     setSalvando(true);
     try {
+      // Não existe mais um cadastro prévio de cliente no painel — o registro
+      // em "clientes" é criado aqui na hora, só pra satisfazer o vínculo que
+      // a proposta precisa (mesma lógica de captar nome/CPF direto que a
+      // reserva usa, ver PainelReservas.tsx).
+      const cliente = await api.criarCliente({
+        nome: nomeCliente.trim(),
+        telefone: contatoCliente || null,
+        cpf: cpfCliente || null,
+      });
       await api.criarProposta({
         lote_id: loteId,
-        cliente_id: clienteId,
+        cliente_id: cliente.id,
         valor_proposto: Number(valor),
         condicoes_pagamento: condicoes || null,
         observacoes: observacoes || null,
@@ -193,22 +205,45 @@ function PropostaForm({
       <h2 id="proposta-modal-title" className="text-lg font-bold text-ink mb-1">
         Nova proposta
       </h2>
-      <select className="input" value={loteId} onChange={(e) => setLoteId(e.target.value)} required>
-        <option value="">Selecione o lote...</option>
-        {lotes.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.condominio_nome} — {l.identificador}
-          </option>
-        ))}
-      </select>
-      <select className="input" value={clienteId} onChange={(e) => setClienteId(e.target.value)} required>
-        <option value="">Selecione o cliente...</option>
-        {clientes.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.nome}
-          </option>
-        ))}
-      </select>
+      {empreendimentos.length > 1 && (
+        <select
+          className="input"
+          value={condominioSlug}
+          onChange={(e) => {
+            setCondominioSlug(e.target.value);
+            setLoteId("");
+          }}
+        >
+          <option value="">Todos os empreendimentos</option>
+          {empreendimentos.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.nome}
+            </option>
+          ))}
+        </select>
+      )}
+      <LoteCombobox key={condominioSlug} lotes={lotesDoEmpreendimento} value={loteId} onChange={setLoteId} />
+      <input
+        className="input"
+        placeholder="Nome completo do cliente"
+        value={nomeCliente}
+        onChange={(e) => setNomeCliente(e.target.value)}
+        required
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <input
+          className="input"
+          placeholder="Contato (telefone/e-mail)"
+          value={contatoCliente}
+          onChange={(e) => setContatoCliente(e.target.value)}
+        />
+        <input
+          className="input"
+          placeholder="CPF (opcional)"
+          value={cpfCliente}
+          onChange={(e) => setCpfCliente(e.target.value)}
+        />
+      </div>
       <input
         className="input"
         type="number"
@@ -236,5 +271,77 @@ function PropostaForm({
         {salvando ? "Salvando..." : "Salvar"}
       </button>
     </form>
+  );
+}
+
+function rotuloLote(l: LoteComCondominio): string {
+  return `${l.condominio_nome} — ${l.identificador} (${l.status})`;
+}
+
+/** Campo de lote com busca — mesma implementação usada em PainelReservas.tsx
+ * (ver comentário lá): digita e escolhe da lista filtrada, em vez de rolar um
+ * <select> gigante. `key={condominioSlug}` no ponto de uso remonta este
+ * componente sempre que o filtro de empreendimento muda. */
+function LoteCombobox({
+  lotes,
+  value,
+  onChange,
+}: {
+  lotes: LoteComCondominio[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const selecionado = lotes.find((l) => l.id === value) ?? null;
+  const [busca, setBusca] = useState(selecionado ? rotuloLote(selecionado) : "");
+  const [aberto, setAberto] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickFora(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setAberto(false);
+    }
+    document.addEventListener("mousedown", onClickFora);
+    return () => document.removeEventListener("mousedown", onClickFora);
+  }, []);
+
+  const termo = busca.trim().toLowerCase();
+  const filtrados = (termo ? lotes.filter((l) => rotuloLote(l).toLowerCase().includes(termo)) : lotes).slice(0, 60);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <input
+        className="input"
+        placeholder="Digite pra buscar o lote (quadra, número...)"
+        value={busca}
+        onFocus={() => setAberto(true)}
+        onChange={(e) => {
+          setBusca(e.target.value);
+          setAberto(true);
+          if (value) onChange("");
+        }}
+      />
+      {aberto && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto card p-1 shadow-lg">
+          {filtrados.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-ink-soft">Nenhum lote encontrado.</p>
+          ) : (
+            filtrados.map((l) => (
+              <button
+                type="button"
+                key={l.id}
+                className="w-full text-left px-3 py-2 text-sm rounded hover:bg-surface-alt"
+                onClick={() => {
+                  onChange(l.id);
+                  setBusca(rotuloLote(l));
+                  setAberto(false);
+                }}
+              >
+                {rotuloLote(l)}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }
