@@ -10,12 +10,36 @@ const STATUS_ATIVOS: ReservaStatus[] = ["pendente", "em_atendimento", "aguardand
 // Limite pra contar uma reserva ativa como "expirando em breve" no card do topo.
 const LIMITE_EXPIRANDO_HORAS = 3;
 
+type SegmentoEstoque = "disponivel" | "reservado" | "vendido";
+
+const SEGMENTO_LABEL: Record<SegmentoEstoque, string> = {
+  disponivel: "Disponíveis",
+  reservado: "Reservados",
+  vendido: "Vendidos",
+};
+
+const SEGMENTO_COR: Record<SegmentoEstoque, string> = {
+  disponivel: "bg-sage",
+  reservado: "bg-ochre",
+  vendido: "bg-rust",
+};
+
+const SEGMENTO_COR_TEXTO: Record<SegmentoEstoque, string> = {
+  disponivel: "text-sage",
+  reservado: "text-ochre",
+  vendido: "text-rust",
+};
+
 export default function PainelVisaoGeral() {
   const [itens, setItens] = useState<VisaoGeralCondominio[] | null>(null);
   const [reservas, setReservas] = useState<ReservaComLote[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
   const [empreendimentoPdf, setEmpreendimentoPdf] = useState<string>("todos");
+  // Filtro executivo: "todos" ou o id de um empreendimento — recorta o
+  // resumo do topo, o gráfico de estoque e o ranking, tudo junto (ver
+  // dataviz: filtros escopam tudo abaixo deles, nunca por gráfico).
+  const [filtro, setFiltro] = useState<string>("todos");
 
   function recarregar() {
     setErro(null);
@@ -39,6 +63,11 @@ export default function PainelVisaoGeral() {
     }
   }
 
+  const escopo = useMemo(
+    () => (filtro === "todos" ? itens ?? [] : (itens ?? []).filter((i) => i.condominio_id === filtro)),
+    [itens, filtro],
+  );
+
   const totais = useMemo(() => {
     const base = {
       total_lotes: 0,
@@ -49,7 +78,7 @@ export default function PainelVisaoGeral() {
       propostas_abertas: 0,
       valor_em_propostas_abertas: 0,
     };
-    for (const item of itens ?? []) {
+    for (const item of escopo) {
       base.total_lotes += item.total_lotes;
       base.disponiveis += item.disponiveis;
       base.reservados += item.reservados;
@@ -59,14 +88,22 @@ export default function PainelVisaoGeral() {
       base.valor_em_propostas_abertas += item.valor_em_propostas_abertas;
     }
     return base;
-  }, [itens]);
+  }, [escopo]);
 
-  const ticketMedioGeral = totais.vendidos > 0 ? totais.valor_total_vendido / totais.vendidos : null;
-  const pctVendidoGeral = totais.total_lotes > 0 ? (totais.vendidos / totais.total_lotes) * 100 : 0;
+  const ticketMedio = totais.vendidos > 0 ? totais.valor_total_vendido / totais.vendidos : null;
+  const pctVendido = totais.total_lotes > 0 ? (totais.vendidos / totais.total_lotes) * 100 : 0;
 
+  const condominioIdsEscopo = useMemo(() => new Set(escopo.map((i) => i.condominio_id)), [escopo]);
+  const reservasEscopo = useMemo(
+    () =>
+      filtro === "todos"
+        ? reservas ?? []
+        : (reservas ?? []).filter((r) => r.lote && condominioIdsEscopo.has(r.lote.condominio_id)),
+    [reservas, filtro, condominioIdsEscopo],
+  );
   const reservasAtivas = useMemo(
-    () => (reservas ?? []).filter((r) => STATUS_ATIVOS.includes(r.status)),
-    [reservas],
+    () => reservasEscopo.filter((r) => STATUS_ATIVOS.includes(r.status)),
+    [reservasEscopo],
   );
   const reservasExpirandoEmBreve = useMemo(
     () =>
@@ -77,16 +114,7 @@ export default function PainelVisaoGeral() {
     [reservasAtivas],
   );
 
-  // Funil de atendimento — mesma leitura que a antiga aba "Acompanhamento"
-  // dava (novo → em atendimento → confirmado, mais os cancelados à parte),
-  // só que junto do resto dos números em vez de uma tela separada.
-  const funil = useMemo(() => {
-    const base = { pendente: 0, em_atendimento: 0, confirmada: 0, cancelada: 0 };
-    for (const r of reservas ?? []) {
-      if (r.status in base) base[r.status as keyof typeof base]++;
-    }
-    return base;
-  }, [reservas]);
+  const escopoLabel = filtro === "todos" ? "Todos os empreendimentos" : escopo[0]?.nome ?? "Empreendimento";
 
   return (
     <div>
@@ -122,55 +150,104 @@ export default function PainelVisaoGeral() {
         <p className="text-ink-soft text-sm">Carregando...</p>
       ) : (
         <>
-          {/* Resumo geral — soma de todos os empreendimentos, pra bater o olho sem
-              precisar somar os cards de baixo na mão. */}
-          <div className="card p-5 sm:p-6 mb-5">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <h2 className="text-sm font-bold text-ink uppercase tracking-wide">Total geral</h2>
-              <span className="text-xs text-ink-soft">
-                {totais.vendidos} de {totais.total_lotes} lotes vendidos ({pctVendidoGeral.toFixed(1)}%)
-              </span>
-            </div>
-            <BarraEstoque disponiveis={totais.disponiveis} reservados={totais.reservados} vendidos={totais.vendidos} />
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 mt-4">
-              <StatTile label="Total de lotes" valor={totais.total_lotes} cor="text-ink" />
-              <StatTile label="Disponíveis" valor={totais.disponiveis} cor="text-sage" />
-              <StatTile label="Reservados" valor={totais.reservados} cor="text-ochre" />
-              <StatTile label="Vendidos" valor={totais.vendidos} cor="text-rust" />
-              <StatTile
-                label="Reservas ativas"
-                valor={reservasAtivas.length}
-                cor="text-ink"
-                destaque={reservasExpirandoEmBreve.length > 0 ? `${reservasExpirandoEmBreve.length} expirando` : undefined}
+          {/* Filtro executivo — uma linha só, acima de tudo, recorta o resumo
+              inteiro (ver dataviz: filtros escopam tudo abaixo deles). */}
+          <div className="flex items-center gap-2 flex-wrap mb-5">
+            <FiltroChip label="Todos" ativo={filtro === "todos"} onClick={() => setFiltro("todos")} />
+            {itens.map((item) => (
+              <FiltroChip
+                key={item.condominio_id}
+                label={item.nome}
+                ativo={filtro === item.condominio_id}
+                onClick={() => setFiltro(item.condominio_id)}
               />
-              <StatTileMoeda label="Valor vendido" valor={totais.valor_total_vendido} cor="text-primary" />
-              <StatTileMoeda label="Ticket médio" valor={ticketMedioGeral} cor="text-ink" />
+            ))}
+          </div>
+
+          {/* Resumo executivo — número principal + estoque, tudo recortado
+              pelo filtro selecionado acima. */}
+          <div className="card p-5 sm:p-6 mb-5">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-1">{escopoLabel}</p>
+                <p className="text-5xl font-bold text-ink leading-none">
+                  {pctVendido.toFixed(1)}
+                  <span className="text-2xl text-ink-soft">%</span>
+                </p>
+                <p className="text-xs text-ink-soft mt-1.5">
+                  vendido · {totais.vendidos} de {totais.total_lotes} lotes
+                </p>
+              </div>
+              <div className="flex gap-6 flex-wrap">
+                <MiniStat label="Valor vendido" valor={formatMoney(totais.valor_total_vendido)} />
+                <MiniStat label="Ticket médio" valor={formatMoney(ticketMedio)} />
+                <MiniStat
+                  label={`Em propostas (${totais.propostas_abertas})`}
+                  valor={formatMoney(totais.valor_em_propostas_abertas)}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <BarraEstoqueInterativa
+                disponiveis={totais.disponiveis}
+                reservados={totais.reservados}
+                vendidos={totais.vendidos}
+              />
             </div>
           </div>
 
-          {/* Funil de atendimento — substitui a antiga aba "Acompanhamento",
-              agora dentro do próprio dashboard. */}
-          <div className="card p-5 sm:p-6 mb-5">
-            <h2 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Funil de atendimento</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatTile label="Novos" valor={funil.pendente} cor="text-primary" />
-              <StatTile label="Em atendimento" valor={funil.em_atendimento} cor="text-ochre" />
-              <StatTile label="Confirmados" valor={funil.confirmada} cor="text-sage" />
-              <StatTile label="Cancelados" valor={funil.cancelada} cor="text-rust" />
-            </div>
+          {/* Reservas ativas — o único indicador operacional que sobrevive
+              aqui (o funil detalhado por status saiu: informação demais pro
+              nível executivo, sem ação direta associada). */}
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 mb-5">
+            <StatTile label="Total de lotes" valor={totais.total_lotes} cor="text-ink" />
+            <StatTile label="Disponíveis" valor={totais.disponiveis} cor="text-sage" />
+            <StatTile label="Reservados" valor={totais.reservados} cor="text-ochre" />
+            <StatTile
+              label="Reservas ativas"
+              valor={reservasAtivas.length}
+              cor="text-primary"
+              destaque={reservasExpirandoEmBreve.length > 0 ? `${reservasExpirandoEmBreve.length} expirando em breve` : undefined}
+            />
           </div>
+
+          {/* Ranking entre empreendimentos — barras clicáveis: clicar aplica
+              o mesmo filtro dos chips acima. */}
+          {itens.length > 1 && (
+            <div className="card p-5 sm:p-6 mb-5">
+              <h2 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Desempenho por empreendimento</h2>
+              <div className="flex flex-col gap-3">
+                {[...itens]
+                  .sort((a, b) => b.valor_total_vendido - a.valor_total_vendido)
+                  .map((item) => (
+                    <BarraRanking
+                      key={item.condominio_id}
+                      item={item}
+                      selecionado={filtro === item.condominio_id}
+                      onClick={() => setFiltro(filtro === item.condominio_id ? "todos" : item.condominio_id)}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-5 lg:grid-cols-2">
             {itens.map((item) => {
-              const pctVendido = item.total_lotes > 0 ? (item.vendidos / item.total_lotes) * 100 : 0;
-              const ticketMedio = item.vendidos > 0 ? item.valor_total_vendido / item.vendidos : null;
+              const pct = item.total_lotes > 0 ? (item.vendidos / item.total_lotes) * 100 : 0;
+              const ticket = item.vendidos > 0 ? item.valor_total_vendido / item.vendidos : null;
+              const selecionado = filtro === item.condominio_id;
               return (
-                <div key={item.condominio_id} className="card p-5 sm:p-6">
+                <div
+                  key={item.condominio_id}
+                  className={`card p-5 sm:p-6 cursor-pointer transition-shadow ${selecionado ? "ring-2 ring-primary" : ""}`}
+                  onClick={() => setFiltro(selecionado ? "todos" : item.condominio_id)}
+                >
                   <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                     <h2 className="text-base font-bold text-ink">{item.nome}</h2>
-                    <span className="text-xs text-ink-soft">{pctVendido.toFixed(1)}% vendido</span>
+                    <span className="text-xs text-ink-soft">{pct.toFixed(1)}% vendido</span>
                   </div>
-                  <BarraEstoque disponiveis={item.disponiveis} reservados={item.reservados} vendidos={item.vendidos} />
+                  <BarraEstoqueInterativa disponiveis={item.disponiveis} reservados={item.reservados} vendidos={item.vendidos} compacta />
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4">
                     <StatTile label="Total de lotes" valor={item.total_lotes} cor="text-ink" />
                     <StatTile label="Disponíveis" valor={item.disponiveis} cor="text-sage" />
@@ -186,8 +263,8 @@ export default function PainelVisaoGeral() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs text-ink-soft">Ticket médio</p>
-                      <p className="text-lg font-bold text-ink truncate" title={formatMoney(ticketMedio)}>
-                        {formatMoney(ticketMedio)}
+                      <p className="text-lg font-bold text-ink truncate" title={formatMoney(ticket)}>
+                        {formatMoney(ticket)}
                       </p>
                     </div>
                     <div className="col-span-2 sm:col-span-2 min-w-0">
@@ -212,27 +289,145 @@ export default function PainelVisaoGeral() {
   );
 }
 
-/** Barra horizontal empilhada — leitura rápida da proporção disponível
- * /reservado/vendido do estoque, mesma paleta usada nos badges de status. */
-function BarraEstoque({
+function FiltroChip({ label, ativo, onClick }: { label: string; ativo: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+        ativo
+          ? "bg-primary text-white border-primary"
+          : "bg-surface text-ink-soft border-border hover:border-ink-soft hover:text-ink"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function MiniStat({ label, valor }: { label: string; valor: string }) {
+  return (
+    <div className="min-w-[7rem]">
+      <p className="text-lg font-bold text-ink truncate" title={valor}>
+        {valor}
+      </p>
+      <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+/** Barra horizontal empilhada com hover por segmento (tooltip com valor e
+ * %) e legenda com rótulo direto — a mesma leitura de sempre, só que agora
+ * interativa (ver dataviz: hover por marca + legenda sempre presente). */
+function BarraEstoqueInterativa({
   disponiveis,
   reservados,
   vendidos,
+  compacta = false,
 }: {
   disponiveis: number;
   reservados: number;
   vendidos: number;
+  compacta?: boolean;
 }) {
+  const [hover, setHover] = useState<SegmentoEstoque | null>(null);
   const total = disponiveis + reservados + vendidos;
+  const valores: Record<SegmentoEstoque, number> = { disponivel: disponiveis, reservado: reservados, vendido: vendidos };
   const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
+  const segmentos: SegmentoEstoque[] = ["disponivel", "reservado", "vendido"];
+
   return (
     <div>
-      <div className="h-2.5 w-full rounded-full overflow-hidden bg-surface-alt flex">
-        {disponiveis > 0 && <div className="h-full bg-sage" style={{ width: `${pct(disponiveis)}%` }} />}
-        {reservados > 0 && <div className="h-full bg-ochre" style={{ width: `${pct(reservados)}%` }} />}
-        {vendidos > 0 && <div className="h-full bg-rust" style={{ width: `${pct(vendidos)}%` }} />}
+      <div className={`relative w-full rounded-full overflow-hidden bg-surface-alt flex ${compacta ? "h-2" : "h-3"}`}>
+        {segmentos.map((seg) =>
+          valores[seg] > 0 ? (
+            <div
+              key={seg}
+              role="img"
+              aria-label={`${SEGMENTO_LABEL[seg]}: ${valores[seg]} (${pct(valores[seg]).toFixed(1)}%)`}
+              tabIndex={0}
+              onMouseEnter={() => setHover(seg)}
+              onMouseLeave={() => setHover(null)}
+              onFocus={() => setHover(seg)}
+              onBlur={() => setHover(null)}
+              className={`h-full ${SEGMENTO_COR[seg]} transition-opacity outline-none ${
+                hover && hover !== seg ? "opacity-50" : "opacity-100"
+              }`}
+              style={{ width: `${pct(valores[seg])}%` }}
+            />
+          ) : null,
+        )}
       </div>
+      {!compacta && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2.5">
+          {segmentos.map((seg) => (
+            <div key={seg} className="flex items-center gap-1.5 text-xs">
+              <span className={`inline-block h-2 w-2 rounded-full ${SEGMENTO_COR[seg]}`} />
+              <span className="text-ink-soft">{SEGMENTO_LABEL[seg]}</span>
+              <span className={`font-semibold ${SEGMENTO_COR_TEXTO[seg]}`}>
+                {valores[seg]} ({pct(valores[seg]).toFixed(0)}%)
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Uma linha do ranking entre empreendimentos — barra proporcional ao valor
+ * vendido, clicável (aplica o filtro executivo) e com tooltip no hover
+ * trazendo a composição completa do estoque. */
+function BarraRanking({
+  item,
+  selecionado,
+  onClick,
+}: {
+  item: VisaoGeralCondominio;
+  selecionado: boolean;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const maiorValor = item.valor_total_vendido || 1;
+  const pctVendido = item.total_lotes > 0 ? (item.vendidos / item.total_lotes) * 100 : 0;
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className={`text-left rounded-sm p-2.5 -mx-2.5 transition-colors ${
+        selecionado ? "bg-primary-tint" : hover ? "bg-surface-alt" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <span className={`text-sm font-semibold ${selecionado ? "text-primary" : "text-ink"}`}>{item.nome}</span>
+        <span className="text-xs text-ink-soft whitespace-nowrap">
+          {formatMoney(item.valor_total_vendido)} · {pctVendido.toFixed(1)}% vendido
+        </span>
+      </div>
+      <div className="h-2.5 w-full rounded-full bg-surface-alt overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${selecionado ? "bg-primary" : "bg-accent"}`}
+          style={{ width: `${Math.max(2, (item.valor_total_vendido / maiorValor) * 100)}%` }}
+        />
+      </div>
+      {hover && (
+        <div className="flex gap-4 mt-2 text-[11px] text-ink-soft">
+          <span>
+            <span className="text-sage font-semibold">{item.disponiveis}</span> disponíveis
+          </span>
+          <span>
+            <span className="text-ochre font-semibold">{item.reservados}</span> reservados
+          </span>
+          <span>
+            <span className="text-rust font-semibold">{item.vendidos}</span> vendidos
+          </span>
+          <span>
+            <span className="text-ink font-semibold">{item.propostas_abertas}</span> propostas em andamento
+          </span>
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -252,18 +447,6 @@ function StatTile({
       <p className={`text-xl font-bold ${cor} truncate`}>{valor}</p>
       <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
       {destaque && <p className="text-[11px] font-semibold text-ochre mt-0.5">{destaque}</p>}
-    </div>
-  );
-}
-
-function StatTileMoeda({ label, valor, cor }: { label: string; valor: number | null; cor: string }) {
-  const texto = formatMoney(valor);
-  return (
-    <div className="rounded-sm bg-surface-alt p-3 min-w-0">
-      <p className={`text-lg font-bold ${cor} truncate`} title={texto}>
-        {texto}
-      </p>
-      <p className="text-[11px] text-ink-soft mt-0.5">{label}</p>
     </div>
   );
 }
