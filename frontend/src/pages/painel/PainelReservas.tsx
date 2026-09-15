@@ -298,7 +298,24 @@ function LoteCombobox({
   }, []);
 
   const termo = busca.trim().toLowerCase();
-  const filtrados = (termo ? lotes.filter((l) => rotuloLote(l).toLowerCase().includes(termo)) : lotes).slice(0, 60);
+  // Números soltos (ex.: "4", "04", "004") — compara ignorando zeros à esquerda, já
+  // que cada empreendimento numera os lotes com uma quantidade diferente de dígitos
+  // (Rancho Texas usa 3, Porto Franco usa 2), então a busca só por texto literal
+  // perdia combinações válidas só por causa da formatação do número.
+  const termoNumero = termo.replace(/\D/g, "");
+  function bate(l: LoteComCondominio): boolean {
+    if (rotuloLote(l).toLowerCase().includes(termo)) return true;
+    if (!termoNumero) return false;
+    const numero = Number(termoNumero);
+    return numero === l.lote_numero || (!!l.quadra && numero === Number(l.quadra));
+  }
+
+  const encontrados = termo ? lotes.filter(bate) : lotes;
+  // Nunca deixa a lista vazia só por causa de uma busca sem match exato — melhor
+  // mostrar todos os lotes pra pessoa escolher na mão do que travar numa tela
+  // "nenhum lote encontrado" sem saída.
+  const semResultadoExato = termo !== "" && encontrados.length === 0;
+  const listaExibida = (semResultadoExato ? lotes : encontrados).slice(0, 60);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -315,10 +332,15 @@ function LoteCombobox({
       />
       {aberto && (
         <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto card p-1 shadow-lg">
-          {filtrados.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-ink-soft">Nenhum lote encontrado.</p>
+          {semResultadoExato && (
+            <p className="px-3 py-2 text-xs text-ink-soft border-b border-border mb-1">
+              Nenhum lote bate exatamente com "{busca.trim()}" — veja todos abaixo:
+            </p>
+          )}
+          {listaExibida.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-ink-soft">Nenhum lote cadastrado.</p>
           ) : (
-            filtrados.map((l) => (
+            listaExibida.map((l) => (
               <button
                 type="button"
                 key={l.id}
