@@ -79,11 +79,20 @@ function CondoCard({ condo }: { condo: CondominioResumo }) {
   const pct = condo.total_lotes > 0 ? Math.round((condo.total_disponiveis / condo.total_lotes) * 100) : 0;
 
   return (
-    <Link
-      to={`/condominios/${condo.slug}`}
-      className="group card overflow-hidden hover:shadow-card-hover hover:-translate-y-0.5
+    <div
+      className="group relative card overflow-hidden hover:shadow-card-hover hover:-translate-y-0.5
                  transition-all duration-200 grid grid-rows-[13rem_1fr]"
     >
+      {/* "Stretched link": cobre o card inteiro pra manter o card todo clicável
+          (like antes), mas sem aninhar um <a> dentro de outro — o botão do
+          site externo do empreendimento fica acima dele (z-20) e captura o
+          próprio clique nessa área. */}
+      <Link
+        to={`/condominios/${condo.slug}`}
+        className="absolute inset-0 z-10"
+        aria-label={`Ver catálogo de ${condo.nome}`}
+      />
+
       <div className="relative overflow-hidden bg-primary">
         {condo.hero_image_url && (
           <img
@@ -129,16 +138,28 @@ function CondoCard({ condo }: { condo: CondominioResumo }) {
           <span className="text-sm font-semibold text-primary group-hover:text-primary-dark">
             Ver catálogo
           </span>
-          <span
-            className="grid h-8 w-8 place-items-center rounded-full bg-surface-alt text-ink-soft
-                       group-hover:bg-primary group-hover:text-white transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-              <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
+          <div className="flex items-center gap-3">
+            {condo.landing_page_url && (
+              <a
+                href={condo.landing_page_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative z-20 text-xs font-medium text-ink-soft hover:text-primary hover:underline underline-offset-2"
+              >
+                Site do empreendimento
+              </a>
+            )}
+            <span
+              className="grid h-8 w-8 place-items-center rounded-full bg-surface-alt text-ink-soft
+                         group-hover:bg-primary group-hover:text-white transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }

@@ -10,6 +10,7 @@ export interface CondominioResumo {
   descricao?: string | null;
   logo_url?: string | null;
   hero_image_url?: string | null;
+  landing_page_url?: string | null;
   total_lotes: number;
   total_disponiveis: number;
 }
