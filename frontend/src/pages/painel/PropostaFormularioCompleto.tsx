@@ -52,6 +52,12 @@ export default function PropostaFormularioCompleto({
   const [dados, setDados] = useState<QualificacaoDados>(qualificacaoDadosVazio());
   const [condicoesPagamento, setCondicoesPagamento] = useState("");
   const [passo, setPasso] = useState(0);
+  // "Cadastro rápido": o corretor quer garantir o lote com só nome + lote
+  // agora, sem parar pra digitar documentos, estado civil, endereço e
+  // telefone — esses campos ficam opcionais enquanto isso estiver marcado.
+  // Profissão, renda e valor proposto continuam obrigatórios (são os únicos
+  // dados que sobram além de nome + lote, ver validarPasso abaixo).
+  const [modoRapido, setModoRapido] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   // Guarda o cliente já criado (se a criação da proposta em si falhar
@@ -100,14 +106,16 @@ export default function PropostaFormularioCompleto({
     }
     if (p === 1) {
       if (!dados.proponente.nome?.trim()) return "Informe o nome completo do cliente.";
-      if (!dados.proponente.cpf_cnpj?.trim()) return "Informe o CPF do cliente.";
-      if (!dados.proponente.rg?.trim()) return "Informe o RG do cliente.";
-      if (!dados.proponente.data_nascimento?.trim()) return "Informe a data de nascimento.";
-      if (!dados.proponente.nacionalidade?.trim()) return "Informe a nacionalidade.";
       if (!dados.proponente.profissao?.trim()) return "Informe a profissão.";
-      if (!dados.proponente.email?.trim()) return "Informe o e-mail.";
+      if (!modoRapido) {
+        if (!dados.proponente.cpf_cnpj?.trim()) return "Informe o CPF do cliente.";
+        if (!dados.proponente.rg?.trim()) return "Informe o RG do cliente.";
+        if (!dados.proponente.data_nascimento?.trim()) return "Informe a data de nascimento.";
+        if (!dados.proponente.nacionalidade?.trim()) return "Informe a nacionalidade.";
+        if (!dados.proponente.email?.trim()) return "Informe o e-mail.";
+      }
     }
-    if (p === 2) {
+    if (p === 2 && !modoRapido) {
       if (!dados.estado_civil) return "Selecione o estado civil.";
       if (casado) {
         if (!dados.conjuge?.nome?.trim()) return "Informe o nome do cônjuge.";
@@ -119,15 +127,15 @@ export default function PropostaFormularioCompleto({
         if (!dados.conjuge?.email?.trim()) return "Informe o e-mail do cônjuge.";
       }
     }
-    if (p === 3) {
+    if (p === 3 && !modoRapido) {
       const msg = validarEndereco(dados.endereco_residencial, "residencial");
       if (msg) return msg;
     }
-    if (p === 4 && !dados.endereco_comercial_nao_possui) {
+    if (p === 4 && !modoRapido && !dados.endereco_comercial_nao_possui) {
       const msg = validarEndereco(dados.endereco_comercial, "comercial");
       if (msg) return `${msg} Ou marque "não possui endereço comercial".`;
     }
-    if (p === 5) {
+    if (p === 5 && !modoRapido) {
       if (!dados.telefone_celular?.trim()) return "Informe um telefone celular pra contato.";
     }
     if (p === 6) {
@@ -258,6 +266,19 @@ export default function PropostaFormularioCompleto({
 
         {passo === 1 && (
           <>
+            <label className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={modoRapido}
+                onChange={(e) => setModoRapido(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold">Cadastro rápido</span> — garantir o lote só com nome e lote agora, sem
+                documentos. Estado civil, endereço e telefone também ficam opcionais; só profissão, renda e valor
+                proposto continuam obrigatórios.
+              </span>
+            </label>
             <Field label="Nome completo *">
               <input
                 className="input"
@@ -266,14 +287,14 @@ export default function PropostaFormularioCompleto({
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="CPF/CNPJ *">
+              <Field label={modoRapido ? "CPF/CNPJ" : "CPF/CNPJ *"}>
                 <input
                   className="input"
                   value={dados.proponente.cpf_cnpj ?? ""}
                   onChange={(e) => setDados({ ...dados, proponente: { ...dados.proponente, cpf_cnpj: e.target.value } })}
                 />
               </Field>
-              <Field label="RG *">
+              <Field label={modoRapido ? "RG" : "RG *"}>
                 <input
                   className="input"
                   value={dados.proponente.rg ?? ""}
@@ -289,7 +310,7 @@ export default function PropostaFormularioCompleto({
                   onChange={(e) => setDados({ ...dados, proponente: { ...dados.proponente, orgao_expedidor: e.target.value } })}
                 />
               </Field>
-              <Field label="Data de nascimento *">
+              <Field label={modoRapido ? "Data de nascimento" : "Data de nascimento *"}>
                 <input
                   className="input"
                   type="date"
@@ -299,7 +320,7 @@ export default function PropostaFormularioCompleto({
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Nacionalidade *">
+              <Field label={modoRapido ? "Nacionalidade" : "Nacionalidade *"}>
                 <input
                   className="input"
                   value={dados.proponente.nacionalidade ?? ""}
@@ -314,7 +335,7 @@ export default function PropostaFormularioCompleto({
                 />
               </Field>
             </div>
-            <Field label="E-mail *">
+            <Field label={modoRapido ? "E-mail" : "E-mail *"}>
               <input
                 className="input"
                 type="email"
@@ -327,7 +348,12 @@ export default function PropostaFormularioCompleto({
 
         {passo === 2 && (
           <>
-            <Field label="Estado civil *">
+            {modoRapido && (
+              <p className="text-xs text-ink-soft italic -mt-1 -mb-1">
+                Opcional no cadastro rápido — pode preencher depois.
+              </p>
+            )}
+            <Field label={modoRapido ? "Estado civil" : "Estado civil *"}>
               <select
                 className="input"
                 value={dados.estado_civil ?? ""}
@@ -420,14 +446,26 @@ export default function PropostaFormularioCompleto({
         )}
 
         {passo === 3 && (
-          <EnderecoCampos
-            endereco={dados.endereco_residencial}
-            onChange={(endereco_residencial) => setDados({ ...dados, endereco_residencial })}
-          />
+          <>
+            {modoRapido && (
+              <p className="text-xs text-ink-soft italic -mb-1">
+                Opcional no cadastro rápido — pode preencher depois.
+              </p>
+            )}
+            <EnderecoCampos
+              endereco={dados.endereco_residencial}
+              onChange={(endereco_residencial) => setDados({ ...dados, endereco_residencial })}
+            />
+          </>
         )}
 
         {passo === 4 && (
           <>
+            {modoRapido && (
+              <p className="text-xs text-ink-soft italic -mb-1">
+                Opcional no cadastro rápido — pode preencher depois.
+              </p>
+            )}
             <label className="flex items-center gap-2 text-sm text-ink -mb-1">
               <input
                 type="checkbox"
@@ -454,6 +492,11 @@ export default function PropostaFormularioCompleto({
 
         {passo === 5 && (
           <>
+            {modoRapido && (
+              <p className="text-xs text-ink-soft italic -mt-1 -mb-1">
+                Opcional no cadastro rápido — pode preencher depois.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Telefone residencial">
                 <input
@@ -471,7 +514,7 @@ export default function PropostaFormularioCompleto({
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Celular *">
+              <Field label={modoRapido ? "Celular" : "Celular *"}>
                 <input
                   className="input"
                   value={dados.telefone_celular ?? ""}
@@ -619,7 +662,7 @@ export default function PropostaFormularioCompleto({
         )}
 
         {passo === 7 && (
-          <Revisao dados={dados} lote={loteSelecionado} condicoesPagamento={condicoesPagamento} />
+          <Revisao dados={dados} lote={loteSelecionado} condicoesPagamento={condicoesPagamento} modoRapido={modoRapido} />
         )}
 
         {erro && <p className="text-rust text-sm">{erro}</p>}
@@ -653,14 +696,23 @@ function Revisao({
   dados,
   lote,
   condicoesPagamento,
+  modoRapido,
 }: {
   dados: QualificacaoDados;
   lote: LoteComCondominio | null;
   condicoesPagamento: string;
+  modoRapido: boolean;
 }) {
   return (
     <div className="grid gap-3 text-sm">
       <p className="text-ink-soft">Confira antes de criar a proposta.</p>
+      {modoRapido && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Cadastro rápido — documentos, estado civil, endereço e telefone ficaram em branco. Volte nas etapas
+          anteriores agora se quiser completar, porque depois de criada a proposta esses dados não dá mais pra
+          editar por aqui.
+        </p>
+      )}
       <div className="grid gap-1">
         <p>
           <span className="text-ink-soft">Lote: </span>
