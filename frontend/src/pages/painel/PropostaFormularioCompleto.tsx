@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../../components/qualificacaoCampos";
-import { api } from "../../lib/api";
+import { api, prewarmBackend } from "../../lib/api";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, QualificacaoDados } from "../../types";
 
@@ -54,6 +54,18 @@ export default function PropostaFormularioCompleto({
   const [passo, setPasso] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // Guarda o cliente já criado (se a criação da proposta em si falhar
+  // depois, ex.: backend acordando no meio do processo) pra um retry em
+  // "Criar proposta" reaproveitar em vez de cadastrar o mesmo proponente de
+  // novo a cada tentativa — ver criar() abaixo.
+  const clienteIdCriadoRef = useRef<string | null>(null);
+
+  // Formulário de 8 etapas — dá tempo de sobra pro backend (Render, plano
+  // free) acordar em paralelo, em vez de só na hora crítica de salvar no
+  // fim (ver comentário de RETRY_DELAYS_MS em lib/api.ts).
+  useEffect(() => {
+    prewarmBackend();
+  }, []);
 
   const empreendimentos = useMemo(() => {
     const vistos = new Map<string, string>();
@@ -171,14 +183,23 @@ export default function PropostaFormularioCompleto({
       // "clientes" é criado aqui na hora, a partir dos dados do proponente
       // (mesma lógica que a reserva/proposta simples já usava, ver
       // PainelReservas.tsx), só que agora com o formulário completo.
-      const cliente = await api.criarCliente({
-        nome: dados.proponente.nome!.trim(),
-        telefone: dados.telefone_celular || null,
-        cpf: dados.proponente.cpf_cnpj || null,
-      });
+      // clienteIdCriadoRef evita cadastrar o mesmo proponente de novo se a
+      // pessoa clicar "Criar proposta" outra vez depois de uma falha bem
+      // aqui no meio (ex.: backend acordando) — sem isso, cada tentativa
+      // criava um cliente duplicado antes de falhar de novo na proposta.
+      let clienteId = clienteIdCriadoRef.current;
+      if (!clienteId) {
+        const cliente = await api.criarCliente({
+          nome: dados.proponente.nome!.trim(),
+          telefone: dados.telefone_celular || null,
+          cpf: dados.proponente.cpf_cnpj || null,
+        });
+        clienteId = cliente.id;
+        clienteIdCriadoRef.current = clienteId;
+      }
       await api.criarProposta({
         lote_id: loteId,
-        cliente_id: cliente.id,
+        cliente_id: clienteId,
         valor_proposto: dados.forma_pagamento.valor_proposto!,
         condicoes_pagamento: condicoesPagamento.trim() || null,
         observacoes: dados.forma_pagamento.observacoes || null,

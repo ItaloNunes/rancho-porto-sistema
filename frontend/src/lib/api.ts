@@ -44,15 +44,25 @@ function extrairErro(body: unknown, fallback: string): string {
 // O backend (Render, plano free) "dorme" depois de ficar um tempo sem
 // requisição e demora até ~50s pra acordar na próxima — sem isso, a
 // primeira chamada do dia falha com "Failed to fetch" (erro de rede puro,
-// o fetch nem chega a ter resposta) e aparece cru pro usuário. As duas
+// o fetch nem chega a ter resposta) e aparece cru pro usuário. As três
 // camadas que evitam isso: 1) keep-alive (.github/workflows/keep-alive.yml)
-// pinga /health de 10 em 10 min pra reduzir a chance de dormir; 2) o retry
-// abaixo, que refaz a chamada em vez de estourar erro na primeira falha —
-// cobre tanto um cold start que escape do keep-alive quanto uma instabilidade
-// de rede passageira. 502/503/504 (gateway/serviço acordando) entram no
+// pinga /health de 10 em 10 min pra reduzir a chance de dormir; 2)
+// prewarmBackend() abaixo, chamado assim que uma tela com formulário longo
+// abre, pra acordar o backend em paralelo enquanto a pessoa ainda tá
+// preenchendo; 3) o retry abaixo, que refaz a chamada em vez de estourar
+// erro na primeira falha. 502/503/504 (gateway/serviço acordando) entram no
 // mesmo retry; qualquer outro status HTTP (400, 401, 404...) é erro de
 // verdade e não deve ser tentado de novo.
-const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 8000]; // ~23s de espera total
+//
+// O total aqui (~55s) tem que ficar ACIMA do pior caso documentado de cold
+// start (~50s) com alguma folga — um total menor que isso short-circuita a
+// espera bem no meio de um cold start normal e devolve "não foi possível
+// conectar" pra quem só precisava esperar mais um pouco (foi exatamente o
+// bug daqui: a soma antiga dava só ~23s). Ainda assim, um deploy novo no
+// Render pode demorar mais que isso pra terminar de subir — se acontecer de
+// alguém tentar salvar bem no meio de um deploy, a mensagem de erro ainda
+// pode aparecer uma vez; tentar de novo depois de mais um minuto resolve.
+const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000, 8000]; // ~55s de espera total
 
 function respostaTemporariamenteIndisponivel(res: Response): boolean {
   return [502, 503, 504].includes(res.status);
@@ -113,6 +123,16 @@ async function requestBlob(path: string): Promise<Blob> {
     throw new Error(extrairErro(body, `Erro ${res.status} ao gerar o PDF`));
   }
   return res.blob();
+}
+
+/** Dispara um ping em /health sem aguardar nem tratar erro — chamado assim
+ * que uma tela com formulário longo abre (ex.: Nova proposta, 8 etapas),
+ * pra aproveitar o tempo de preenchimento acordando o backend em paralelo
+ * em vez de só na hora crítica de salvar (ver comentário de
+ * RETRY_DELAYS_MS acima). Sem retry de propósito: se falhar, o próprio
+ * `request`/`fetchComRetry` da ação real (salvar) ainda cobre o caso. */
+export function prewarmBackend(): void {
+  fetch(`${API_URL}/health`).catch(() => {});
 }
 
 export const api = {
