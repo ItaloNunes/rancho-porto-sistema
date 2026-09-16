@@ -56,13 +56,30 @@ export default function PainelVisaoGeral() {
   useEffect(recarregar, []);
 
   async function exportarPdf() {
+    // A aba precisa abrir *na hora do clique* (síncrono) — se esperarmos o
+    // fetch do PDF terminar pra só então chamar window.open, o navegador não
+    // reconhece mais como resultado direto de um gesto do usuário e bloqueia
+    // a aba silenciosamente (sem erro nenhum: parecia que o botão "não fazia
+    // nada"). Abrindo em branco primeiro e só trocando a URL depois que o
+    // blob chega, a aba sempre abre.
+    const aba = window.open("", "_blank");
     setExportando(true);
     try {
       const blob = await api.exportarVisaoGeralPdf(empreendimentoPdf === "todos" ? undefined : empreendimentoPdf);
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
+      if (aba) {
+        aba.location.href = url;
+      } else {
+        // Mesmo a abertura em branco pode ser bloqueada (config restritiva do
+        // navegador) — nesse caso, baixa o arquivo direto em vez de silenciar.
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "visao-geral.pdf";
+        link.click();
+      }
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
+      aba?.close();
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setExportando(false);

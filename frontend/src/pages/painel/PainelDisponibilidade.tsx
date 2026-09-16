@@ -58,7 +58,6 @@ export default function PainelDisponibilidade() {
   const [busca, setBusca] = useState("");
   const [condominioSlug, setCondominioSlug] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
-  const [exportando, setExportando] = useState(false);
 
   const ehAdmin = perfil?.papel === "admin";
 
@@ -121,24 +120,6 @@ export default function PainelDisponibilidade() {
     return base;
   }, [lotesDoEmpreendimento]);
 
-  // Reaproveita o mesmo PDF (com linha colorida) já usado na Visão geral —
-  // aqui exporta já filtrado pelo empreendimento selecionado no filtro de
-  // cima, se tiver algum selecionado (senão sai com todos).
-  async function exportarPdf() {
-    setExportando(true);
-    try {
-      const condominioId = condominioSlug ? lotesDoEmpreendimento[0]?.condominio_id : undefined;
-      const blob = await api.exportarVisaoGeralPdf(condominioId);
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
-    } finally {
-      setExportando(false);
-    }
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -157,15 +138,6 @@ export default function PainelDisponibilidade() {
               </span>
             ))}
           </div>
-          {ehAdmin && (
-            <button className="btn btn-primary text-center leading-tight" onClick={exportarPdf} disabled={exportando}>
-              {exportando
-                ? "Gerando..."
-                : condominioSlug
-                  ? `Exportar PDF (${empreendimentos.find((c) => c.slug === condominioSlug)?.nome ?? ""})`
-                  : "Exportar PDF (todos)"}
-            </button>
-          )}
         </div>
       </div>
 
