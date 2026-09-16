@@ -543,9 +543,21 @@ def visao_geral(_admin: dict = Depends(require_admin)):
 
 
 @router.get("/visao-geral/pdf")
-def visao_geral_pdf(condominio_id: str | None = None, admin: dict = Depends(require_admin)):
+def visao_geral_pdf(
+    condominio_id: str | None = None,
+    status: str | None = None,
+    busca: str | None = None,
+    admin: dict = Depends(require_admin),
+):
     """Exporta o relatório em PDF — de todos os empreendimentos, ou só de um
-    (`?condominio_id=...`), conforme o seletor do painel."""
+    (`?condominio_id=...`), conforme o seletor do painel.
+
+    `status` e `busca` (opcionais) recortam só a TABELA de lotes de cada
+    empreendimento — os mesmos filtros da tela de Disponibilidade, aplicados
+    do mesmo jeito, pra o PDF sair batendo com o que está na tela quando ela
+    os usa. Os cartões de totais no topo continuam mostrando o estoque
+    inteiro do empreendimento (mesmo comportamento da legenda da tela, que
+    também não muda com o filtro de status)."""
     resumo, lotes_por_condominio = _montar_visao_geral()
     sufixo_arquivo = "todos-os-empreendimentos"
     if condominio_id:
@@ -555,6 +567,17 @@ def visao_geral_pdf(condominio_id: str | None = None, admin: dict = Depends(requ
         resumo = [item]
         lotes_por_condominio = {condominio_id: lotes_por_condominio.get(condominio_id, [])}
         sufixo_arquivo = item["slug"]
+    if status or busca:
+        termo = (busca or "").strip().lower()
+
+        def combina(lote: dict) -> bool:
+            if status and lote.get("status") != status:
+                return False
+            if termo and termo not in f"{lote.get('identificador', '')} {lote.get('quadra', '')}".lower():
+                return False
+            return True
+
+        lotes_por_condominio = {cid: [l for l in lotes if combina(l)] for cid, lotes in lotes_por_condominio.items()}
     pdf_bytes = gerar_visao_geral_pdf(resumo=resumo, lotes_por_condominio=lotes_por_condominio, gerado_por=admin)
     nome_arquivo = f"relatorio-disponibilidade-{sufixo_arquivo}-{datetime.now().strftime('%Y-%m-%d')}.pdf"
     return Response(

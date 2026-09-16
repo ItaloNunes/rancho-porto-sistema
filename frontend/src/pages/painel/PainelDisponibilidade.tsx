@@ -58,6 +58,7 @@ export default function PainelDisponibilidade() {
   const [busca, setBusca] = useState("");
   const [condominioSlug, setCondominioSlug] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
+  const [exportando, setExportando] = useState(false);
 
   const ehAdmin = perfil?.papel === "admin";
 
@@ -120,6 +121,47 @@ export default function PainelDisponibilidade() {
     return base;
   }, [lotesDoEmpreendimento]);
 
+  // O PDF sai batendo com o que está na tela: mesmo empreendimento, mesmo
+  // status e mesma busca escolhidos nos filtros de cima (ver `status`/`busca`
+  // em backend/app/routers/crm.py::visao_geral_pdf).
+  async function exportarPdf() {
+    // Abre a aba já no clique (síncrono) — esperar o PDF terminar de gerar
+    // pra só então abrir faz o navegador bloquear a aba sem avisar nada
+    // (mesmo ajuste feito na Visão Geral).
+    const aba = window.open("", "_blank");
+    setExportando(true);
+    try {
+      const condominioId = condominioSlug ? lotesDoEmpreendimento[0]?.condominio_id : undefined;
+      const blob = await api.exportarVisaoGeralPdf({
+        condominioId,
+        status: statusFiltro === "todos" ? undefined : statusFiltro,
+        busca: busca.trim() || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      if (aba) {
+        aba.location.href = url;
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "disponibilidade.pdf";
+        link.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      aba?.close();
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  const rotuloExportar = [
+    condominioSlug ? empreendimentos.find((c) => c.slug === condominioSlug)?.nome : null,
+    statusFiltro !== "todos" ? STATUS_LABEL[statusFiltro] : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -138,6 +180,11 @@ export default function PainelDisponibilidade() {
               </span>
             ))}
           </div>
+          {ehAdmin && (
+            <button className="btn btn-primary text-center leading-tight" onClick={exportarPdf} disabled={exportando}>
+              {exportando ? "Gerando..." : rotuloExportar ? `Exportar PDF (${rotuloExportar})` : "Exportar PDF (todos)"}
+            </button>
+          )}
         </div>
       </div>
 

@@ -65,7 +65,9 @@ export default function PainelVisaoGeral() {
     const aba = window.open("", "_blank");
     setExportando(true);
     try {
-      const blob = await api.exportarVisaoGeralPdf(empreendimentoPdf === "todos" ? undefined : empreendimentoPdf);
+      const blob = await api.exportarVisaoGeralPdf({
+        condominioId: empreendimentoPdf === "todos" ? undefined : empreendimentoPdf,
+      });
       const url = URL.createObjectURL(blob);
       if (aba) {
         aba.location.href = url;

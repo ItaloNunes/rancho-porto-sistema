@@ -240,8 +240,17 @@ export const api = {
 
   // Painel — visão geral (só admin): números por empreendimento + relatório em PDF
   visaoGeral: () => request<VisaoGeralCondominio[]>("/crm/visao-geral", undefined, true),
-  exportarVisaoGeralPdf: (condominioId?: string) =>
-    requestBlob(`/crm/visao-geral/pdf${condominioId ? `?condominio_id=${condominioId}` : ""}`),
+  // `status`/`busca` (opcionais) recortam a tabela de lotes do PDF pelos
+  // mesmos filtros da tela de Disponibilidade — sem eles, exporta o
+  // empreendimento inteiro (comportamento usado pela Visão Geral).
+  exportarVisaoGeralPdf: (opts?: { condominioId?: string; status?: LoteStatus; busca?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.condominioId) params.set("condominio_id", opts.condominioId);
+    if (opts?.status) params.set("status", opts.status);
+    if (opts?.busca) params.set("busca", opts.busca);
+    const query = params.toString();
+    return requestBlob(`/crm/visao-geral/pdf${query ? `?${query}` : ""}`);
+  },
 };
 
 export function formatMoney(v?: number | null): string {
