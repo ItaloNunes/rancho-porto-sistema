@@ -14,6 +14,46 @@ const STATUS_LABEL: Record<ReservaStatus, string> = {
   cancelada: "Cancelada",
 };
 
+// Trocar o status de um pedido mexe de verdade no estoque (ver
+// atualizar_status_reserva no backend): confirmar trava o lote com este
+// cliente, cancelar libera ele na hora pra qualquer corretor reservar de
+// novo. As trocas "de passagem" (pendente/em atendimento/aguardando
+// cliente/análise financeira) só pedem uma confirmação simples; as duas
+// consequentes — confirmar, cancelar, ou desfazer uma reserva que já
+// estava confirmada — pedem uma segunda camada: digitar uma palavra antes
+// de valer, no mesmo espírito da trava de "Vendido" na tela de Lotes.
+type TrocaCritica = "confirmar" | "cancelar" | "desfazer_confirmacao";
+
+const CRITICO_INFO: Record<
+  TrocaCritica,
+  { titulo: string; aviso: string; palavra: string; botao: string; botaoClasse: string }
+> = {
+  confirmar: {
+    titulo: "Confirmar esta reserva",
+    aviso:
+      "Confirmar trava o lote de vez com este cliente — tem o mesmo peso de fechar a venda. Só confirme depois que o negócio estiver realmente certo.",
+    palavra: "CONFIRMAR",
+    botao: "Sim, confirmar esta reserva",
+    botaoClasse: "btn-primary",
+  },
+  cancelar: {
+    titulo: "Cancelar este pedido",
+    aviso:
+      "Cancelar libera o lote imediatamente de volta pra disponibilidade — qualquer corretor pode reservá-lo de novo a partir de agora.",
+    palavra: "CANCELAR",
+    botao: "Sim, cancelar este pedido",
+    botaoClasse: "btn-primary !bg-rust hover:!bg-rust/90",
+  },
+  desfazer_confirmacao: {
+    titulo: "Desfazer uma reserva já confirmada",
+    aviso:
+      "Este pedido já está confirmado. Mudar o status agora desfaz essa confirmação — pode afetar um contrato ou comissão já combinados com o cliente.",
+    palavra: "DESFAZER",
+    botao: "Sim, desfazer mesmo assim",
+    botaoClasse: "btn-primary !bg-rust hover:!bg-rust/90",
+  },
+};
+
 export default function PainelReservas() {
   const { perfil } = useAuth();
   const location = useLocation();
@@ -30,6 +70,20 @@ export default function PainelReservas() {
   // (ela é buscada à parte, de novo, nesta tela) — só aí abre o formulário,
   // senão o combobox monta antes do lote existir na lista e fica em branco.
   const loteAlvoRef = useRef((location.state as { novoPedidoLoteId?: string } | null)?.novoPedidoLoteId ?? null);
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  // Troca "de passagem" entre os 4 status intermediários — confirmação única.
+  const [simples, setSimples] = useState<{ reserva: ReservaComLote; novoStatus: ReservaStatus } | null>(null);
+  // Confirmar, cancelar, ou desfazer uma confirmação — trava em 3 passos
+  // (aviso → digitar a palavra → checkbox + botão final), igual ao
+  // desbloqueio de "Vendido" em PainelLotes.tsx.
+  const [critico, setCritico] = useState<{
+    reserva: ReservaComLote;
+    novoStatus: ReservaStatus;
+    tipo: TrocaCritica;
+    passo: 1 | 2 | 3;
+    digitado: string;
+    ciente: boolean;
+  } | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -54,12 +108,32 @@ export default function PainelReservas() {
   }, [lotes]);
 
   async function mudarStatus(r: ReservaComLote, status: ReservaStatus) {
+    setSalvandoId(r.id);
     try {
       await api.atualizarStatusReserva(r.id, status);
       recarregar();
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSalvandoId(null);
     }
+  }
+
+  function selecionarStatus(r: ReservaComLote, status: ReservaStatus) {
+    if (status === r.status) return;
+    if (r.status === "confirmada") {
+      setCritico({ reserva: r, novoStatus: status, tipo: "desfazer_confirmacao", passo: 1, digitado: "", ciente: false });
+      return;
+    }
+    if (status === "confirmada") {
+      setCritico({ reserva: r, novoStatus: status, tipo: "confirmar", passo: 1, digitado: "", ciente: false });
+      return;
+    }
+    if (status === "cancelada") {
+      setCritico({ reserva: r, novoStatus: status, tipo: "cancelar", passo: 1, digitado: "", ciente: false });
+      return;
+    }
+    setSimples({ reserva: r, novoStatus: status });
   }
 
   async function excluir(r: ReservaComLote) {
@@ -112,17 +186,28 @@ export default function PainelReservas() {
                   <td className="px-4 py-3 text-ink">{r.nome || "—"}</td>
                   <td className="px-4 py-3 text-ink-soft">{r.contato || "—"}</td>
                   <td className="px-4 py-3">
-                    <select
-                      className="input !py-1.5 !text-xs w-auto"
-                      value={r.status}
-                      onChange={(e) => mudarStatus(r, e.target.value as ReservaStatus)}
-                    >
-                      {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                        <option key={v} value={v} disabled={v === "confirmada" && perfil?.papel !== "admin"}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                    {salvandoId === r.id ? (
+                      <span className="inline-flex items-center gap-2 text-xs text-ink-soft">
+                        <span
+                          className="h-3.5 w-3.5 rounded-full border-2 border-border border-t-primary animate-spin"
+                          aria-hidden="true"
+                        />
+                        Salvando...
+                      </span>
+                    ) : (
+                      <select
+                        className="input !py-1.5 !text-xs w-auto"
+                        value={r.status}
+                        disabled={salvandoId !== null}
+                        onChange={(e) => selecionarStatus(r, e.target.value as ReservaStatus)}
+                      >
+                        {Object.entries(STATUS_LABEL).map(([v, label]) => (
+                          <option key={v} value={v} disabled={v === "confirmada" && perfil?.papel !== "admin"}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {r.status !== "confirmada" && r.status !== "cancelada" && (
                       <PrazoBadge prazoIso={r.expira_em} rotulo="pra expirar" />
                     )}
@@ -160,6 +245,133 @@ export default function PainelReservas() {
               recarregar();
             }}
           />
+        </Modal>
+      )}
+
+      {simples && (
+        <Modal onClose={() => setSimples(null)} labelledBy="confirmar-status-reserva-titulo">
+          <div className="p-6">
+            <h2 id="confirmar-status-reserva-titulo" className="text-lg font-bold text-ink mb-2">
+              Confirmar mudança de status
+            </h2>
+            <p className="text-sm text-ink-soft mb-1">
+              Você está prestes a mudar o status do pedido abaixo para{" "}
+              <span className="font-semibold text-ink">{STATUS_LABEL[simples.novoStatus]}</span>:
+            </p>
+            <p className="text-sm text-ink mb-5">
+              <span className="font-semibold">{simples.reserva.lote ? simples.reserva.lote.identificador : "—"}</span>{" "}
+              <span className="text-ink-soft">— {simples.reserva.nome || "sem nome informado"}</span>
+              <br />
+              <span className="text-ink-soft">Status atual: {STATUS_LABEL[simples.reserva.status]}</span>
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-outline !text-xs !py-2" onClick={() => setSimples(null)}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary !text-xs !py-2"
+                onClick={() => {
+                  mudarStatus(simples.reserva, simples.novoStatus);
+                  setSimples(null);
+                }}
+              >
+                Sim, mudar o status
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {critico && (
+        <Modal onClose={() => setCritico(null)} labelledBy="critico-status-reserva-titulo">
+          <div className="p-6">
+            <h2 id="critico-status-reserva-titulo" className="text-lg font-bold text-rust mb-2">
+              {CRITICO_INFO[critico.tipo].titulo}
+            </h2>
+            <p className="text-sm text-ink mb-4">
+              <span className="font-semibold">{critico.reserva.lote ? critico.reserva.lote.identificador : "—"}</span>{" "}
+              <span className="text-ink-soft">— {critico.reserva.nome || "sem nome informado"}</span>
+            </p>
+
+            {critico.passo === 1 && (
+              <>
+                <p className="text-sm text-ink-soft mb-5">{CRITICO_INFO[critico.tipo].aviso}</p>
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setCritico(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-outline !text-xs !py-2 !border-rust !text-rust"
+                    onClick={() => setCritico({ ...critico, passo: 2 })}
+                  >
+                    Entendi, continuar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {critico.passo === 2 && (
+              <>
+                <p className="text-sm text-ink-soft mb-2">
+                  Pra confirmar, digite <span className="font-semibold text-ink">{CRITICO_INFO[critico.tipo].palavra}</span>{" "}
+                  abaixo:
+                </p>
+                <input
+                  autoFocus
+                  className="input mb-5"
+                  placeholder={`Digite ${CRITICO_INFO[critico.tipo].palavra}`}
+                  value={critico.digitado}
+                  onChange={(e) => setCritico({ ...critico, digitado: e.target.value })}
+                />
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setCritico(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-outline !text-xs !py-2 !border-rust !text-rust disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={critico.digitado.trim().toUpperCase() !== CRITICO_INFO[critico.tipo].palavra}
+                    onClick={() => setCritico({ ...critico, passo: 3 })}
+                  >
+                    Continuar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {critico.passo === 3 && (
+              <>
+                <p className="text-sm text-ink-soft mb-4">
+                  Última confirmação: o status vai mudar de{" "}
+                  <span className="font-semibold text-ink">{STATUS_LABEL[critico.reserva.status]}</span> para{" "}
+                  <span className="font-semibold text-ink">{STATUS_LABEL[critico.novoStatus]}</span>.
+                </p>
+                <label className="flex items-start gap-2 text-sm text-ink mb-5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={critico.ciente}
+                    onChange={(e) => setCritico({ ...critico, ciente: e.target.checked })}
+                  />
+                  Estou ciente e quero fazer essa mudança mesmo assim.
+                </label>
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setCritico(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className={`btn !text-xs !py-2 ${CRITICO_INFO[critico.tipo].botaoClasse} disabled:opacity-40 disabled:cursor-not-allowed`}
+                    disabled={!critico.ciente}
+                    onClick={() => {
+                      mudarStatus(critico.reserva, critico.novoStatus);
+                      setCritico(null);
+                    }}
+                  >
+                    {CRITICO_INFO[critico.tipo].botao}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </Modal>
       )}
 
