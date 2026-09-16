@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { api, formatMoney } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
@@ -53,7 +53,7 @@ export default function PainelPropostas() {
     // reconhece mais como resultado direto de um gesto do usuário e bloqueia
     // a aba silenciosamente (sem erro nenhum: parecia que o botão "não fazia
     // nada"). Mesmo padrão já usado em PainelVisaoGeral.tsx/PainelDisponibilidade.tsx.
-    const aba = window.open("", "_blank");
+    const aba = abrirAbaComCarregamento("Gerando PDF da proposta...");
     setGerandoPdf(p.id);
     try {
       const blob = await api.gerarPdfProposta(p.id);

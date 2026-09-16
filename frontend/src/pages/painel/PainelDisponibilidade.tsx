@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, formatMoney } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { Corretor, LoteComCondominio, LoteStatus, ReservaComLote } from "../../types";
 
@@ -128,7 +128,7 @@ export default function PainelDisponibilidade() {
     // Abre a aba já no clique (síncrono) — esperar o PDF terminar de gerar
     // pra só então abrir faz o navegador bloquear a aba sem avisar nada
     // (mesmo ajuste feito na Visão Geral).
-    const aba = window.open("", "_blank");
+    const aba = abrirAbaComCarregamento("Gerando relatório de disponibilidade...");
     setExportando(true);
     try {
       const condominioId = condominioSlug ? lotesDoEmpreendimento[0]?.condominio_id : undefined;

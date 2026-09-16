@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, formatMoney, horasRestantes } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney, horasRestantes } from "../../lib/api";
 import type { ReservaComLote, ReservaStatus, VisaoGeralCondominio } from "../../types";
 
 // Status que ainda contam como "reserva ativa" pro contador do topo — mesmo
@@ -62,7 +62,7 @@ export default function PainelVisaoGeral() {
     // a aba silenciosamente (sem erro nenhum: parecia que o botão "não fazia
     // nada"). Abrindo em branco primeiro e só trocando a URL depois que o
     // blob chega, a aba sempre abre.
-    const aba = window.open("", "_blank");
+    const aba = abrirAbaComCarregamento("Gerando relatório de visão geral...");
     setExportando(true);
     try {
       const blob = await api.exportarVisaoGeralPdf({

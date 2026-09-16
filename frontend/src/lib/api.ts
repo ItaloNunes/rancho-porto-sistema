@@ -135,6 +135,45 @@ export function prewarmBackend(): void {
   fetch(`${API_URL}/health`).catch(() => {});
 }
 
+/** Abre uma aba em branco já com uma mensagem de carregamento, em vez de
+ * deixar "about:blank" parado enquanto o PDF é gerado no backend — sem isso,
+ * se o servidor estiver "dormindo" (Render free-tier, ver RETRY_DELAYS_MS
+ * acima) a aba fica em branco por até ~1 minuto e parece travada/quebrada,
+ * mesmo estando tudo funcionando (só lento). Reaproveitada por toda tela que
+ * gera PDF: PainelPropostas, PainelQualificacoes, PainelDisponibilidade e
+ * PainelVisaoGeral. */
+export function abrirAbaComCarregamento(mensagem: string): Window | null {
+  const aba = window.open("", "_blank");
+  if (aba) {
+    aba.document.write(`<!doctype html>
+<meta charset="utf-8">
+<title>${mensagem}</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    background: #EEF1F5; color: #54607A;
+  }
+  .caixa { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 24px; }
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid #E2E6EC; border-top-color: #0B3D5C;
+    border-radius: 50%; animation: girar .8s linear infinite;
+  }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  p { font-size: 14px; margin: 0; }
+  .aviso { font-size: 12px; color: #8791A6; }
+</style>
+<div class="caixa">
+  <div class="spinner"></div>
+  <p>${mensagem}</p>
+  <p class="aviso">Pode levar até 1 minuto se o sistema estiver inativo há um tempo.</p>
+</div>`);
+    aba.document.close();
+  }
+  return aba;
+}
+
 export const api = {
   // Catálogo público
   listarCondominios: () => request<CondominioResumo[]>("/condominios"),

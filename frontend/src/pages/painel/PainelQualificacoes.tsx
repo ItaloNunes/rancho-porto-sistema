@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { api, formatDateTime, formatMoney } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatDateTime, formatMoney } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS } from "../../types";
 import type { DocumentoTipo, EstadoCivil, QualificacaoComRelacoes, QualificacaoStatus } from "../../types";
@@ -146,7 +146,7 @@ function DetalheQualificacao({
     // await faz o navegador não reconhecer como gesto direto do usuário e
     // bloquear silenciosamente (bug real encontrado em PainelPropostas.tsx —
     // ver comentário lá).
-    const aba = window.open("", "_blank");
+    const aba = abrirAbaComCarregamento("Abrindo documento...");
     setBaixando(documentoId);
     try {
       const { url } = await api.baixarDocumentoQualificacao(q.id, documentoId);
