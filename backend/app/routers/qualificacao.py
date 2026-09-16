@@ -211,7 +211,22 @@ def decidir_qualificacao(
         "analisado_por": admin["id"],
         "motivo_reprovacao": payload.motivo_reprovacao if not payload.aprovado else None,
     }
-    atualizado = sb.table("formularios_qualificacao").update(updates).eq("id", qualificacao_id).execute().data[0]
+    # Atualização condicional: só decide se a qualificação AINDA estiver
+    # 'em_analise' neste instante, não na leitura lá em cima — fecha a
+    # corrida de duas decisões quase simultâneas (duplo clique, duas abas do
+    # painel) que antes conseguiam as duas passar pela checagem acima e
+    # gerar proposta duplicada / sobrescrever a decisão uma da outra.
+    decidido = (
+        sb.table("formularios_qualificacao")
+        .update(updates)
+        .eq("id", qualificacao_id)
+        .eq("status", "em_analise")
+        .execute()
+        .data
+    )
+    if not decidido:
+        raise HTTPException(409, "Esta qualificação acabou de ser decidida por outra pessoa.")
+    atualizado = decidido[0]
 
     if payload.aprovado:
         dados = q.get("dados") or {}

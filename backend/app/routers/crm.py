@@ -18,6 +18,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from postgrest.exceptions import APIError
 
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
@@ -129,7 +130,19 @@ def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin
         "papel": payload.papel,
         "ativo": True,
     }
-    inserido = sb.table("corretores").insert(row).execute().data[0]
+    try:
+        inserido = sb.table("corretores").insert(row).execute().data[0]
+    except APIError as e:
+        # A checagem de "já usado" lá em cima lê a lista antes de gravar —
+        # se dois admins cadastrarem corretor quase ao mesmo tempo com o
+        # mesmo usuário (ou o mesmo nome, gerando o mesmo slug), os dois
+        # podem passar na checagem antes de qualquer um gravar. Quem grava
+        # por último esbarra na constraint unique(usuario) do banco — o
+        # 23505 é o código padrão do Postgres pra isso; convertido aqui pra
+        # um 409 com mensagem clara em vez do 500 genérico do handler global.
+        if e.code == "23505":
+            raise HTTPException(409, "Já existe um login com esse usuário — tente outro.")
+        raise
     return {**inserido, "senha": senha}
 
 
