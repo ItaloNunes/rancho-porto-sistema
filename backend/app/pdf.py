@@ -527,7 +527,13 @@ class _RelatorioPDF(_CastelPDF):
             self.cell(largura, 7, valor)
         self.set_xy(15, y0 + 13)
 
-    _LARGURAS = [18, 30, 24, 30, 26, 26, 42, 24, 26]
+    # "Lote" alargado (30 -> 55mm) pra caber identificadores longos tipo
+    # "LOTE 01 - QUADRA 11" sem cortar o texto (era o motivo do relatório
+    # sair com a coluna cortada) — a folga saiu de colunas com valores
+    # curtos (Tamanho, Entrada, Na entrega, Parcelamento, Prazo entrega,
+    # Status), mantendo a soma dentro da largura útil da página (A4
+    # paisagem, ~267mm).
+    _LARGURAS = [18, 55, 25, 28, 23, 23, 36, 18, 25]
     _CABECALHO = [
         "Quadra",
         "Lote",
