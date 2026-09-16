@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import type { LoteComCondominio, LoteStatus } from "../../types";
 import Modal from "../../components/Modal";
@@ -68,6 +69,7 @@ const CONFIRMACAO: Record<LoteStatus, { titulo: string; aviso: string | null; bo
 };
 
 export default function PainelLotes() {
+  const navigate = useNavigate();
   const [lotes, setLotes] = useState<LoteComCondominio[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
@@ -115,6 +117,15 @@ export default function PainelLotes() {
     if (status === l.status) return;
     if (l.status === "vendido") {
       setDesbloqueio({ lote: l, novoStatus: status, passo: 1, digitado: "", ciente: false });
+      return;
+    }
+    if (status === "reservado") {
+      // Reservar de verdade é abrir um pedido de reserva (nome do
+      // interessado, contato etc.), não só virar o status aqui sem
+      // nenhum dado de quem tá interessado. Por isso manda direto pra
+      // tela de Reservas com o "Novo pedido" já aberto e este lote
+      // pré-selecionado, em vez de confirmar a troca de status nesta tela.
+      navigate("/painel/reservas", { state: { novoPedidoLoteId: l.id } });
       return;
     }
     setPendente({ lote: l, novoStatus: status });

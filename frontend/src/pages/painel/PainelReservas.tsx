@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
 import { api, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -15,10 +16,20 @@ const STATUS_LABEL: Record<ReservaStatus, string> = {
 
 export default function PainelReservas() {
   const { perfil } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [reservas, setReservas] = useState<ReservaComLote[] | null>(null);
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<ReservaComLote | "novo" | null>(null);
+  // Quando a tela de Lotes manda reservar um lote específico, ela navega pra
+  // cá já passando o id dele — abre o "Novo pedido" sozinho, sem a pessoa
+  // precisar procurar o lote de novo no combobox.
+  const [loteIdPreSelecionado, setLoteIdPreSelecionado] = useState<string | null>(null);
+  // Guarda o id vindo da navegação até a lista de lotes terminar de carregar
+  // (ela é buscada à parte, de novo, nesta tela) — só aí abre o formulário,
+  // senão o combobox monta antes do lote existir na lista e fica em branco.
+  const loteAlvoRef = useRef((location.state as { novoPedidoLoteId?: string } | null)?.novoPedidoLoteId ?? null);
 
   function recarregar() {
     setErro(null);
@@ -28,7 +39,19 @@ export default function PainelReservas() {
   useEffect(() => {
     recarregar();
     api.listarTodosLotes().then(setLotes).catch(() => {});
+    // Limpa o state da navegação já de cara pra não reabrir o modal sozinho
+    // se a pessoa recarregar a página ou voltar/avançar pelo histórico.
+    if (loteAlvoRef.current) navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (loteAlvoRef.current && lotes.length > 0) {
+      setLoteIdPreSelecionado(loteAlvoRef.current);
+      setEditando("novo");
+      loteAlvoRef.current = null;
+    }
+  }, [lotes]);
 
   async function mudarStatus(r: ReservaComLote, status: ReservaStatus) {
     try {
@@ -120,12 +143,20 @@ export default function PainelReservas() {
       )}
 
       {editando && (
-        <Modal onClose={() => setEditando(null)} labelledBy="reserva-modal-title">
+        <Modal
+          onClose={() => {
+            setEditando(null);
+            setLoteIdPreSelecionado(null);
+          }}
+          labelledBy="reserva-modal-title"
+        >
           <ReservaForm
             reserva={editando === "novo" ? null : editando}
             lotes={lotes}
+            loteIdInicial={editando === "novo" ? loteIdPreSelecionado : null}
             onSalvo={() => {
               setEditando(null);
+              setLoteIdPreSelecionado(null);
               recarregar();
             }}
           />
@@ -162,14 +193,18 @@ function PrazoBadge({ prazoIso, rotulo = "restantes" }: { prazoIso?: string | nu
 function ReservaForm({
   reserva,
   lotes,
+  loteIdInicial,
   onSalvo,
 }: {
   reserva: ReservaComLote | null;
   lotes: LoteComCondominio[];
+  loteIdInicial?: string | null;
   onSalvo: () => void;
 }) {
-  const [loteId, setLoteId] = useState(reserva?.lote_id ?? "");
-  const [condominioSlug, setCondominioSlug] = useState("");
+  const [loteId, setLoteId] = useState(reserva?.lote_id ?? loteIdInicial ?? "");
+  const [condominioSlug, setCondominioSlug] = useState(
+    () => lotes.find((l) => l.id === loteIdInicial)?.condominio_slug ?? "",
+  );
   const [nome, setNome] = useState(reserva?.nome ?? "");
   const [contato, setContato] = useState(reserva?.contato ?? "");
   const [cpf, setCpf] = useState(reserva?.cpf ?? "");
