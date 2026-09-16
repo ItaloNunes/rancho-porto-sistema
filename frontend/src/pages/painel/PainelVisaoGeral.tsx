@@ -305,7 +305,16 @@ export default function PainelVisaoGeral() {
                         <tr
                           key={item.condominio_id}
                           onClick={() => setFiltro(selecionado ? "todos" : item.condominio_id)}
-                          className={`cursor-pointer border-b border-border last:border-0 hover:bg-surface-alt transition-colors ${
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setFiltro(selecionado ? "todos" : item.condominio_id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={selecionado}
+                          className={`cursor-pointer border-b border-border last:border-0 hover:bg-surface-alt transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 ${
                             selecionado ? "bg-primary-tint" : ""
                           }`}
                         >

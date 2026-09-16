@@ -84,11 +84,11 @@ export default function PainelCorretores() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button className="text-primary text-xs font-medium hover:underline mr-3" onClick={() => setEditando(c)}>
+                    <button className="btn-row btn-row-primary mr-1.5" onClick={() => setEditando(c)}>
                       editar
                     </button>
                     <button
-                      className="text-rust text-xs font-medium hover:underline"
+                      className={`btn-row ${c.ativo ? "btn-row-danger" : "btn-row-success"}`}
                       onClick={() =>
                         c.ativo ? setDesativando({ corretor: c, passo: 1, digitado: "" }) : reativar(c)
                       }

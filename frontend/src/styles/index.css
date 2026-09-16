@@ -31,6 +31,19 @@ body {
 .btn-outline { @apply border border-border bg-surface text-ink hover:border-ink-soft; }
 .btn-ghost { @apply text-ink-soft hover:text-ink hover:bg-surface-alt; }
 
+/* Ações compactas (ex.: "editar"/"excluir" numa linha de tabela) — antes eram
+   só texto sublinhado, o que não parece clicável. Com fundo em tom sutil da
+   própria cor da ação, viram um botão de verdade sem pesar no layout. */
+.btn-row {
+  @apply inline-flex min-h-8 items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-xs font-semibold
+         transition-colors duration-150 select-none active:scale-[0.97]
+         disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+.btn-row-primary { @apply text-primary bg-primary/10 hover:bg-primary/15; }
+.btn-row-danger { @apply text-rust bg-rust/10 hover:bg-rust/15; }
+.btn-row-success { @apply text-sage bg-sage/10 hover:bg-sage/15; }
+.btn-row-neutral { @apply text-ink-soft bg-surface-alt hover:bg-border/70 hover:text-ink; }
+
 .card { @apply bg-surface rounded-lg border border-border shadow-card transition-shadow; }
 
 .input {

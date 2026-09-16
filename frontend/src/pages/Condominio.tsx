@@ -180,10 +180,7 @@ export default function Condominio() {
             <span className="badge bg-primary-tint text-primary">
               {zonaFiltro.label ?? `Quadra ${zonaFiltro.quadra}`}
             </span>
-            <button
-              onClick={() => setZonaFiltro(null)}
-              className="text-xs text-ink-soft hover:text-ink underline underline-offset-2"
-            >
+            <button onClick={() => setZonaFiltro(null)} className="btn-row btn-row-neutral">
               limpar filtro
             </button>
           </div>

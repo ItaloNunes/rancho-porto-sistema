@@ -213,10 +213,10 @@ export default function PainelReservas() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button className="text-primary text-xs font-medium hover:underline mr-3" onClick={() => setEditando(r)}>
+                    <button className="btn-row btn-row-primary mr-1.5" onClick={() => setEditando(r)}>
                       editar
                     </button>
-                    <button className="text-rust text-xs font-medium hover:underline" onClick={() => excluir(r)}>
+                    <button className="btn-row btn-row-danger" onClick={() => excluir(r)}>
                       excluir
                     </button>
                   </td>

@@ -153,7 +153,7 @@ export default function PainelLayout() {
                 {perfil?.nome}{" "}
                 <span className="text-[11px] uppercase tracking-wide text-ink-soft/70">({perfil?.papel})</span>
               </p>
-              <Link to="/definir-senha" className="text-xs font-medium text-primary hover:underline w-fit" onClick={() => setMenuAberto(false)}>
+              <Link to="/definir-senha" className="btn-row btn-row-primary w-fit" onClick={() => setMenuAberto(false)}>
                 Trocar senha
               </Link>
             </div>

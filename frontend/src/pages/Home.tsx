@@ -144,9 +144,12 @@ function CondoCard({ condo }: { condo: CondominioResumo }) {
                 href={condo.landing_page_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative z-20 text-xs font-medium text-ink-soft hover:text-primary hover:underline underline-offset-2"
+                className="btn-row btn-row-neutral relative z-20"
               >
                 Site do empreendimento
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
+                  <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </a>
             )}
             <span

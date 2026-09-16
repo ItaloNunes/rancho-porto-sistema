@@ -79,7 +79,7 @@ export default function PainelQualificacoes() {
                     <span className={`badge ${STATUS_BADGE[q.status]}`}>{STATUS_LABEL[q.status]}</span>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button className="text-primary text-xs font-medium hover:underline" onClick={() => setAberta(q)}>
+                    <button className="btn-row btn-row-primary" onClick={() => setAberta(q)}>
                       ver detalhes
                     </button>
                   </td>
@@ -274,7 +274,7 @@ function DetalheQualificacao({
                     </span>
                     {doc && (
                       <button
-                        className="text-primary text-xs font-medium hover:underline shrink-0 disabled:opacity-50"
+                        className="btn-row btn-row-primary shrink-0"
                         disabled={baixando === doc.id}
                         onClick={() => baixar(doc.id)}
                       >

@@ -73,10 +73,10 @@ export default function PainelClientes() {
                   <td className="px-4 py-3 text-ink-soft">{c.origem || "—"}</td>
                   {isAdmin && <td className="px-4 py-3 text-ink-soft">{nomeCorretor(c.corretor_id)}</td>}
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button className="text-primary text-xs font-medium hover:underline mr-3" onClick={() => setEditando(c)}>
+                    <button className="btn-row btn-row-primary mr-1.5" onClick={() => setEditando(c)}>
                       editar
                     </button>
-                    <button className="text-rust text-xs font-medium hover:underline" onClick={() => excluir(c)}>
+                    <button className="btn-row btn-row-danger" onClick={() => excluir(c)}>
                       excluir
                     </button>
                   </td>

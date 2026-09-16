@@ -125,7 +125,7 @@ export default function PainelPropostas() {
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
-                      className="text-primary text-xs font-medium hover:underline disabled:opacity-50"
+                      className="btn-row btn-row-primary"
                       disabled={gerandoPdf === p.id || !p.lote || !p.cliente || !STATUS_LIBERA_PDF.includes(p.status)}
                       title={
                         !p.lote || !p.cliente
