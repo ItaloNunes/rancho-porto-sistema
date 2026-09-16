@@ -476,7 +476,7 @@ def atualizar_status_proposta(
     proposta_id: str, payload: PropostaStatusUpdate, corretor: dict = Depends(get_current_corretor)
 ):
     sb = get_supabase()
-    existente = sb.table("propostas").select("id, lote_id, corretor_id").eq("id", proposta_id).limit(
+    existente = sb.table("propostas").select("id, lote_id, cliente_id, corretor_id").eq("id", proposta_id).limit(
         1
     ).execute().data
     if not existente:
@@ -491,7 +491,49 @@ def atualizar_status_proposta(
     ]
     if payload.status == "aceita":
         sb.table("lotes").update({"status": "vendido"}).eq("id", existente["lote_id"]).execute()
+    elif payload.status == "aprovada":
+        _gerar_reserva_da_proposta_aprovada(sb, proposta_id, existente)
     return atualizado
+
+
+def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) -> None:
+    """Aprovar a proposta já tranca o lote com esse cliente pra valer — em vez
+    de o admin precisar abrir "Novo pedido" em Reservas e digitar tudo de
+    novo, a reserva nasce sozinha aqui, reaproveitando nome/telefone/CPF do
+    cliente que o corretor já cadastrou ao criar a proposta (ver
+    PropostaFormularioCompleto.tsx). Confere antes se já não existe uma
+    reserva com esse proposta_id: reprocessar a aprovação (ex.: um retry no
+    front) não pode duplicar a reserva.
+    """
+    ja_existe = sb.table("reservas").select("id").eq("proposta_id", proposta_id).limit(1).execute().data
+    if ja_existe:
+        return
+
+    cliente = (
+        sb.table("clientes").select("nome, telefone, cpf").eq("id", proposta["cliente_id"]).limit(1).execute().data
+    )
+    cliente = cliente[0] if cliente else {}
+
+    lote = sb.table("lotes").select("status").eq("id", proposta["lote_id"]).limit(1).execute().data
+    lote_status = lote[0]["status"] if lote else None
+
+    sb.table("reservas").insert(
+        {
+            "lote_id": proposta["lote_id"],
+            "cliente_id": proposta["cliente_id"],
+            "corretor_id": proposta.get("corretor_id"),
+            "proposta_id": proposta_id,
+            "nome": cliente.get("nome"),
+            "contato": cliente.get("telefone"),
+            "cpf": cliente.get("cpf"),
+            "status": "pendente",
+            "observacao": "Reserva gerada automaticamente pela aprovação da proposta.",
+        }
+    ).execute()
+    # Só sobe o status se o lote ainda estava 'disponivel' — não sobrescreve
+    # um lote que por algum motivo já esteja 'vendido' ou já 'reservado'.
+    if lote_status == "disponivel":
+        sb.table("lotes").update({"status": "reservado"}).eq("id", proposta["lote_id"]).execute()
 
 
 # ---------------------------------------------------------------------------
@@ -606,8 +648,37 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
     condos = {c["id"]: c for c in sb.table("condominios").select("id, nome, slug").execute().data}
     lotes = sb.table("lotes").select("*").order("condominio_id").order("lote_numero").execute().data
+
+    # "Observação" com data/hora que a tela de Lotes mostra assim que um
+    # corretor cria uma proposta (mesmo em rascunho) pra aquele lote — avisa
+    # o admin que tem gente em negociação antes mesmo de virar reserva (ver
+    # PainelLotes.tsx). Só propostas ainda abertas contam: aprovada já virou
+    # reserva de verdade (ver _gerar_reserva_da_proposta_aprovada acima) e
+    # recusada/cancelada encerram o assunto — em ambos os casos a observação
+    # some sozinha. `.order("created_at")` + sobrescrever no dict garante
+    # que, se por acaso existir mais de uma proposta aberta pro mesmo lote, é
+    # a mais recente que aparece.
+    propostas_abertas = (
+        sb.table("propostas")
+        .select("lote_id, status, created_at")
+        .in_("status", ["rascunho", "aguardando_aprovacao"])
+        .order("created_at")
+        .execute()
+        .data
+    )
+    proposta_por_lote = {p["lote_id"]: p for p in propostas_abertas}
+
     resultado = []
     for l in lotes:
         condo = condos.get(l["condominio_id"], {})
-        resultado.append({**l, "condominio_nome": condo.get("nome", "?"), "condominio_slug": condo.get("slug", "")})
+        proposta = proposta_por_lote.get(l["id"])
+        resultado.append(
+            {
+                **l,
+                "condominio_nome": condo.get("nome", "?"),
+                "condominio_slug": condo.get("slug", ""),
+                "proposta_pendente_status": proposta["status"] if proposta else None,
+                "proposta_pendente_desde": proposta["created_at"] if proposta else None,
+            }
+        )
     return resultado

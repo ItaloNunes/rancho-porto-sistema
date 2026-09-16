@@ -199,6 +199,11 @@ class Reserva(BaseModel):
     status: ReservaStatus
     cliente_id: Optional[str] = None
     corretor_id: Optional[str] = None
+    # Preenchido só quando a própria reserva nasceu sozinha, a partir da
+    # aprovação de uma proposta (ver atualizar_status_proposta em
+    # routers/crm.py) — None em toda reserva criada do jeito normal (link
+    # público ou formulário do painel).
+    proposta_id: Optional[str] = None
     analise_prazo_em: Optional[datetime] = None
     # Prazo duro de 24h — passou disso sem confirmar, a reserva expira
     # sozinha (ver _expirar_vencidas em routers/reservas.py). Só None em
@@ -222,6 +227,16 @@ class LoteComCondominio(Lote):
 
     condominio_nome: str
     condominio_slug: str
+    # "Observação" com data/hora que a tela de Lotes mostra assim que um
+    # corretor cria uma proposta (mesmo em rascunho) pra esse lote — avisa o
+    # admin que tem gente em negociação antes mesmo de virar reserva. Vem só
+    # de propostas ainda abertas (rascunho/aguardando_aprovacao); some
+    # sozinho quando a proposta é aprovada (aí já virou reserva, ver
+    # atualizar_status_proposta) ou é recusada/cancelada. Tipado como str
+    # solto (não PropostaStatus) só porque esse Literal é definido mais
+    # abaixo no arquivo, depois da seção de lotes.
+    proposta_pendente_status: Optional[str] = None
+    proposta_pendente_desde: Optional[datetime] = None
 
 
 # ---------------------------------------------------------------------------

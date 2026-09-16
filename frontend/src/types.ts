@@ -185,6 +185,11 @@ export interface ReservaComLote extends Reserva {
 export interface LoteComCondominio extends Lote {
   condominio_nome: string;
   condominio_slug: string;
+  // "Observação" com data/hora de uma proposta ainda aberta (rascunho ou
+  // aguardando aprovação) pra esse lote — ver GET /crm/lotes. null quando
+  // não tem nenhuma proposta pendente no momento.
+  proposta_pendente_status?: string | null;
+  proposta_pendente_desde?: string | null;
 }
 
 export interface VisaoGeralCondominio {

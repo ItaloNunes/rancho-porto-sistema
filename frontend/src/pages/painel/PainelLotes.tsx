@@ -10,6 +10,24 @@ const STATUS_LABEL: Record<LoteStatus, string> = {
   vendido: "Vendido",
 };
 
+// Rótulo curto da observação de proposta pendente (ver comentário de
+// proposta_pendente_status em types.ts) — só esses dois status chegam a
+// aparecer aqui, mas cobre qualquer outro valor inesperado com o texto cru
+// em vez de sumir a observação sem explicação.
+const PROPOSTA_STATUS_LABEL: Record<string, string> = {
+  rascunho: "rascunho",
+  aguardando_aprovacao: "aguardando aprovação",
+};
+
+function formatarDataHora(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // Mesma paleta usada na Disponibilidade — linha inteira tingida pela cor do
 // status, pra dar de relance a mesma leitura visual em todo o painel.
 // Opacidade mais alta que o normal (15/22 em vez de 10/15): num relance
@@ -182,7 +200,15 @@ export default function PainelLotes() {
               {filtrados.map((l) => (
                 <tr key={l.id} className={`border-b border-border last:border-0 transition-colors ${LINHA_COR[l.status]}`}>
                   <td className="px-4 py-3 text-ink-soft">{l.condominio_nome}</td>
-                  <td className="px-4 py-3 font-medium text-ink">{l.identificador}</td>
+                  <td className="px-4 py-3 font-medium text-ink">
+                    {l.identificador}
+                    {l.proposta_pendente_desde && (
+                      <div className="mt-1 text-[11px] font-normal text-ink-soft">
+                        📝 Proposta ({PROPOSTA_STATUS_LABEL[l.proposta_pendente_status ?? ""] ?? l.proposta_pendente_status}
+                        ) desde {formatarDataHora(l.proposta_pendente_desde)}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-ink-soft">{l.tamanho_m2.toLocaleString("pt-BR")} m²</td>
                   <td className="px-4 py-3">
                     {salvandoId === l.id ? (
