@@ -37,6 +37,7 @@ class CondominioResumo(BaseModel):
     descricao: Optional[str] = None
     logo_url: Optional[str] = None
     hero_image_url: Optional[str] = None
+    landing_page_url: Optional[str] = None
     total_lotes: int = 0
     total_disponiveis: int = 0
 
