@@ -341,7 +341,10 @@ export const api = {
   }) => request<Proposta>("/crm/propostas", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarStatusProposta: (id: string, status: PropostaStatus) =>
     request<Proposta>(`/crm/propostas/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
-  gerarPdfProposta: (id: string) => requestBlob(`/crm/propostas/${id}/pdf`),
+  // Rota sem "pdf" na URL de propósito — ver comentário em
+  // backend/app/routers/crm.py::gerar_pdf_proposta (bloqueador de
+  // anúncio/rastreador barrando a URL só por conter "pdf" no caminho).
+  gerarPdfProposta: (id: string) => requestBlob(`/crm/propostas/${id}/documento`),
 
   // Painel — fila de pedidos de reserva vindos do catálogo público (+ os criados manualmente)
   listarReservas: () => request<ReservaComLote[]>("/reservas", undefined, true),
@@ -383,7 +386,7 @@ export const api = {
     if (opts?.status) params.set("status", opts.status);
     if (opts?.busca) params.set("busca", opts.busca);
     const query = params.toString();
-    return requestBlob(`/crm/visao-geral/pdf${query ? `?${query}` : ""}`);
+    return requestBlob(`/crm/visao-geral/relatorio${query ? `?${query}` : ""}`);
   },
 };
 

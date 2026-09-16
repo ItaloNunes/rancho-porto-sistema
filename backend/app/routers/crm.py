@@ -401,10 +401,18 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     return sb.table("propostas").update(updates).eq("id", proposta_id).execute().data[0]
 
 
-@router.get("/propostas/{proposta_id}/pdf")
+@router.get("/propostas/{proposta_id}/documento")
 def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
     """Gera o PDF da proposta em papel timbrado (logo Castel), com os dados do
     lote, cliente, corretor e as condições comerciais — pra enviar ao cliente.
+
+    Rota deliberadamente NÃO tem "pdf" na URL (era /propostas/{id}/pdf antes) —
+    bloqueadores de anúncio/rastreadores (Brave Shields, uBlock, etc.) usam
+    listas de filtro com regras genéricas tipo "*/pdf*" que casam com URL só
+    pelo caminho, mesmo sendo uma API de negócio e não anúncio nenhum. Isso
+    fazia o fetch() do navegador morrer com erro de rede puro (nem chegava a
+    ter resposta), 100% reproduzível pra quem tivesse esse tipo de bloqueio
+    ativado — indistinguível de "servidor fora do ar" do lado do frontend.
     """
     sb = get_supabase()
     # Antes eram até 4 idas e voltas ao Supabase em série (proposta, depois
@@ -601,7 +609,7 @@ def visao_geral(_admin: dict = Depends(require_admin)):
     return resumo
 
 
-@router.get("/visao-geral/pdf")
+@router.get("/visao-geral/relatorio")
 def visao_geral_pdf(
     condominio_id: str | None = None,
     status: str | None = None,
