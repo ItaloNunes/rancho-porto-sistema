@@ -27,6 +27,28 @@ VERMELHO = (196, 42, 42)
 CINZA = (110, 110, 120)
 CINZA_CLARO = (240, 241, 245)
 
+# CAUSA REAL do "gerar PDF" falhando com "Não foi possível conectar ao
+# servidor" (100% reproduzível): a fonte core "Helvetica" só suporta
+# latin-1. Qualquer texto livre (observações, nome, endereço...) com um
+# travessão "—", aspas curvas, reticências "…" etc. — comuns em texto colado
+# do WhatsApp/Word ou digitado com corretor automático — fazia o fpdf2
+# lançar FPDFUnicodeEncodingException NO MEIO da geração. Essa exceção não
+# tratada derrubava a resposta sem chegar a virar um HTTP normal, e o
+# fetch() do painel via isso como "erro de rede" puro, indistinguível de
+# servidor fora do ar. Ver normalize_text() abaixo, que corrige isso de vez
+# pra qualquer campo de texto, atual ou futuro.
+_TROCAS_CARACTERES = {
+    "—": "-",   # — em dash
+    "–": "-",   # – en dash
+    "‘": "'",   # ‘
+    "’": "'",   # ’
+    "“": '"',   # “
+    "”": '"',   # ”
+    "…": "...", # …
+    " ": " ",   # espaço sem quebra
+    "•": "-",   # •
+}
+
 
 def _fmt_money(v: Optional[float]) -> str:
     if v is None:
@@ -78,6 +100,18 @@ class _CastelPDF(FPDF):
     # instância antes do add_page() quando o documento é de um empreendimento
     # só (ver gerar_visao_geral_pdf). None = mostra só a logo Castel.
     LOGO_EMPREENDIMENTO: Optional[Path] = None
+
+    def normalize_text(self, text: str) -> str:
+        """Sobrescreve o normalize_text do fpdf2 (chamado por cell/multi_cell
+        antes de desenhar QUALQUER texto) pra nunca mais lançar
+        FPDFUnicodeEncodingException — troca os caracteres comuns fora do
+        latin-1 (ver _TROCAS_CARACTERES) e, pra qualquer outro que sobrar,
+        substitui pelo "?" em vez de derrubar a geração inteira do PDF."""
+        if not self.is_ttf_font and self.core_fonts_encoding:
+            for original, troca in _TROCAS_CARACTERES.items():
+                text = text.replace(original, troca)
+            return text.encode(self.core_fonts_encoding, "replace").decode("latin-1")
+        return text
 
     def header(self):
         if LOGO_PATH.exists():
