@@ -84,6 +84,12 @@ async function main() {
   </head>`;
 
     let html = baseHtml.replace(/<title>.*?<\/title>/s, `<title>${escapeHtml(titulo)}</title>`);
+    // O index.html base já tem og:*/twitter:* genéricos (catálogo como um
+    // todo, ver index.html) — sem removê-los aqui, a página por empreendimento
+    // ficaria com as tags duplicadas (as genéricas + estas específicas), e
+    // cada rede social escolhe uma ordem diferente pra desempatar. Tira as
+    // genéricas antes de injetar as específicas, pra nunca ter ambiguidade.
+    html = html.replace(/\s*<meta\s+(?:property="og:[^"]*"|name="twitter:[^"]*")[^>]*\/>\n?/g, "");
     html = html.replace("</head>", metaTags);
 
     fs.writeFileSync(path.join(outDir, `${c.slug}.html`), html);

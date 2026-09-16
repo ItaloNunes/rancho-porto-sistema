@@ -247,10 +247,8 @@ export const api = {
   // Catálogo público
   listarCondominios: () => request<CondominioResumo[]>("/condominios"),
   obterCondominio: (slug: string) => request<CondominioDetalhe>(`/condominios/${slug}`),
-  reservarLote: (
-    loteId: string,
-    payload: { nome?: string; contato: string; observacao?: string; website?: string; carregado_em?: number },
-  ) => request(`/lotes/${loteId}/reservar`, { method: "POST", body: JSON.stringify(payload) }),
+  // reservarLote foi removido: reserva agora só é criada pelo corretor, pelo
+  // painel (api.criarReserva, abaixo) — ver backend/app/routers/reservas.py.
 
   // Qualificação — link público que o cliente final preenche (sem login, só
   // pela posse do token). Ver backend/app/routers/qualificacao.py.

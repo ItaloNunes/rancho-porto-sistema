@@ -1,14 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
-from ..antispam import checar_honeypot, checar_rate_limit, checar_tempo_minimo, client_ip
 from ..database import get_supabase
 from ..schemas import (
     Reserva,
     ReservaComLote,
     ReservaCreateInterna,
-    ReservaPublicaCreate,
     ReservaStatusUpdate,
     ReservaUpdate,
 )
@@ -49,35 +47,14 @@ def _expirar_vencidas(sb) -> int:
 
 
 @router.post("/{lote_id}/reservar", response_model=Reserva)
-def reservar_lote(lote_id: str, payload: ReservaPublicaCreate, request: Request):
-    """Pedido de reserva feito pelo cliente no catálogo público.
-
-    Não é uma reserva confirmada: cria um pedido 'pendente' e marca o lote
-    como 'reservado' para tirá-lo da vitrine enquanto a imobiliária confere
-    e formaliza (ou libera de volta, se cair). Como não tem login, passa
-    antes pelas checagens anti-spam (ver ..antispam).
+def reservar_lote(lote_id: str):
+    """DESATIVADO — decisão de negócio: só o corretor pode criar uma reserva
+    (pelo painel, ver `criar_reserva` logo abaixo); o cliente não reserva mais
+    sozinho pelo catálogo público (formulário removido de DetalheLote.tsx).
+    Mantida a rota, em vez de apagada, só pra quem ainda chamar essa URL
+    antiga receber uma mensagem clara em vez de um 404 sem explicação.
     """
-    checar_honeypot(payload.website)
-    checar_tempo_minimo(payload.carregado_em)
-    checar_rate_limit(client_ip(request))
-
-    sb = get_supabase()
-    lote = sb.table("lotes").select("*").eq("id", lote_id).limit(1).execute().data
-    if not lote:
-        raise HTTPException(404, "Lote não encontrado.")
-    lote = lote[0]
-    if lote["status"] != "disponivel":
-        raise HTTPException(409, "Este lote não está mais disponível.")
-
-    dados = payload.model_dump(exclude={"website", "carregado_em"})
-    reserva = (
-        sb.table("reservas")
-        .insert({"lote_id": lote_id, **dados})
-        .execute()
-        .data[0]
-    )
-    sb.table("lotes").update({"status": "reservado"}).eq("id", lote_id).execute()
-    return reserva
+    raise HTTPException(403, "Reservas não são mais feitas diretamente pelo cliente — fale com um corretor.")
 
 
 @admin_router.get("", response_model=list[ReservaComLote])
