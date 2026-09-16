@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { abrirAbaComCarregamento, api, formatMoney } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
@@ -70,8 +70,9 @@ export default function PainelPropostas() {
       }
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
-      aba?.close();
-      alert(e instanceof Error ? e.message : String(e));
+      const mensagem = e instanceof Error ? e.message : String(e);
+      mostrarErroNaAba(aba, mensagem);
+      alert(mensagem);
     } finally {
       setGerandoPdf(null);
     }

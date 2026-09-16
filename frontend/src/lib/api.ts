@@ -64,28 +64,54 @@ function extrairErro(body: unknown, fallback: string): string {
 // pode aparecer uma vez; tentar de novo depois de mais um minuto resolve.
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000, 8000]; // ~55s de espera total
 
+// Teto de segurança pra chamada inteira (todas as tentativas somadas): se uma
+// única tentativa de fetch ficar pendurada sem nunca resolver nem rejeitar —
+// por exemplo, a conexão fica "presa" no meio de um cold start em vez de
+// falhar rápido com 502/503/504 — o `await fetch(...)` abaixo esperaria pra
+// sempre e a tela ficaria travada (aba de PDF em branco pra sempre, sem
+// nenhum erro aparecendo), pois o retry só reage a uma Promise que já
+// terminou. O AbortController garante que, no pior caso, a chamada sempre
+// desiste e lança um erro dentro desse prazo — nunca fica pendurada. Deixa
+// uma folga de ~15s sobre a soma de RETRY_DELAYS_MS + tempo de resposta.
+const TEMPO_MAXIMO_TOTAL_MS = 75_000;
+
 function respostaTemporariamenteIndisponivel(res: Response): boolean {
   return [502, 503, 504].includes(res.status);
 }
 
 async function fetchComRetry(url: string, init: RequestInit): Promise<Response> {
+  const prazoFinal = Date.now() + TEMPO_MAXIMO_TOTAL_MS;
   for (let tentativa = 0; ; tentativa++) {
     let res: Response | null = null;
     let erroDeRede: unknown = null;
+    let estourouPrazo = false;
+    const controlador = new AbortController();
+    const tempoRestante = Math.max(prazoFinal - Date.now(), 1000);
+    const cronometro = setTimeout(() => {
+      estourouPrazo = true;
+      controlador.abort();
+    }, tempoRestante);
     try {
-      res = await fetch(url, init);
+      res = await fetch(url, { ...init, signal: controlador.signal });
     } catch (e) {
       erroDeRede = e;
+    } finally {
+      clearTimeout(cronometro);
     }
-    const podeTentarDeNovo = tentativa < RETRY_DELAYS_MS.length;
+    const aindaDaTempo = Date.now() < prazoFinal;
+    const podeTentarDeNovo = tentativa < RETRY_DELAYS_MS.length && aindaDaTempo;
     const falhouPorRede = erroDeRede !== null;
     const falhouPorIndisponibilidade = res !== null && respostaTemporariamenteIndisponivel(res);
     if ((falhouPorRede || falhouPorIndisponibilidade) && podeTentarDeNovo) {
-      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[tentativa]));
+      const espera = Math.min(RETRY_DELAYS_MS[tentativa], Math.max(prazoFinal - Date.now(), 0));
+      await new Promise((r) => setTimeout(r, espera));
       continue;
     }
     if (falhouPorRede) {
-      throw new Error("Não foi possível conectar ao servidor. Verifique sua internet e tente novamente em instantes.");
+      const mensagem = estourouPrazo
+        ? "O servidor demorou demais pra responder. Tente novamente em instantes."
+        : "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente em instantes.";
+      throw new Error(mensagem);
     }
     return res as Response;
   }
@@ -163,15 +189,58 @@ export function abrirAbaComCarregamento(mensagem: string): Window | null {
   @keyframes girar { to { transform: rotate(360deg); } }
   p { font-size: 14px; margin: 0; }
   .aviso { font-size: 12px; color: #8791A6; }
+  .marca { font-size: 10px; color: #B7BECC; font-family: monospace; }
 </style>
 <div class="caixa">
   <div class="spinner"></div>
   <p>${mensagem}</p>
-  <p class="aviso">Pode levar até 1 minuto se o sistema estiver inativo há um tempo.</p>
+  <p class="aviso">Pode levar até 75 segundos se o sistema estiver inativo há um tempo — nunca mais que isso.</p>
+  <p class="marca">build pdf-fix-2</p>
 </div>`);
     aba.document.close();
   }
   return aba;
+}
+
+/** Escreve o erro real DENTRO da aba que já estava aberta (em vez de só um
+ * alert(), que em alguns navegadores/extensões de privacidade pode ser
+ * suprimido ou passar despercebido se a aba perdeu o foco) — assim, se algo
+ * der errado, sempre existe alguma coisa visível na própria aba, nunca fica
+ * "about:blank" indefinidamente sem explicação nenhuma. Usada nos mesmos 4
+ * lugares que abrem aba com abrirAbaComCarregamento(). */
+export function mostrarErroNaAba(aba: Window | null, mensagem: string): void {
+  if (!aba || aba.closed) return;
+  try {
+    aba.document.open();
+    aba.document.write(`<!doctype html>
+<meta charset="utf-8">
+<title>Não foi possível gerar o arquivo</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    background: #FBEAEA; color: #7A2323;
+  }
+  .caixa { max-width: 440px; text-align: center; padding: 28px; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 16px; margin: 0; }
+  p { font-size: 14px; margin: 0; line-height: 1.5; }
+  button {
+    margin-top: 6px; align-self: center; border: 1px solid #7A2323; background: transparent;
+    color: #7A2323; border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #F3D6D6; }
+</style>
+<div class="caixa">
+  <h1>Não foi possível gerar o arquivo</h1>
+  <p>${mensagem.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+  <button onclick="window.close()">Fechar esta aba</button>
+</div>`);
+    aba.document.close();
+  } catch {
+    // Se nem escrever na aba funcionar, não sobra mais nada que dê pra fazer
+    // por ela — o alert() no catch de cada tela continua como último recurso.
+  }
 }
 
 export const api = {

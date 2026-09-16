@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { abrirAbaComCarregamento, api, formatMoney } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { Corretor, LoteComCondominio, LoteStatus, ReservaComLote } from "../../types";
 
@@ -148,8 +148,9 @@ export default function PainelDisponibilidade() {
       }
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
-      aba?.close();
-      alert(e instanceof Error ? e.message : String(e));
+      const mensagem = e instanceof Error ? e.message : String(e);
+      mostrarErroNaAba(aba, mensagem);
+      alert(mensagem);
     } finally {
       setExportando(false);
     }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { abrirAbaComCarregamento, api, formatMoney, horasRestantes } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney, horasRestantes, mostrarErroNaAba } from "../../lib/api";
 import type { ReservaComLote, ReservaStatus, VisaoGeralCondominio } from "../../types";
 
 // Status que ainda contam como "reserva ativa" pro contador do topo — mesmo
@@ -81,8 +81,9 @@ export default function PainelVisaoGeral() {
       }
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
-      aba?.close();
-      alert(e instanceof Error ? e.message : String(e));
+      const mensagem = e instanceof Error ? e.message : String(e);
+      mostrarErroNaAba(aba, mensagem);
+      alert(mensagem);
     } finally {
       setExportando(false);
     }

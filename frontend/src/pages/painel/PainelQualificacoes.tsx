@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { abrirAbaComCarregamento, api, formatDateTime, formatMoney } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatDateTime, formatMoney, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS } from "../../types";
 import type { DocumentoTipo, EstadoCivil, QualificacaoComRelacoes, QualificacaoStatus } from "../../types";
@@ -156,8 +156,9 @@ function DetalheQualificacao({
         window.open(url, "_blank");
       }
     } catch (e) {
-      aba?.close();
-      alert(e instanceof Error ? e.message : String(e));
+      const mensagem = e instanceof Error ? e.message : String(e);
+      mostrarErroNaAba(aba, mensagem);
+      alert(mensagem);
     } finally {
       setBaixando(null);
     }
