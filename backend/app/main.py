@@ -1,13 +1,48 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import settings
+from .database import get_supabase
 from .routers import condominios, crm, qualificacao, reservas
+from .routers.reservas import _expirar_vencidas
 
 logger = logging.getLogger(__name__)
+
+# Reforça a regra de 24h (ver _expirar_vencidas em routers/reservas.py)
+# sozinho, sem depender de alguém abrir a tela de Reservas no painel (a
+# checagem lá é "preguiçosa", só roda dentro de GET /reservas) nem de um
+# cron/workflow externo pra chamar POST /reservas/expirar-vencidas. Enquanto
+# o processo do backend estiver de pé — o workflow keep-alive.yml já
+# existente cuida de não deixar ele dormir no plano free do Render — essa
+# tarefa de fundo roda a mesma rotina a cada 15 minutos por conta própria.
+INTERVALO_EXPIRACAO_SEGUNDOS = 15 * 60
+
+
+async def _loop_expirar_reservas() -> None:
+    while True:
+        try:
+            expiradas = _expirar_vencidas(get_supabase())
+            if expiradas:
+                logger.info("Expiração automática: %d reserva(s) vencida(s) liberada(s).", expiradas)
+        except Exception:
+            # Uma falha aqui (ex.: Supabase fora do ar por um instante) não
+            # pode derrubar o backend inteiro nem parar de tentar depois —
+            # só loga e tenta de novo no próximo ciclo.
+            logger.exception("Falha ao rodar a expiração automática de reservas.")
+        await asyncio.sleep(INTERVALO_EXPIRACAO_SEGUNDOS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    tarefa = asyncio.create_task(_loop_expirar_reservas())
+    yield
+    tarefa.cancel()
+
 
 app = FastAPI(
     title="Rancho Porto | Catálogo de Lotes",
@@ -18,6 +53,7 @@ app = FastAPI(
     docs_url="/docs" if settings.enable_docs else None,
     redoc_url="/redoc" if settings.enable_docs else None,
     openapi_url="/openapi.json" if settings.enable_docs else None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
