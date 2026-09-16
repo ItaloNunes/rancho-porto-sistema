@@ -142,11 +142,21 @@ function DetalheQualificacao({
   const [baixando, setBaixando] = useState<string | null>(null);
 
   async function baixar(documentoId: string) {
+    // Mesmo cuidado do PDF de proposta/visão geral: abrir a aba só depois do
+    // await faz o navegador não reconhecer como gesto direto do usuário e
+    // bloquear silenciosamente (bug real encontrado em PainelPropostas.tsx —
+    // ver comentário lá).
+    const aba = window.open("", "_blank");
     setBaixando(documentoId);
     try {
       const { url } = await api.baixarDocumentoQualificacao(q.id, documentoId);
-      window.open(url, "_blank");
+      if (aba) {
+        aba.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
     } catch (e) {
+      aba?.close();
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setBaixando(null);

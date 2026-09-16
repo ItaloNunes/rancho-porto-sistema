@@ -48,13 +48,29 @@ export default function PainelPropostas() {
   const [gerandoPdf, setGerandoPdf] = useState<string | null>(null);
 
   async function abrirPdf(p: PropostaDetalhe) {
+    // A aba precisa abrir *na hora do clique* (síncrono) — se esperarmos o
+    // fetch do PDF terminar pra só então chamar window.open, o navegador não
+    // reconhece mais como resultado direto de um gesto do usuário e bloqueia
+    // a aba silenciosamente (sem erro nenhum: parecia que o botão "não fazia
+    // nada"). Mesmo padrão já usado em PainelVisaoGeral.tsx/PainelDisponibilidade.tsx.
+    const aba = window.open("", "_blank");
     setGerandoPdf(p.id);
     try {
       const blob = await api.gerarPdfProposta(p.id);
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
+      if (aba) {
+        aba.location.href = url;
+      } else {
+        // Mesmo a abertura em branco pode ser bloqueada (config restritiva do
+        // navegador) — nesse caso, baixa o arquivo direto em vez de silenciar.
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `proposta-${p.lote?.identificador ?? p.id}.pdf`;
+        link.click();
+      }
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
+      aba?.close();
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setGerandoPdf(null);
