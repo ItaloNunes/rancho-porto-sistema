@@ -507,7 +507,27 @@ def atualizar_status_proposta(
         0
     ]
     if payload.status == "aceita":
-        sb.table("lotes").update({"status": "vendido"}).eq("id", existente["lote_id"]).execute()
+        # Nada no fluxo hoje obriga passar por 'aprovada' antes de 'aceita'
+        # (um corretor pode pular direto pra cá) — então duas propostas
+        # diferentes pro mesmo lote podem chegar em 'aceita' sem que a etapa
+        # de aprovação tenha travado o lote antes. O UPDATE condicional
+        # abaixo garante, na escrita, que não existe venda dupla: só marca
+        # 'vendido' se o lote AINDA não estiver 'vendido' nesse instante: 0
+        # linhas afetadas quer dizer que outra proposta já venceu essa
+        # corrida, e essa é rejeitada com um erro claro em vez de sobrescrever
+        # silenciosamente quem já comprou.
+        vendeu = (
+            sb.table("lotes")
+            .update({"status": "vendido"})
+            .eq("id", existente["lote_id"])
+            .neq("status", "vendido")
+            .execute()
+            .data
+        )
+        if not vendeu:
+            raise HTTPException(
+                409, "Este lote já consta como vendido (por outra proposta) — confira antes de aceitar esta."
+            )
     elif payload.status == "aprovada":
         _gerar_reserva_da_proposta_aprovada(sb, proposta_id, existente)
     return atualizado
@@ -531,9 +551,6 @@ def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) ->
     )
     cliente = cliente[0] if cliente else {}
 
-    lote = sb.table("lotes").select("status").eq("id", proposta["lote_id"]).limit(1).execute().data
-    lote_status = lote[0]["status"] if lote else None
-
     sb.table("reservas").insert(
         {
             "lote_id": proposta["lote_id"],
@@ -547,10 +564,15 @@ def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) ->
             "observacao": "Reserva gerada automaticamente pela aprovação da proposta.",
         }
     ).execute()
-    # Só sobe o status se o lote ainda estava 'disponivel' — não sobrescreve
-    # um lote que por algum motivo já esteja 'vendido' ou já 'reservado'.
-    if lote_status == "disponivel":
-        sb.table("lotes").update({"status": "reservado"}).eq("id", proposta["lote_id"]).execute()
+    # Atualização condicional (atômica no Postgres): só sobe pra 'reservado'
+    # se o lote AINDA estiver 'disponivel' neste instante — não confia num
+    # status lido antes da escrita (podia ter mudado entre a leitura e aqui,
+    # ex.: duas propostas pro mesmo lote aprovadas quase juntas). Se não
+    # estiver mais disponível, não faz nada — mesma regra de sempre: nunca
+    # destrava um lote já 'vendido' ou já travado por outra reserva.
+    sb.table("lotes").update({"status": "reservado"}).eq("id", proposta["lote_id"]).eq(
+        "status", "disponivel"
+    ).execute()
 
 
 # ---------------------------------------------------------------------------

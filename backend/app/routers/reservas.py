@@ -85,20 +85,47 @@ def expirar_vencidas_endpoint():
 @admin_router.post("", response_model=Reserva)
 def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_current_corretor)):
     """Cria um pedido manualmente pelo painel (ex.: lead que chegou por telefone
-    ou WhatsApp, sem passar pelo formulário público)."""
+    ou WhatsApp, sem passar pelo formulário público).
+
+    Trava o lote de forma atômica: o UPDATE abaixo só marca 'reservado' se o
+    lote AINDA estiver 'disponivel' no exato instante da escrita — quem
+    resolve a corrida é o Postgres (uma única instrução SQL), não uma
+    checagem em Python. Antes desta correção, o código lia o status, sempre
+    inseria a reserva e só atualizava o lote se ele *tivesse estado*
+    disponível na leitura lá em cima — deixando uma janela em que dois
+    corretores clicando "reservar" no mesmo lote quase ao mesmo tempo
+    conseguiam criar duas reservas ativas pro mesmo lote (double booking)."""
     sb = get_supabase()
     lote = sb.table("lotes").select("id, status").eq("id", payload.lote_id).limit(1).execute().data
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
-    lote = lote[0]
+    if lote[0]["status"] != "disponivel":
+        raise HTTPException(409, f"Este lote não está disponível (status atual: {lote[0]['status']}).")
+
+    travou = (
+        sb.table("lotes")
+        .update({"status": "reservado"})
+        .eq("id", payload.lote_id)
+        .eq("status", "disponivel")
+        .execute()
+        .data
+    )
+    if not travou:
+        # A checagem lá em cima passou, mas alguém "ganhou" o lote entre a
+        # leitura e esta escrita — 0 linhas afetadas é exatamente esse caso.
+        raise HTTPException(409, "Este lote acabou de ser reservado por outra pessoa — atualize a página.")
 
     data = payload.model_dump()
     if corretor["papel"] != "admin":
         data["corretor_id"] = corretor["id"]
-    reserva = sb.table("reservas").insert(data).execute().data[0]
-    if lote["status"] == "disponivel":
-        sb.table("lotes").update({"status": "reservado"}).eq("id", payload.lote_id).execute()
-    return reserva
+    try:
+        return sb.table("reservas").insert(data).execute().data[0]
+    except Exception:
+        # Já travamos o lote como 'reservado' antes de tentar gravar a
+        # reserva em si — se essa gravação falhar, desfaz a trava pra não
+        # deixar o lote preso em 'reservado' sem nenhuma reserva por trás.
+        sb.table("lotes").update({"status": "disponivel"}).eq("id", payload.lote_id).execute()
+        raise
 
 
 @admin_router.patch("/{reserva_id}", response_model=Reserva)
