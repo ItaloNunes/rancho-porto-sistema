@@ -407,8 +407,26 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
     lote, cliente, corretor e as condições comerciais — pra enviar ao cliente.
     """
     sb = get_supabase()
+    # Antes eram até 4 idas e voltas ao Supabase em série (proposta, depois
+    # condomínio, depois corretor, depois formulário) — cada uma soma latência
+    # de rede, e é exatamente esse acúmulo que fazia "gerar PDF" parecer bem
+    # mais lento que o resto do painel (que normalmente é 1 consulta só).
+    # Como lote/cliente/corretor/formulário são todos ligados à proposta por
+    # chave estrangeira direta (ver supabase/migrations/0002_crm.sql e
+    # 0007_qualificacao_cliente.sql), o PostgREST consegue trazer tudo isso
+    # embutido numa única consulta — mesmo truque já usado em
+    # routers/qualificacao.py (corretores!corretor_id).
     proposta = (
-        sb.table("propostas").select("*, lote:lotes(*), cliente:clientes(*)").eq("id", proposta_id).limit(1).execute().data
+        sb.table("propostas")
+        .select(
+            "*, lote:lotes(*, condominio:condominios(nome)), cliente:clientes(*), "
+            "corretor_vinculado:corretores!corretor_id(nome, email, telefone), "
+            "formulario:formularios_qualificacao!formulario_id(dados)"
+        )
+        .eq("id", proposta_id)
+        .limit(1)
+        .execute()
+        .data
     )
     if not proposta:
         raise HTTPException(404, "Proposta não encontrada.")
@@ -425,17 +443,15 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
     if not lote or not cliente:
         raise HTTPException(409, "Proposta com lote ou cliente ausente — não é possível gerar o PDF.")
 
-    condominio = (
-        sb.table("condominios").select("nome").eq("id", lote["condominio_id"]).limit(1).execute().data
-    )
-    condominio_nome = condominio[0]["nome"] if condominio else "-"
+    condominio_nome = (lote.get("condominio") or {}).get("nome", "-")
 
-    responsavel = None
-    if proposta.get("corretor_id"):
-        resp = sb.table("corretores").select("nome, email, telefone").eq("id", proposta["corretor_id"]).limit(1).execute().data
-        responsavel = resp[0] if resp else None
+    corretor_vinculado = proposta.get("corretor_vinculado")
+    if corretor_vinculado:
+        responsavel = corretor_vinculado
     elif corretor["papel"] != "admin":
         responsavel = corretor
+    else:
+        responsavel = None
 
     # Formulário completo pra preencher o PDF: preferência pro que veio
     # direto na criação da proposta (dados_qualificacao, preenchido pelo
@@ -443,16 +459,9 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
     # formulário de qualificação vinculado (preenchido pelo cliente final
     # via link público) quando a proposta não carrega o próprio.
     dados_qualificacao = proposta.get("dados_qualificacao")
-    if not dados_qualificacao and proposta.get("formulario_id"):
-        form = (
-            sb.table("formularios_qualificacao")
-            .select("dados")
-            .eq("id", proposta["formulario_id"])
-            .limit(1)
-            .execute()
-            .data
-        )
-        dados_qualificacao = form[0]["dados"] if form else None
+    if not dados_qualificacao:
+        formulario = proposta.get("formulario")
+        dados_qualificacao = formulario.get("dados") if formulario else None
 
     pdf_bytes = gerar_proposta_pdf(
         proposta=proposta,
