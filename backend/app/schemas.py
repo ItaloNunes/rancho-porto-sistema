@@ -225,6 +225,89 @@ class LoteComCondominio(Lote):
 
 
 # ---------------------------------------------------------------------------
+# Campos do formulário completo (RG, endereços, cônjuge, forma de pagamento
+# detalhada etc.) — mesmos da Proposta de Compra/Venda em papel. Usado tanto
+# pelo formulário público de qualificação (dados guardados em
+# formularios_qualificacao.dados, ver mais abaixo) quanto por
+# PropostaCreate.dados_qualificacao (formulário completo preenchido direto
+# pelo corretor no painel, sem link de qualificação — daí precisar estar
+# definido antes do bloco de CRM/propostas, logo abaixo).
+# ---------------------------------------------------------------------------
+
+EstadoCivil = Literal["solteiro", "casado", "viuvo", "divorciado", "outros"]
+
+
+class EnderecoDados(BaseModel):
+    rua: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+
+
+class PessoaDados(BaseModel):
+    """Campos de identificação — usado tanto para o proponente quanto (se
+    casado) para o cônjuge, igual ao formulário em papel."""
+
+    nome: Optional[str] = None
+    rg: Optional[str] = None
+    orgao_expedidor: Optional[str] = None
+    cpf_cnpj: Optional[str] = None
+    data_nascimento: Optional[str] = None
+    nacionalidade: Optional[str] = None
+    email: Optional[str] = None
+    profissao: Optional[str] = None
+
+
+class FormaPagamentoDados(BaseModel):
+    a_vista: Optional[bool] = None
+    renda: Optional[str] = None
+    valor_proposto: Optional[float] = None
+    sinal: Optional[str] = None
+    sinal_cheque_numero: Optional[str] = None
+    sinal_banco: Optional[str] = None
+    sinal_agencia: Optional[str] = None
+    dividido_em_parcelas: Optional[int] = None
+    valor_parcela: Optional[str] = None
+    vencimento: Optional[str] = None
+    primeiro_mes: Optional[str] = None
+    intercaladas_valor: Optional[str] = None
+    intercaladas_vencimento_dia: Optional[str] = None
+    observacoes: Optional[str] = None
+
+
+class QualificacaoDados(BaseModel):
+    """Corpo completo do formulário (mesmos campos da Proposta de
+    Compra/Venda em papel) — guardado como JSON, seja em
+    `formularios_qualificacao.dados` (preenchido pelo cliente final via link
+    público) ou em `propostas.dados_qualificacao` (preenchido direto pelo
+    corretor no painel). Tudo opcional no schema porque pode ser salvo
+    parcialmente entre etapas; a validação de "está completo o bastante"
+    é feita à parte, em cada fluxo (ver qualificacao.py e routers/crm.py)."""
+
+    proponente: PessoaDados = Field(default_factory=PessoaDados)
+    estado_civil: Optional[EstadoCivil] = None
+    conjuge: Optional[PessoaDados] = None
+    endereco_residencial: EnderecoDados = Field(default_factory=EnderecoDados)
+    endereco_comercial: EnderecoDados = Field(default_factory=EnderecoDados)
+    # Nem todo proponente tem endereço comercial próprio (autônomo, aposentado
+    # etc.) — sem essa flag não dá pra distinguir "não preencheu ainda" de
+    # "não se aplica" na validação do envio final (ver enviar_para_analise).
+    endereco_comercial_nao_possui: Optional[bool] = None
+    # Pra qual dos dois endereços vai a correspondência — mesmo campo
+    # "Comercial ( ) / Residencial ( )" da lateral do formulário em papel.
+    endereco_correspondencia: Optional[Literal["residencial", "comercial"]] = None
+    telefone_residencial: Optional[str] = None
+    telefone_comercial: Optional[str] = None
+    telefone_celular: Optional[str] = None
+    telefone_recados: Optional[str] = None
+    falar_com: Optional[str] = None
+    forma_pagamento: FormaPagamentoDados = Field(default_factory=FormaPagamentoDados)
+
+
+# ---------------------------------------------------------------------------
 # CRM: clientes/leads, corretores e propostas de compra e venda.
 # ---------------------------------------------------------------------------
 
@@ -357,6 +440,12 @@ class PropostaCreate(BaseModel):
     valor_proposto: float
     condicoes_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
+    # Formulário completo (RG, endereços, cônjuge, forma de pagamento
+    # detalhada etc.) — preenchido quando o corretor cria a proposta com o
+    # formulário completo direto no painel (PropostaFormularioCompleto.tsx),
+    # sem passar pelo link de qualificação do cliente final. Mesmo formato
+    # de formularios_qualificacao.dados — usado por gerar_proposta_pdf.
+    dados_qualificacao: Optional[QualificacaoDados] = None
 
 
 class PropostaStatusUpdate(BaseModel):
@@ -382,6 +471,7 @@ class Proposta(BaseModel):
     status: PropostaStatus
     documento_url: Optional[str] = None
     observacoes: Optional[str] = None
+    dados_qualificacao: Optional[dict] = None
     created_at: datetime
 
 
@@ -418,7 +508,6 @@ class VisaoGeralCondominio(BaseModel):
 # ---------------------------------------------------------------------------
 
 QualificacaoStatus = Literal["aguardando_preenchimento", "em_analise", "aprovada", "reprovada"]
-EstadoCivil = Literal["solteiro", "casado", "viuvo", "divorciado", "outros"]
 DocumentoTipo = Literal[
     "rg", "cpf", "comprovante_residencia", "certidao_nascimento_casamento",
     "conjuge_rg", "conjuge_cpf", "comprovante_renda", "outro",
@@ -430,70 +519,11 @@ DOCUMENTOS_OBRIGATORIOS: tuple[DocumentoTipo, ...] = (
 # Exigidos só quando estado_civil == "casado" (ver _valida_documentos_obrigatorios em qualificacao.py).
 DOCUMENTOS_CONJUGE: tuple[DocumentoTipo, ...] = ("conjuge_rg", "conjuge_cpf")
 
-
-class EnderecoDados(BaseModel):
-    rua: Optional[str] = None
-    numero: Optional[str] = None
-    complemento: Optional[str] = None
-    bairro: Optional[str] = None
-    cidade: Optional[str] = None
-    estado: Optional[str] = None
-    cep: Optional[str] = None
-
-
-class PessoaDados(BaseModel):
-    """Campos de identificação — usado tanto para o proponente quanto (se
-    casado) para o cônjuge, igual ao formulário em papel."""
-
-    nome: Optional[str] = None
-    rg: Optional[str] = None
-    orgao_expedidor: Optional[str] = None
-    cpf_cnpj: Optional[str] = None
-    data_nascimento: Optional[str] = None
-    nacionalidade: Optional[str] = None
-    email: Optional[str] = None
-    profissao: Optional[str] = None
-
-
-class FormaPagamentoDados(BaseModel):
-    a_vista: Optional[bool] = None
-    renda: Optional[str] = None
-    valor_proposto: Optional[float] = None
-    sinal: Optional[str] = None
-    sinal_cheque_numero: Optional[str] = None
-    sinal_banco: Optional[str] = None
-    sinal_agencia: Optional[str] = None
-    dividido_em_parcelas: Optional[int] = None
-    valor_parcela: Optional[str] = None
-    vencimento: Optional[str] = None
-    primeiro_mes: Optional[str] = None
-    intercaladas_valor: Optional[str] = None
-    intercaladas_vencimento_dia: Optional[str] = None
-    observacoes: Optional[str] = None
-
-
-class QualificacaoDados(BaseModel):
-    """Corpo completo do formulário público — guardado como JSON
-    (`formularios_qualificacao.dados`). Tudo opcional no schema porque o
-    cliente pode salvar parcialmente entre etapas; a validação de
-    "está completo o bastante pra enviar pra análise" é feita à parte, no
-    endpoint de envio final (ver qualificacao.py)."""
-
-    proponente: PessoaDados = Field(default_factory=PessoaDados)
-    estado_civil: Optional[EstadoCivil] = None
-    conjuge: Optional[PessoaDados] = None
-    endereco_residencial: EnderecoDados = Field(default_factory=EnderecoDados)
-    endereco_comercial: EnderecoDados = Field(default_factory=EnderecoDados)
-    # Nem todo proponente tem endereço comercial próprio (autônomo, aposentado
-    # etc.) — sem essa flag não dá pra distinguir "não preencheu ainda" de
-    # "não se aplica" na validação do envio final (ver enviar_para_analise).
-    endereco_comercial_nao_possui: Optional[bool] = None
-    telefone_residencial: Optional[str] = None
-    telefone_comercial: Optional[str] = None
-    telefone_celular: Optional[str] = None
-    telefone_recados: Optional[str] = None
-    falar_com: Optional[str] = None
-    forma_pagamento: FormaPagamentoDados = Field(default_factory=FormaPagamentoDados)
+# EstadoCivil, EnderecoDados, PessoaDados, FormaPagamentoDados e
+# QualificacaoDados moraram aqui antes — subiram pra antes do bloco de CRM
+# (ver acima de PropostaStatus) porque PropostaCreate.dados_qualificacao
+# (formulário completo preenchido direto pelo corretor no painel, sem link
+# de qualificação) passou a referenciar QualificacaoDados também.
 
 
 class QualificacaoCreate(BaseModel):

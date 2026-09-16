@@ -377,7 +377,10 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
     cliente = sb.table("clientes").select("id").eq("id", payload.cliente_id).limit(1).execute().data
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado.")
-    data = payload.model_dump()
+    # mode="json" pra dados_qualificacao (formulário completo, quando vem do
+    # PropostaFormularioCompleto.tsx do painel) sair como dict puro, pronto
+    # pro Supabase gravar na coluna jsonb.
+    data = payload.model_dump(mode="json")
     if corretor["papel"] != "admin":
         data["corretor_id"] = corretor["id"]
     return sb.table("propostas").insert(data).execute().data[0]
@@ -434,8 +437,13 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
     elif corretor["papel"] != "admin":
         responsavel = corretor
 
-    dados_qualificacao = None
-    if proposta.get("formulario_id"):
+    # Formulário completo pra preencher o PDF: preferência pro que veio
+    # direto na criação da proposta (dados_qualificacao, preenchido pelo
+    # corretor no painel — ver PropostaFormularioCompleto.tsx); só cai pro
+    # formulário de qualificação vinculado (preenchido pelo cliente final
+    # via link público) quando a proposta não carrega o próprio.
+    dados_qualificacao = proposta.get("dados_qualificacao")
+    if not dados_qualificacao and proposta.get("formulario_id"):
         form = (
             sb.table("formularios_qualificacao")
             .select("dados")

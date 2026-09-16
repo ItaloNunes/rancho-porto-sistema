@@ -204,6 +204,12 @@ export const api = {
     valor_proposto: number;
     condicoes_pagamento?: string | null;
     observacoes?: string | null;
+    // Formulário completo (RG, endereços, cônjuge, forma de pagamento
+    // detalhada etc.) — preenchido quando a proposta nasce direto do
+    // formulário completo do painel (ver PropostaFormularioCompleto.tsx),
+    // sem passar pelo link de qualificação do cliente final. Sem isso, o
+    // PDF cai de volta pro resumo simples (nome/CPF/telefone do cliente).
+    dados_qualificacao?: QualificacaoDados | null;
   }) => request<Proposta>("/crm/propostas", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarStatusProposta: (id: string, status: PropostaStatus) =>
     request<Proposta>(`/crm/propostas/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, true),

@@ -133,11 +133,16 @@ export interface Proposta {
   lote_id: string;
   cliente_id: string;
   corretor_id?: string | null;
+  formulario_id?: string | null;
   valor_proposto: number;
   condicoes_pagamento?: string | null;
   status: PropostaStatus;
   documento_url?: string | null;
   observacoes?: string | null;
+  /** Formulário completo (mesmos campos da Proposta de Compra/Venda em
+   * papel) quando a proposta foi criada direto pelo corretor no painel, sem
+   * passar pelo link de qualificação do cliente final — usado pelo PDF. */
+  dados_qualificacao?: Partial<QualificacaoDados> | null;
   created_at: string;
 }
 
@@ -271,6 +276,8 @@ export interface FormaPagamentoDados {
   observacoes?: string | null;
 }
 
+export type EnderecoCorrespondencia = "residencial" | "comercial";
+
 export interface QualificacaoDados {
   proponente: PessoaDados;
   estado_civil?: EstadoCivil | null;
@@ -281,6 +288,10 @@ export interface QualificacaoDados {
   // etc.) — sem essa flag não dá pra distinguir "não preencheu ainda" de
   // "não se aplica" na validação do envio final.
   endereco_comercial_nao_possui?: boolean | null;
+  // Pra qual dos dois endereços vai a correspondência — mesmo campo (X)
+  // Residencial/Comercial do formulário em papel. Só relevante quando existe
+  // endereço comercial; sem ele a correspondência é sempre a residencial.
+  endereco_correspondencia?: EnderecoCorrespondencia | null;
   telefone_residencial?: string | null;
   telefone_comercial?: string | null;
   telefone_celular?: string | null;
@@ -297,6 +308,7 @@ export function qualificacaoDadosVazio(): QualificacaoDados {
     endereco_residencial: {},
     endereco_comercial: {},
     endereco_comercial_nao_possui: false,
+    endereco_correspondencia: null,
     forma_pagamento: {},
   };
 }

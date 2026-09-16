@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { api } from "../../lib/api";
-import type { Corretor, CorretorImportadoItem, Papel } from "../../types";
+import type { Corretor, Papel } from "../../types";
 
+/** Essa tela (e toda a API de /crm/corretores por trás dela) já é travada
+ * pro admin nos dois lados: RequireAuth adminOnly (main.tsx) bloqueia a
+ * rota /painel/corretores pro corretor comum mesmo digitando a URL na mão
+ * (cai numa tela de "sem permissão"), e cada endpoint do backend exige
+ * require_admin — o corretor comum nunca vê nem essa aba (TABS_BASE, em
+ * PainelLayout.tsx, só lista Reservas/Propostas/Disponibilidade pra ele) nem
+ * consegue chamar a API direto. A "trava anti-burro" pedida aqui é sobre as
+ * ações dentro do CRUD (ver ConfirmarDesativacao/confirmação de promoção a
+ * admin abaixo), não sobre quem chega até a tela. */
 export default function PainelCorretores() {
   const [corretores, setCorretores] = useState<Corretor[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -10,8 +19,12 @@ export default function PainelCorretores() {
   const [criado, setCriado] = useState<{ usuario: string; senha: string; motivo: "criado" | "resetado" } | null>(
     null,
   );
-  const [importando, setImportando] = useState(false);
-  const [resultadoImportacao, setResultadoImportacao] = useState<CorretorImportadoItem[] | null>(null);
+  // Reativar é reversível na hora (basta desativar de novo) — confirmação
+  // simples basta. Desativar corta o acesso de alguém, por isso passa pelo
+  // fluxo de dois passos com nome digitado (ver ConfirmarDesativacao).
+  const [desativando, setDesativando] = useState<{ corretor: Corretor; passo: 1 | 2; digitado: string } | null>(
+    null,
+  );
 
   function recarregar() {
     setErro(null);
@@ -20,96 +33,30 @@ export default function PainelCorretores() {
 
   useEffect(recarregar, []);
 
-  async function alternarAtivo(c: Corretor) {
-    const acao = c.ativo ? "desativar" : "reativar";
-    if (!confirm(`Confirma ${acao} o login de "${c.nome}"?`)) return;
+  async function aplicarAtivo(c: Corretor, ativo: boolean) {
     try {
-      await api.atualizarCorretor(c.id, { ativo: !c.ativo });
+      await api.atualizarCorretor(c.id, { ativo });
       recarregar();
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     }
   }
 
-  async function importarDaPlanilha() {
-    if (
-      !confirm(
-        "Isso cadastra de uma vez todos os corretores da planilha inicial (quem já tem login é pulado — pode rodar de novo com segurança). Continuar?",
-      )
-    )
-      return;
-    setImportando(true);
-    setErro(null);
-    try {
-      const resultado = await api.importarCorretores();
-      setResultadoImportacao(resultado);
-      recarregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
-    } finally {
-      setImportando(false);
-    }
+  async function reativar(c: Corretor) {
+    if (!confirm(`Confirma reativar o login de "${c.nome}"?`)) return;
+    aplicarAtivo(c, true);
   }
-
-  function baixarCsvImportacao() {
-    if (!resultadoImportacao) return;
-    const linhas = [
-      ["nome", "usuario", "senha", "ativo", "status"],
-      ...resultadoImportacao.map((r) => [r.nome, r.usuario, r.senha ?? "", r.ativo ? "sim" : "não", r.status]),
-    ];
-    const csv = linhas.map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "corretores-login.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  const criadosNaImportacao = resultadoImportacao?.filter((r) => r.status === "criado") ?? [];
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <h1 className="text-xl font-bold text-ink">Corretores</h1>
-        <div className="flex gap-2">
-          <button className="btn btn-outline" onClick={importarDaPlanilha} disabled={importando}>
-            {importando ? "Importando..." : "Importar da planilha"}
-          </button>
-          <button className="btn btn-primary" onClick={() => setEditando("novo")}>
-            + Novo login
-          </button>
-        </div>
+        <button className="btn btn-primary" onClick={() => setEditando("novo")}>
+          + Novo login
+        </button>
       </div>
 
       {erro && <p className="text-rust text-sm mb-4">{erro}</p>}
-
-      {resultadoImportacao && (
-        <div className="card p-4 mb-5">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <p className="text-sm text-ink">
-              Importação concluída: <strong>{criadosNaImportacao.length}</strong> login(s) criado(s) de{" "}
-              {resultadoImportacao.length} linha(s) ({resultadoImportacao.filter((r) => r.status === "ja_existia").length} já
-              existiam, {resultadoImportacao.filter((r) => r.status === "erro").length} com erro).
-            </p>
-            <div className="flex gap-2 shrink-0">
-              <button className="btn btn-outline !py-1.5 !px-3 text-xs" onClick={baixarCsvImportacao}>
-                Baixar tabela (CSV)
-              </button>
-              <button className="text-ink-soft text-xs hover:text-ink" onClick={() => setResultadoImportacao(null)}>
-                fechar
-              </button>
-            </div>
-          </div>
-          {criadosNaImportacao.length > 0 && (
-            <p className="text-xs text-ink-soft">
-              Usuário = login; senha inicial = telefone da pessoa (só números). Baixe a tabela agora — essa é a única
-              vez que as senhas aparecem em texto puro.
-            </p>
-          )}
-        </div>
-      )}
 
       {!corretores ? (
         <p className="text-ink-soft text-sm">Carregando...</p>
@@ -140,7 +87,12 @@ export default function PainelCorretores() {
                     <button className="text-primary text-xs font-medium hover:underline mr-3" onClick={() => setEditando(c)}>
                       editar
                     </button>
-                    <button className="text-rust text-xs font-medium hover:underline" onClick={() => alternarAtivo(c)}>
+                    <button
+                      className="text-rust text-xs font-medium hover:underline"
+                      onClick={() =>
+                        c.ativo ? setDesativando({ corretor: c, passo: 1, digitado: "" }) : reativar(c)
+                      }
+                    >
                       {c.ativo ? "desativar" : "reativar"}
                     </button>
                   </td>
@@ -187,6 +139,71 @@ export default function PainelCorretores() {
           </div>
         </Modal>
       )}
+
+      {desativando && (
+        <Modal onClose={() => setDesativando(null)} labelledBy="desativar-corretor-titulo">
+          <div className="p-6">
+            <h2 id="desativar-corretor-titulo" className="text-lg font-bold text-rust mb-2">
+              Desativar login de corretor
+            </h2>
+            <p className="text-sm text-ink mb-4">
+              <span className="font-semibold">{desativando.corretor.nome}</span>{" "}
+              <span className="text-ink-soft">({desativando.corretor.usuario || "sem usuário"})</span>
+            </p>
+
+            {desativando.passo === 1 && (
+              <>
+                <p className="text-sm text-ink-soft mb-5">
+                  Isso bloqueia o login imediatamente — a pessoa não consegue mais entrar no painel até alguém
+                  reativar. O histórico dela (clientes, propostas, reservas) continua intacto.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setDesativando(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-outline !text-xs !py-2 !border-rust !text-rust"
+                    onClick={() => setDesativando({ ...desativando, passo: 2 })}
+                  >
+                    Entendi, continuar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {desativando.passo === 2 && (
+              <>
+                <p className="text-sm text-ink-soft mb-2">Pra confirmar, digite o nome exatamente como aparece na lista:</p>
+                <p className="text-sm font-semibold text-ink mb-3">{desativando.corretor.nome}</p>
+                <input
+                  autoFocus
+                  className="input mb-5"
+                  placeholder="Digite o nome do corretor"
+                  value={desativando.digitado}
+                  onChange={(e) => setDesativando({ ...desativando, digitado: e.target.value })}
+                />
+                <div className="flex justify-end gap-2">
+                  <button className="btn btn-outline !text-xs !py-2" onClick={() => setDesativando(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-primary !text-xs !py-2 !bg-rust disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={
+                      desativando.digitado.trim().toLowerCase() !== desativando.corretor.nome.trim().toLowerCase()
+                    }
+                    onClick={() => {
+                      aplicarAtivo(desativando.corretor, false);
+                      setDesativando(null);
+                    }}
+                  >
+                    Sim, desativar este login
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -205,9 +222,31 @@ function CorretorForm({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [resetando, setResetando] = useState(false);
+  // Dar papel de admin (criando um login novo já como admin, ou promovendo
+  // um corretor existente) é a ação mais sensível deste CRUD — dá acesso
+  // total ao painel, inclusive pra gerenciar outros logins. Por isso passa
+  // por uma segunda confirmação (digitar "ADMIN") antes de salvar de
+  // verdade, do mesmo jeito que desativar um login (ver ConfirmarDesativacao
+  // acima) ou desfazer uma venda (PainelLotes.tsx) também pedem.
+  const precisaConfirmarAdmin = papel === "admin" && corretor?.papel !== "admin";
+  const [confirmarAdmin, setConfirmarAdmin] = useState(false);
+  const [digitadoAdmin, setDigitadoAdmin] = useState("");
+
+  function mudarPapel(novoPapel: Papel) {
+    setPapel(novoPapel);
+    setConfirmarAdmin(false);
+    setDigitadoAdmin("");
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (precisaConfirmarAdmin && !confirmarAdmin) {
+      setConfirmarAdmin(true);
+      return;
+    }
+    if (precisaConfirmarAdmin && digitadoAdmin.trim().toUpperCase() !== "ADMIN") {
+      return;
+    }
     setErro(null);
     setSalvando(true);
     try {
@@ -285,11 +324,11 @@ function CorretorForm({
         onChange={(e) => setTelefone(e.target.value)}
         required={!corretor}
       />
-      <select className="input" value={papel} onChange={(e) => setPapel(e.target.value as Papel)}>
+      <select className="input" value={papel} onChange={(e) => mudarPapel(e.target.value as Papel)}>
         <option value="corretor">Corretor</option>
         <option value="admin">Admin</option>
       </select>
-      {corretor && (
+      {corretor && !confirmarAdmin && (
         <button
           type="button"
           className="btn btn-outline text-xs justify-self-start"
@@ -299,10 +338,51 @@ function CorretorForm({
           {resetando ? "Resetando..." : "Resetar senha (usar o telefone atual)"}
         </button>
       )}
+
+      {precisaConfirmarAdmin && confirmarAdmin && (
+        <div className="border-t border-border pt-4 grid gap-3">
+          <p className="text-sm font-semibold text-rust">Confirmar acesso de administrador</p>
+          <p className="text-sm text-ink-soft">
+            Isso dá a {nome.trim() || "esta pessoa"} acesso total ao painel — gerenciar (e desativar) outros logins,
+            aprovar propostas e ver os números de todos os empreendimentos. Digite <strong>ADMIN</strong> pra
+            confirmar.
+          </p>
+          <input
+            autoFocus
+            className="input"
+            placeholder='Digite "ADMIN"'
+            value={digitadoAdmin}
+            onChange={(e) => setDigitadoAdmin(e.target.value)}
+          />
+        </div>
+      )}
+
       {erro && <p className="text-rust text-sm">{erro}</p>}
-      <button className="btn btn-primary mt-2" disabled={salvando}>
-        {salvando ? "Salvando..." : "Salvar"}
-      </button>
+
+      {precisaConfirmarAdmin && confirmarAdmin ? (
+        <div className="flex gap-3 mt-2">
+          <button
+            type="button"
+            className="btn btn-outline flex-1"
+            onClick={() => {
+              setConfirmarAdmin(false);
+              setDigitadoAdmin("");
+            }}
+          >
+            Voltar
+          </button>
+          <button
+            className="btn btn-primary flex-1 !bg-rust hover:!bg-rust/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={salvando || digitadoAdmin.trim().toUpperCase() !== "ADMIN"}
+          >
+            {salvando ? "Salvando..." : "Confirmar e salvar"}
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn-primary mt-2" disabled={salvando}>
+          {salvando ? "Salvando..." : "Salvar"}
+        </button>
+      )}
     </form>
   );
 }

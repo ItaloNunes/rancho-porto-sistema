@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
+import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../components/qualificacaoCampos";
 import {
   DOCUMENTO_LABEL,
   DOCUMENTOS_CONJUGE,
@@ -14,14 +15,6 @@ import type {
   QualificacaoDados,
   QualificacaoPublica as QualificacaoPublicaTipo,
 } from "../types";
-
-const ESTADO_CIVIL_OPCOES: { valor: EstadoCivil; label: string }[] = [
-  { valor: "solteiro", label: "Solteiro(a)" },
-  { valor: "casado", label: "Casado(a)" },
-  { valor: "viuvo", label: "Viúvo(a)" },
-  { valor: "divorciado", label: "Divorciado(a)" },
-  { valor: "outros", label: "Outros" },
-];
 
 const PASSOS = [
   "Seus dados",
@@ -181,15 +174,6 @@ function ProgressBar({ passo, total }: { passo: number; total: number }) {
         <div className="h-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }} />
       </div>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-xs font-semibold text-ink-soft">{label}</span>
-      {children}
-    </label>
   );
 }
 
@@ -536,11 +520,17 @@ function Formulario({
             Não possuo endereço comercial
           </label>
           {!dados.endereco_comercial_nao_possui && (
-            <EnderecoCampos
-              endereco={dados.endereco_comercial}
-              onChange={(endereco_comercial) => setDados({ ...dados, endereco_comercial })}
-              obrigatorio
-            />
+            <>
+              <EnderecoCampos
+                endereco={dados.endereco_comercial}
+                onChange={(endereco_comercial) => setDados({ ...dados, endereco_comercial })}
+                obrigatorio
+              />
+              <CorrespondenciaCampo
+                valor={dados.endereco_correspondencia}
+                onChange={(endereco_correspondencia) => setDados({ ...dados, endereco_correspondencia })}
+              />
+            </>
           )}
         </>
       )}
@@ -729,59 +719,6 @@ function Formulario({
         )}
       </div>
     </div>
-  );
-}
-
-function EnderecoCampos({
-  endereco,
-  onChange,
-  obrigatorio = true,
-}: {
-  endereco: QualificacaoDados["endereco_residencial"];
-  onChange: (e: QualificacaoDados["endereco_residencial"]) => void;
-  /** Complemento fica de fora mesmo quando obrigatório — nem todo endereço
-   * tem um, e travar o envio por isso não faz sentido. */
-  obrigatorio?: boolean;
-}) {
-  const m = obrigatorio ? " *" : "";
-  return (
-    <>
-      <div className="grid grid-cols-[1fr_auto] gap-3">
-        <Field label={`Rua/Avenida${m}`}>
-          <input className="input" value={endereco.rua ?? ""} onChange={(e) => onChange({ ...endereco, rua: e.target.value })} />
-        </Field>
-        <Field label={`Nº${m}`}>
-          <input
-            className="input w-20"
-            value={endereco.numero ?? ""}
-            onChange={(e) => onChange({ ...endereco, numero: e.target.value })}
-          />
-        </Field>
-      </div>
-      <Field label="Complemento">
-        <input
-          className="input"
-          value={endereco.complemento ?? ""}
-          onChange={(e) => onChange({ ...endereco, complemento: e.target.value })}
-        />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={`Bairro${m}`}>
-          <input className="input" value={endereco.bairro ?? ""} onChange={(e) => onChange({ ...endereco, bairro: e.target.value })} />
-        </Field>
-        <Field label={`CEP${m}`}>
-          <input className="input" value={endereco.cep ?? ""} onChange={(e) => onChange({ ...endereco, cep: e.target.value })} />
-        </Field>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={`Cidade${m}`}>
-          <input className="input" value={endereco.cidade ?? ""} onChange={(e) => onChange({ ...endereco, cidade: e.target.value })} />
-        </Field>
-        <Field label={`UF${m}`}>
-          <input className="input" maxLength={2} value={endereco.estado ?? ""} onChange={(e) => onChange({ ...endereco, estado: e.target.value.toUpperCase() })} />
-        </Field>
-      </div>
-    </>
   );
 }
 

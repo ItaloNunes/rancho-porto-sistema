@@ -11,10 +11,13 @@ const STATUS_LABEL: Record<LoteStatus, string> = {
 
 // Mesma paleta usada na Disponibilidade — linha inteira tingida pela cor do
 // status, pra dar de relance a mesma leitura visual em todo o painel.
+// Opacidade mais alta que o normal (15/22 em vez de 10/15): num relance
+// rápido de cima pra baixo na tabela, um tingimento muito sutil acaba
+// parecendo "sem cor nenhuma" — pedido explícito pra ficar claramente visível.
 const LINHA_COR: Record<LoteStatus, string> = {
-  disponivel: "bg-sage/10 hover:bg-sage/15",
-  reservado: "bg-ochre/10 hover:bg-ochre/15",
-  vendido: "bg-rust/10 hover:bg-rust/15",
+  disponivel: "bg-sage/15 hover:bg-sage/20",
+  reservado: "bg-ochre/15 hover:bg-ochre/20",
+  vendido: "bg-rust/15 hover:bg-rust/20",
 };
 
 // Pontinho da legenda — precisa ser texto literal em algum lugar do arquivo
@@ -26,11 +29,14 @@ const PONTO_COR: Record<LoteStatus, string> = {
 };
 
 // O próprio select de status também carrega a cor do valor atual — assim dá
-// pra ver o status sem precisar abrir o menu.
+// pra ver o status sem precisar abrir o menu. Fundo preenchido + borda sólida
+// na cor cheia (não só um traço fino a 40% — isso passava despercebido) pra
+// funcionar como um "selo" colorido, do mesmo jeito que os badges do resto
+// do painel (ver .badge-disponivel/.badge-reservado/.badge-vendido).
 const SELECT_COR: Record<LoteStatus, string> = {
-  disponivel: "!border-sage/40 !text-sage",
-  reservado: "!border-ochre/40 !text-ochre",
-  vendido: "!border-rust/40 !text-rust",
+  disponivel: "!bg-sage/15 !border-sage !text-sage",
+  reservado: "!bg-ochre/15 !border-ochre !text-ochre",
+  vendido: "!bg-rust/15 !border-rust !text-rust",
 };
 
 // Texto de cada modal de confirmação, por status de destino — toda troca de

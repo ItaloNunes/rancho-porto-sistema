@@ -397,6 +397,12 @@ def gerar_proposta_pdf(
             ("Estado", end_com.get("estado") or "-", 1),
             ("CEP", end_com.get("cep") or "-", 1),
         )
+        # Mesmo campo "Comercial ( ) / Residencial ( )" da lateral do
+        # formulário em papel — só faz sentido perguntar quando existe um
+        # endereço comercial pra escolher entre os dois.
+        corresp = dq.get("endereco_correspondencia")
+        if corresp:
+            pdf.campo_grade(("Endereço para correspondência", "Comercial" if corresp == "comercial" else "Residencial", 1))
 
     if dq.get("telefone_residencial") or dq.get("telefone_comercial") or dq.get("telefone_celular") or dq.get("telefone_recados"):
         pdf.campo_titulo("Dados complementares para contrato")
