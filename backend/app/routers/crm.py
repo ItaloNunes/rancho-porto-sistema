@@ -14,14 +14,15 @@ layout exato do formulário em papel usado pela imobiliária (Proposta de
 Compra/Venda Castel, operada com a JR Imóveis) — ver app/pdf.py.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from postgrest.exceptions import APIError
 
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
+from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf
 from ..schemas import (
     Cliente,
@@ -32,6 +33,8 @@ from ..schemas import (
     CorretorCriado,
     CorretorImportadoItem,
     CorretorUpdate,
+    DocumentoProposta,
+    DocumentoTipo,
     LoginRequest,
     LoginResponse,
     LoteComCondominio,
@@ -373,9 +376,9 @@ def _pode_mexer_na_proposta(corretor: dict, proposta: dict) -> bool:
 @router.get("/propostas", response_model=list[PropostaDetalhe])
 def listar_propostas(corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
-    query = sb.table("propostas").select("*, lote:lotes(*), cliente:clientes(*)").order(
-        "created_at", desc=True
-    )
+    query = sb.table("propostas").select(
+        "*, lote:lotes(*), cliente:clientes(*), documentos:documentos_proposta(*)"
+    ).order("created_at", desc=True)
     if corretor["papel"] != "admin":
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     return query.execute().data
@@ -412,6 +415,125 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     if not updates:
         return existente
     return sb.table("propostas").update(updates).eq("id", proposta_id).execute().data[0]
+
+
+def _carregar_proposta_ou_404(sb, proposta_id: str) -> dict:
+    proposta = sb.table("propostas").select("*").eq("id", proposta_id).limit(1).execute().data
+    if not proposta:
+        raise HTTPException(404, "Proposta não encontrada.")
+    return proposta[0]
+
+
+@router.get("/propostas/{proposta_id}/documentos", response_model=list[DocumentoProposta])
+def listar_documentos_proposta(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    if not _pode_mexer_na_proposta(corretor, proposta):
+        raise HTTPException(403, "Esta proposta é de outro corretor.")
+    return (
+        sb.table("documentos_proposta")
+        .select("*")
+        .eq("proposta_id", proposta_id)
+        .order("enviado_em", desc=True)
+        .execute()
+        .data
+    )
+
+
+@router.post("/propostas/{proposta_id}/documentos", response_model=DocumentoProposta)
+async def anexar_documento_proposta(
+    proposta_id: str,
+    tipo: DocumentoTipo,
+    arquivo: UploadFile = File(...),
+    corretor: dict = Depends(get_current_corretor),
+):
+    """Anexo de documento numa proposta já existente — ao contrário do
+    formulário de qualificação (routers/qualificacao.py), aqui não há
+    trava de status: a proposta pode ser editada e ganhar novos documentos
+    a qualquer momento, é assim que o corretor completa depois o que faltou
+    na hora de montar a proposta. `tipo: DocumentoTipo` faz o FastAPI
+    rejeitar sozinho (422) um tipo fora da lista aceita, antes mesmo de
+    chegar aqui."""
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    if not _pode_mexer_na_proposta(corretor, proposta):
+        raise HTTPException(403, "Esta proposta é de outro corretor.")
+
+    conteudo, content_type = await validar_e_ler(arquivo)
+
+    storage_path = caminho_no_bucket(f"proposta/{proposta_id}", tipo, arquivo.filename)
+    try:
+        sb.storage.from_(BUCKET).upload(storage_path, conteudo, {"content-type": content_type})
+    except Exception:
+        raise HTTPException(502, "Não foi possível enviar o arquivo agora. Tente novamente em instantes.")
+
+    row = {
+        "proposta_id": proposta_id,
+        "tipo": tipo,
+        "nome_arquivo": arquivo.filename or tipo,
+        "storage_path": storage_path,
+        "tamanho_bytes": len(conteudo),
+        "enviado_por": corretor["id"],
+        "enviado_em": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        return sb.table("documentos_proposta").insert(row).execute().data[0]
+    except Exception:
+        # O arquivo já subiu pro Storage — sem isso, uma falha só na gravação
+        # da linha (ex.: Supabase instável por um instante) deixaria um
+        # arquivo órfão no bucket, sem nenhum registro apontando pra ele.
+        excluir_do_storage_silenciosamente(sb, storage_path)
+        raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
+
+
+@router.get("/propostas/{proposta_id}/documentos/{documento_id}/arquivo")
+def baixar_documento_proposta(proposta_id: str, documento_id: str, corretor: dict = Depends(get_current_corretor)):
+    """Gera uma URL assinada (curta duração) pro documento — o painel nunca
+    fala direto com o Storage, sempre passa por aqui, autenticado."""
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    if not _pode_mexer_na_proposta(corretor, proposta):
+        raise HTTPException(403, "Esta proposta é de outro corretor.")
+    doc = (
+        sb.table("documentos_proposta")
+        .select("*")
+        .eq("id", documento_id)
+        .eq("proposta_id", proposta_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not doc:
+        raise HTTPException(404, "Documento não encontrado.")
+    assinada = sb.storage.from_(BUCKET).create_signed_url(doc[0]["storage_path"], 300)
+    url = assinada.get("signedURL") or assinada.get("signed_url")
+    if not url:
+        raise HTTPException(502, "Não foi possível gerar o link do documento.")
+    return {"url": url}
+
+
+@router.delete("/propostas/{proposta_id}/documentos/{documento_id}")
+def excluir_documento_proposta(proposta_id: str, documento_id: str, corretor: dict = Depends(get_current_corretor)):
+    """Deixa o corretor corrigir um anexo errado (documento ilegível, tipo
+    trocado etc.) sem precisar recriar a proposta inteira."""
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    if not _pode_mexer_na_proposta(corretor, proposta):
+        raise HTTPException(403, "Esta proposta é de outro corretor.")
+    doc = (
+        sb.table("documentos_proposta")
+        .select("*")
+        .eq("id", documento_id)
+        .eq("proposta_id", proposta_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not doc:
+        raise HTTPException(404, "Documento não encontrado.")
+    sb.table("documentos_proposta").delete().eq("id", documento_id).execute()
+    excluir_do_storage_silenciosamente(sb, doc[0]["storage_path"])
+    return {"ok": True}
 
 
 @router.get("/propostas/{proposta_id}/documento")

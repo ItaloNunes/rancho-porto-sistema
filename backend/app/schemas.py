@@ -494,6 +494,10 @@ class Proposta(BaseModel):
 class PropostaDetalhe(Proposta):
     lote: Optional[Lote] = None
     cliente: Optional[Cliente] = None
+    # Forward ref (classe "DocumentoProposta" só é definida mais abaixo,
+    # depois de DocumentoTipo) — mesmo padrão já usado por
+    # QualificacaoComRelacoes.documentos logo abaixo neste arquivo.
+    documentos: list["DocumentoProposta"] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -580,6 +584,20 @@ class DocumentoQualificacao(BaseModel):
     tipo: DocumentoTipo
     nome_arquivo: str
     tamanho_bytes: Optional[int] = None
+    enviado_em: datetime
+
+
+class DocumentoProposta(BaseModel):
+    """Documento anexado direto numa proposta pelo corretor logado, pelo
+    painel — independente do fluxo (mais antigo, por link público) de
+    documentos_qualificacao acima. Ver routers/crm.py."""
+
+    id: str
+    proposta_id: str
+    tipo: DocumentoTipo
+    nome_arquivo: str
+    tamanho_bytes: Optional[int] = None
+    enviado_por: Optional[str] = None
     enviado_em: datetime
 
 

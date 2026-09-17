@@ -14,18 +14,19 @@ Duas famílias de rotas neste arquivo:
 - `admin_router` (prefixo /crm/qualificacoes): painel interno, exige login.
 """
 
-import mimetypes
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from ..database import get_supabase
+from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..schemas import (
     DOCUMENTOS_CONJUGE,
     DOCUMENTOS_OBRIGATORIOS,
     Cliente,
     DocumentoQualificacao,
+    DocumentoTipo,
     Qualificacao,
     QualificacaoComRelacoes,
     QualificacaoCreate,
@@ -37,11 +38,6 @@ from ..security import get_current_corretor, require_admin
 
 router = APIRouter(prefix="/qualificacao", tags=["qualificacao"])
 admin_router = APIRouter(prefix="/qualificacoes", tags=["qualificacao"])
-
-BUCKET = "documentos-clientes"
-TAMANHO_MAX_BYTES = 12 * 1024 * 1024  # 12MB por arquivo — dá folga pra foto de celular
-TIPOS_ACEITOS = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"}
-
 
 def _gerar_token() -> str:
     return secrets.token_urlsafe(24)
@@ -308,25 +304,18 @@ def salvar_formulario(token: str, payload: QualificacaoDados):
 
 
 @router.post("/{token}/documentos", response_model=DocumentoQualificacao)
-async def enviar_documento(token: str, tipo: str, arquivo: UploadFile = File(...)):
+async def enviar_documento(token: str, tipo: DocumentoTipo, arquivo: UploadFile = File(...)):
+    """`tipo: DocumentoTipo` (em vez de `str`) já faz o FastAPI validar contra
+    a lista de tipos aceitos sozinho, com um 422 explicando os valores
+    válidos — não precisa mais checar isso na mão aqui."""
     sb = get_supabase()
     q = _buscar_por_token(sb, token)
     if q["status"] != "aguardando_preenchimento":
         raise HTTPException(409, "Este formulário já foi enviado — não é mais possível anexar documentos.")
-    if tipo not in (
-        "rg", "cpf", "comprovante_residencia", "certidao_nascimento_casamento",
-        "conjuge_rg", "conjuge_cpf", "comprovante_renda", "outro",
-    ):
-        raise HTTPException(400, "Tipo de documento inválido.")
 
-    conteudo = await arquivo.read()
-    if len(conteudo) > TAMANHO_MAX_BYTES:
-        raise HTTPException(413, "Arquivo muito grande — envie até 12MB.")
-    content_type = arquivo.content_type or mimetypes.guess_type(arquivo.filename or "")[0] or "application/octet-stream"
-    if content_type not in TIPOS_ACEITOS:
-        raise HTTPException(415, "Formato não aceito — envie PDF, JPG, PNG ou HEIC.")
+    conteudo, content_type = await validar_e_ler(arquivo)
 
-    storage_path = f"{q['id']}/{tipo}-{secrets.token_hex(6)}-{arquivo.filename}"
+    storage_path = caminho_no_bucket(q["id"], tipo, arquivo.filename)
     sb.storage.from_(BUCKET).upload(storage_path, conteudo, {"content-type": content_type})
 
     row = {
@@ -337,7 +326,14 @@ async def enviar_documento(token: str, tipo: str, arquivo: UploadFile = File(...
         "tamanho_bytes": len(conteudo),
         "enviado_em": datetime.now(timezone.utc).isoformat(),
     }
-    return sb.table("documentos_qualificacao").insert(row).execute().data[0]
+    try:
+        return sb.table("documentos_qualificacao").insert(row).execute().data[0]
+    except Exception:
+        # O upload pro Storage já tinha sido concluído — sem isso, ficaria um
+        # arquivo órfão lá (sem linha nenhuma apontando pra ele) toda vez que
+        # essa gravação falhasse.
+        excluir_do_storage_silenciosamente(sb, storage_path)
+        raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
 
 
 def _endereco_faltando(endereco: dict, rotulo: str) -> list[str]:

@@ -6,6 +6,7 @@ import type {
   Corretor,
   CorretorCriado,
   CorretorImportadoItem,
+  DocumentoProposta,
   DocumentoQualificacao,
   DocumentoTipo,
   Lote,
@@ -343,6 +344,30 @@ export const api = {
   // backend/app/routers/crm.py::gerar_pdf_proposta (bloqueador de
   // anúncio/rastreador barrando a URL só por conter "pdf" no caminho).
   gerarPdfProposta: (id: string) => requestBlob(`/crm/propostas/${id}/documento`),
+  // Anexos da proposta (RG, CPF, comprovante de renda etc.) — diferente do
+  // fluxo de qualificação por link, aqui o corretor pode anexar/remover a
+  // qualquer momento, mesmo com a proposta já criada há tempos. A lista já
+  // vem embutida em cada PropostaDetalhe (ver listarPropostas), então só
+  // recarregar a lista de propostas após enviar/excluir já atualiza a tela.
+  enviarDocumentoProposta: async (propostaId: string, tipo: DocumentoTipo, arquivo: File): Promise<DocumentoProposta> => {
+    const form = new FormData();
+    form.append("arquivo", arquivo);
+    const token = getToken();
+    const res = await fetchComRetry(`${API_URL}/crm/propostas/${propostaId}/documentos?tipo=${tipo}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(extrairErro(body, `Erro ${res.status} ao enviar o documento`));
+    }
+    return res.json();
+  },
+  baixarDocumentoProposta: (propostaId: string, documentoId: string) =>
+    request<{ url: string }>(`/crm/propostas/${propostaId}/documentos/${documentoId}/arquivo`, undefined, true),
+  excluirDocumentoProposta: (propostaId: string, documentoId: string) =>
+    request<void>(`/crm/propostas/${propostaId}/documentos/${documentoId}`, { method: "DELETE" }, true),
 
   // Painel — fila de pedidos de reserva vindos do catálogo público (+ os criados manualmente)
   listarReservas: () => request<ReservaComLote[]>("/reservas", undefined, true),

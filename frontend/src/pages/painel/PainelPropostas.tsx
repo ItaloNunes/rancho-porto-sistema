@@ -3,6 +3,7 @@ import Modal from "../../components/Modal";
 import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
+import PropostaDocumentos from "./PropostaDocumentos";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
 const STATUS_LABEL: Record<PropostaStatus, string> = {
@@ -25,6 +26,7 @@ export default function PainelPropostas() {
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
+  const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -102,6 +104,7 @@ export default function PainelPropostas() {
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Valor proposto</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Documentos</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
@@ -123,6 +126,11 @@ export default function PainelPropostas() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <button className="btn-row btn-row-neutral" onClick={() => setVerDocumentosDe(p.id)}>
+                      {p.documentos.length > 0 ? `${p.documentos.length} anexo(s)` : "anexar"}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
@@ -158,6 +166,22 @@ export default function PainelPropostas() {
           />
         </Modal>
       )}
+
+      {verDocumentosDe &&
+        (() => {
+          const proposta = propostas?.find((p) => p.id === verDocumentosDe);
+          // A proposta pode ter sumido da lista entre um recarregar() e
+          // outro (ex.: excluída em outra aba) — nesse caso simplesmente
+          // não reabre o modal, em vez de quebrar renderizando undefined.
+          if (!proposta) return null;
+          return (
+            <Modal onClose={() => setVerDocumentosDe(null)} labelledBy="proposta-documentos-title">
+              <div className="p-6 sm:p-8">
+                <PropostaDocumentos proposta={proposta} onAtualizado={recarregar} />
+              </div>
+            </Modal>
+          );
+        })()}
     </div>
   );
 }

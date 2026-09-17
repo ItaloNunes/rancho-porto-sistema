@@ -150,6 +150,21 @@ export interface Proposta {
 export interface PropostaDetalhe extends Proposta {
   lote?: Lote | null;
   cliente?: Cliente | null;
+  documentos: DocumentoProposta[];
+}
+
+/** Documento anexado direto numa proposta pelo corretor, no painel — pode
+ * ser enviado a qualquer momento, mesmo depois da proposta já criada (ao
+ * contrário de DocumentoQualificacao, que trava assim que o formulário de
+ * qualificação é enviado). Ver PainelPropostas.tsx e routers/crm.py. */
+export interface DocumentoProposta {
+  id: string;
+  proposta_id: string;
+  tipo: DocumentoTipo;
+  nome_arquivo: string;
+  tamanho_bytes?: number | null;
+  enviado_por?: string | null;
+  enviado_em: string;
 }
 
 export type ReservaStatus =
