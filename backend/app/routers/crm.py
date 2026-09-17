@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
-from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf
+from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..schemas import (
     Cliente,
     ClienteCreate,
@@ -587,20 +587,12 @@ def excluir_documento_proposta(proposta_id: str, documento_id: str, corretor: di
     return {"ok": True}
 
 
-@router.get("/propostas/{proposta_id}/documento")
-def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
-    """Gera o PDF da proposta em papel timbrado (logo Castel), com os dados do
-    lote, cliente, corretor e as condições comerciais — pra enviar ao cliente.
-
-    Rota deliberadamente NÃO tem "pdf" na URL (era /propostas/{id}/pdf antes) —
-    bloqueadores de anúncio/rastreadores (Brave Shields, uBlock, etc.) usam
-    listas de filtro com regras genéricas tipo "*/pdf*" que casam com URL só
-    pelo caminho, mesmo sendo uma API de negócio e não anúncio nenhum. Isso
-    fazia o fetch() do navegador morrer com erro de rede puro (nem chegava a
-    ter resposta), 100% reproduzível pra quem tivesse esse tipo de bloqueio
-    ativado — indistinguível de "servidor fora do ar" do lado do frontend.
-    """
-    sb = get_supabase()
+def _montar_pdf_proposta(sb, proposta_id: str, corretor: dict) -> tuple[bytes, str]:
+    """Busca a proposta e gera os bytes do PDF em papel timbrado — usado tanto
+    pelo "gerar PDF" de só a proposta quanto pelo relatório completo (proposta
+    + documentos anexados) abaixo, pra não duplicar essa lógica em dois
+    lugares. Retorna (pdf_bytes, identificador_do_lote) — o identificador serve
+    só pra montar o nome do arquivo baixado."""
     # Antes eram até 4 idas e voltas ao Supabase em série (proposta, depois
     # condomínio, depois corretor, depois formulário) — cada uma soma latência
     # de rede, e é exatamente esse acúmulo que fazia "gerar PDF" parecer bem
@@ -666,7 +658,68 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
         gerado_por=corretor,
         dados_qualificacao=dados_qualificacao,
     )
-    nome_arquivo = f"proposta-{lote.get('identificador', proposta_id)}.pdf".replace(" ", "-")
+    return pdf_bytes, lote.get("identificador", proposta_id)
+
+
+@router.get("/propostas/{proposta_id}/documento")
+def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
+    """Gera o PDF da proposta em papel timbrado (logo Castel), com os dados do
+    lote, cliente, corretor e as condições comerciais — pra enviar ao cliente.
+
+    Rota deliberadamente NÃO tem "pdf" na URL (era /propostas/{id}/pdf antes) —
+    bloqueadores de anúncio/rastreadores (Brave Shields, uBlock, etc.) usam
+    listas de filtro com regras genéricas tipo "*/pdf*" que casam com URL só
+    pelo caminho, mesmo sendo uma API de negócio e não anúncio nenhum. Isso
+    fazia o fetch() do navegador morrer com erro de rede puro (nem chegava a
+    ter resposta), 100% reproduzível pra quem tivesse esse tipo de bloqueio
+    ativado — indistinguível de "servidor fora do ar" do lado do frontend.
+    """
+    sb = get_supabase()
+    pdf_bytes, identificador_lote = _montar_pdf_proposta(sb, proposta_id, corretor)
+    nome_arquivo = f"proposta-{identificador_lote}.pdf".replace(" ", "-")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nome_arquivo}"'},
+    )
+
+
+@router.get("/propostas/{proposta_id}/documento-completo")
+def gerar_relatorio_completo(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
+    """Gera UM ÚNICO PDF: a proposta (mesmo documento de `gerar_pdf_proposta`
+    acima) seguida de todos os documentos anexados (RG, CPF, comprovantes...),
+    nessa ordem — pra ter tudo junto pra enviar/arquivar de uma vez, em vez de
+    baixar a proposta e cada anexo separado. Documento que já é PDF entra com
+    todas as páginas; imagem (JPG/PNG/WEBP/HEIC) vira uma página só com a
+    foto. Mesma trava de status do "gerar PDF" (só depois de aprovada) — sem
+    isso o relatório completo destravaria o PDF antes da hora."""
+    sb = get_supabase()
+    pdf_proposta, identificador_lote = _montar_pdf_proposta(sb, proposta_id, corretor)
+
+    documentos = (
+        sb.table("documentos_proposta")
+        .select("storage_path, nome_arquivo")
+        .eq("proposta_id", proposta_id)
+        .order("enviado_em")
+        .execute()
+        .data
+    )
+    anexos: list[bytes] = []
+    for doc in documentos:
+        try:
+            anexos.append(sb.storage.from_(BUCKET).download(doc["storage_path"]))
+        except Exception:
+            # Um anexo sumido/corrompido no Storage não pode derrubar o
+            # relatório inteiro — melhor entregar com o que existe do que
+            # falhar tudo por causa de 1 arquivo problemático.
+            logger.warning(
+                "Documento %s da proposta %s não pôde ser baixado do Storage — pulando no relatório completo.",
+                doc.get("nome_arquivo"),
+                proposta_id,
+            )
+
+    pdf_bytes = montar_relatorio_completo(pdf_proposta, anexos)
+    nome_arquivo = f"proposta-completa-{identificador_lote}.pdf".replace(" ", "-")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

@@ -43,6 +43,7 @@ export default function PropostaDocumentos({
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState<string | null>(null);
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const documentos = [...proposta.documentos].sort(
@@ -81,6 +82,33 @@ export default function PropostaDocumentos({
       alert(mensagem);
     } finally {
       setBaixando(null);
+    }
+  }
+
+  async function gerarRelatorioCompleto() {
+    // Mesmo padrão de PainelPropostas.tsx::abrirPdf — a aba precisa abrir na
+    // hora do clique (síncrono), antes do fetch, senão o navegador bloqueia
+    // por não reconhecer como resultado direto de um gesto do usuário.
+    const aba = abrirAbaComCarregamento("Gerando relatório completo...");
+    setGerandoRelatorio(true);
+    try {
+      const blob = await api.gerarRelatorioCompletoProposta(proposta.id);
+      const url = URL.createObjectURL(blob);
+      if (aba) {
+        aba.location.href = url;
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `proposta-completa-${proposta.lote?.identificador ?? proposta.id}.pdf`;
+        link.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      const mensagem = err instanceof Error ? err.message : String(err);
+      mostrarErroNaAba(aba, mensagem);
+      alert(mensagem);
+    } finally {
+      setGerandoRelatorio(false);
     }
   }
 
@@ -170,6 +198,22 @@ export default function PropostaDocumentos({
           ))}
         </div>
       )}
+
+      <div className="border-t border-border pt-3">
+        <button
+          className="btn btn-primary w-full !py-2.5"
+          disabled={gerandoRelatorio}
+          onClick={gerarRelatorioCompleto}
+        >
+          {gerandoRelatorio ? "Gerando relatório..." : "Gerar PDF completo (proposta + documentos)"}
+        </button>
+        <p className="text-xs text-ink-soft mt-1.5">
+          Junta a proposta e todos os documentos anexados acima num único PDF, pronto pra enviar ou arquivar.
+          {proposta.status === "rascunho" || proposta.status === "aguardando_aprovacao" ? (
+            <> Só funciona depois que a proposta for aprovada por um administrador.</>
+          ) : null}
+        </p>
+      </div>
     </div>
   );
 }

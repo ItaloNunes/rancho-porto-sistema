@@ -344,6 +344,11 @@ export const api = {
   // backend/app/routers/crm.py::gerar_pdf_proposta (bloqueador de
   // anúncio/rastreador barrando a URL só por conter "pdf" no caminho).
   gerarPdfProposta: (id: string) => requestBlob(`/crm/propostas/${id}/documento`),
+  // Igual a gerarPdfProposta, mas num PDF só: a proposta seguida de todos os
+  // documentos anexados (RG, CPF, comprovantes...) — ver
+  // backend/app/routers/crm.py::gerar_relatorio_completo. Mesma ausência de
+  // "pdf" na URL, pelo mesmo motivo (bloqueador de anúncio/rastreador).
+  gerarRelatorioCompletoProposta: (id: string) => requestBlob(`/crm/propostas/${id}/documento-completo`),
   // Anexos da proposta (RG, CPF, comprovante de renda etc.) — diferente do
   // fluxo de qualificação por link, aqui o corretor pode anexar/remover a
   // qualquer momento, mesmo com a proposta já criada há tempos. A lista já

@@ -10,3 +10,10 @@ python-multipart==0.0.12
 # que o backend emite e valida sozinho — ver app/usuarios.py e app/security.py.
 bcrypt==4.2.0
 PyJWT==2.9.0
+# Relatório completo (proposta + documentos anexados num PDF só, ver
+# routers/crm.py::gerar_relatorio_completo / app/pdf.py::montar_relatorio_completo):
+# pypdf mescla as páginas, Pillow+pillow-heif convertem cada imagem anexada
+# (JPG/PNG/WEBP/HEIC) numa página de PDF antes de mesclar.
+pypdf==5.1.0
+Pillow==11.0.0
+pillow-heif==0.21.0

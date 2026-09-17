@@ -6,11 +6,15 @@ corretor e as condições (valores, entrada, parcelas) propostas, pra formalizar
 e enviar ao cliente antes da negociação virar contrato.
 """
 
+import io
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from fpdf import FPDF
+
+logger = logging.getLogger(__name__)
 
 LOGO_PATH = Path(__file__).parent / "assets" / "castel-logo.png"
 
@@ -527,6 +531,121 @@ def gerar_proposta_pdf(
 
     out = pdf.output()
     return bytes(out)
+
+
+# ---------------------------------------------------------------------------
+# Relatório completo (proposta + documentos anexados) — usado por
+# GET /crm/propostas/{id}/documento-completo (ver routers/crm.py). Mescla o
+# PDF da proposta com cada documento anexado (RG, CPF, comprovantes...) num
+# único arquivo, na ordem em que foram enviados. Documento que já é PDF entra
+# com todas as páginas; imagem vira 1 página cheia com a foto.
+# ---------------------------------------------------------------------------
+
+
+def _detectar_tipo_por_assinatura(conteudo: bytes) -> str:
+    """Mesma checagem de assinatura (magic bytes) usada no upload
+    (documentos.py::_bate_assinatura), só que aqui pra IDENTIFICAR o tipo de
+    um arquivo já salvo, não pra validar um tipo declarado — o registro em
+    `documentos_proposta` guarda só a CATEGORIA do documento (rg, cpf...),
+    não o content-type do arquivo, então não dá pra saber por ali se é PDF ou
+    imagem."""
+    if conteudo.startswith(b"%PDF-"):
+        return "application/pdf"
+    if conteudo.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if conteudo.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if conteudo[:4] == b"RIFF" and conteudo[8:12] == b"WEBP":
+        return "image/webp"
+    if conteudo[4:8] == b"ftyp":
+        return "image/heic"
+    return "application/octet-stream"
+
+
+def _pagina_pdf_da_imagem(conteudo: bytes, tipo: str) -> Optional[bytes]:
+    """Converte uma imagem (JPG/PNG/WEBP/HEIC) numa página de PDF só com ela,
+    ocupando o quanto der da folha mantendo a proporção — pra virar 1 página
+    do relatório completo. Retorna None se não conseguir abrir a imagem (ex.:
+    arquivo corrompido) em vez de derrubar o relatório inteiro por causa de 1
+    anexo ruim."""
+    from PIL import Image
+
+    if tipo == "image/heic":
+        # Pillow sozinho não decodifica HEIC — precisa desse plugin
+        # registrado antes do Image.open (ver requirements.txt).
+        import pillow_heif
+
+        pillow_heif.register_heif_opener()
+
+    try:
+        img = Image.open(io.BytesIO(conteudo))
+        img.load()
+    except Exception:
+        logger.warning("Não foi possível abrir uma imagem (%s) pra incluir no relatório completo.", tipo)
+        return None
+
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+
+    # Pillow desenha a página do PDF do tamanho da imagem, na resolução
+    # (dpi) que a gente passar — não redimensiona a folha sozinho. Pra imagem
+    # caber numa A4 com 10mm de margem, calcula o dpi que faz o tamanho em
+    # pixels da imagem corresponder exatamente à área útil da folha (ou
+    # menor, se a imagem já for pequena o bastante pra não precisar esticar).
+    largura_pagina, altura_pagina = 595.28, 841.89  # A4 em pontos (72pt/polegada)
+    margem = 28.35  # 10mm em pontos
+    largura_util, altura_util = largura_pagina - 2 * margem, altura_pagina - 2 * margem
+    dpi_base = 100.0
+    largura_pt_no_dpi_base = img.width / dpi_base * 72
+    altura_pt_no_dpi_base = img.height / dpi_base * 72
+    fator = min(largura_util / largura_pt_no_dpi_base, altura_util / altura_pt_no_dpi_base, 1)
+    dpi_final = dpi_base / fator if fator > 0 else dpi_base
+
+    saida = io.BytesIO()
+    img.save(saida, format="PDF", resolution=dpi_final)
+    return saida.getvalue()
+
+
+def montar_relatorio_completo(pdf_proposta: bytes, documentos: list[bytes]) -> bytes:
+    """Mescla o PDF da proposta com os documentos anexados, nessa ordem:
+    proposta primeiro, documentos depois (na ordem em que foram enviados —
+    ver a consulta ordenada por enviado_em em routers/crm.py). Cada
+    `documentos[i]` é o conteúdo bruto baixado do Storage, ainda sem saber se
+    é PDF ou imagem — descoberto aqui pela assinatura dos bytes."""
+    from pypdf import PdfReader, PdfWriter
+
+    writer = PdfWriter()
+
+    leitor_proposta = PdfReader(io.BytesIO(pdf_proposta))
+    for pagina in leitor_proposta.pages:
+        writer.add_page(pagina)
+
+    for conteudo in documentos:
+        tipo = _detectar_tipo_por_assinatura(conteudo)
+        if tipo == "application/pdf":
+            try:
+                leitor = PdfReader(io.BytesIO(conteudo))
+                for pagina in leitor.pages:
+                    writer.add_page(pagina)
+            except Exception:
+                logger.warning("Não foi possível ler um PDF anexado pra incluir no relatório completo.")
+            continue
+        if tipo == "application/octet-stream":
+            # Nem PDF, nem imagem reconhecida (não deveria acontecer — o
+            # upload já valida a assinatura antes de aceitar, ver
+            # documentos.py::validar_e_ler) — pula em vez de quebrar tudo.
+            logger.warning("Anexo com formato não reconhecido — pulando no relatório completo.")
+            continue
+        pagina_pdf = _pagina_pdf_da_imagem(conteudo, tipo)
+        if pagina_pdf is None:
+            continue
+        leitor = PdfReader(io.BytesIO(pagina_pdf))
+        for pagina in leitor.pages:
+            writer.add_page(pagina)
+
+    saida = io.BytesIO()
+    writer.write(saida)
+    return saida.getvalue()
 
 
 # ---------------------------------------------------------------------------
