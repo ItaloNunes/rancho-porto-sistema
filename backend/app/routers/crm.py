@@ -14,11 +14,14 @@ layout exato do formulário em papel usado pela imobiliária (Proposta de
 Compra/Venda Castel, operada com a JR Imóveis) — ver app/pdf.py.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from postgrest.exceptions import APIError
+
+logger = logging.getLogger(__name__)
 
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
@@ -373,15 +376,34 @@ def _pode_mexer_na_proposta(corretor: dict, proposta: dict) -> bool:
     return corretor["papel"] == "admin" or proposta.get("corretor_id") in (None, corretor["id"])
 
 
+def _query_propostas(sb, corretor: dict, com_documentos: bool):
+    campos = "*, lote:lotes(*), cliente:clientes(*)"
+    if com_documentos:
+        campos += ", documentos:documentos_proposta(*)"
+    query = sb.table("propostas").select(campos).order("created_at", desc=True)
+    if corretor["papel"] != "admin":
+        query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
+    return query
+
+
 @router.get("/propostas", response_model=list[PropostaDetalhe])
 def listar_propostas(corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
-    query = sb.table("propostas").select(
-        "*, lote:lotes(*), cliente:clientes(*), documentos:documentos_proposta(*)"
-    ).order("created_at", desc=True)
-    if corretor["papel"] != "admin":
-        query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
-    return query.execute().data
+    try:
+        return _query_propostas(sb, corretor, com_documentos=True).execute().data
+    except APIError as e:
+        # documentos_proposta só existe depois que a migration 0015 rodar no
+        # banco (ver supabase/migrations/0015_documentos_proposta.sql) — até
+        # lá, o PostgREST rejeita esse embed com "relationship not found".
+        # Em vez de derrubar a tela inteira de Propostas (como fazia antes
+        # dessa proteção), cai pro comportamento de antes: lista sem a coluna
+        # de documentos, que volta a aparecer sozinha assim que a migration
+        # rodar — sem precisar de outro deploy.
+        logger.warning("Consulta de propostas sem documentos_proposta (migration 0015 pendente?): %s", e)
+        dados = _query_propostas(sb, corretor, com_documentos=False).execute().data
+        for proposta in dados:
+            proposta["documentos"] = []
+        return dados
 
 
 @router.post("/propostas", response_model=Proposta)
