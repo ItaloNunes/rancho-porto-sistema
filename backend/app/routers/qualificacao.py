@@ -18,6 +18,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
@@ -309,14 +310,20 @@ async def enviar_documento(token: str, tipo: DocumentoTipo, arquivo: UploadFile 
     a lista de tipos aceitos sozinho, com um 422 explicando os valores
     válidos — não precisa mais checar isso na mão aqui."""
     sb = get_supabase()
-    q = _buscar_por_token(sb, token)
+    # Ver o mesmo comentário em routers/crm.py::anexar_documento_proposta:
+    # essas chamadas do Supabase são síncronas/bloqueantes, e essa rota
+    # precisa ser "async def" por causa do `await validar_e_ler`. Sem
+    # `run_in_threadpool`, cada upload aqui travava a única thread do event
+    # loop do uvicorn — e com ela, o sistema inteiro (outras abas, outros
+    # corretores) — até o Storage/banco responderem.
+    q = await run_in_threadpool(_buscar_por_token, sb, token)
     if q["status"] != "aguardando_preenchimento":
         raise HTTPException(409, "Este formulário já foi enviado — não é mais possível anexar documentos.")
 
     conteudo, content_type = await validar_e_ler(arquivo)
 
     storage_path = caminho_no_bucket(q["id"], tipo, arquivo.filename)
-    sb.storage.from_(BUCKET).upload(storage_path, conteudo, {"content-type": content_type})
+    await run_in_threadpool(sb.storage.from_(BUCKET).upload, storage_path, conteudo, {"content-type": content_type})
 
     row = {
         "formulario_id": q["id"],
@@ -327,12 +334,12 @@ async def enviar_documento(token: str, tipo: DocumentoTipo, arquivo: UploadFile 
         "enviado_em": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        return sb.table("documentos_qualificacao").insert(row).execute().data[0]
+        return await run_in_threadpool(lambda: sb.table("documentos_qualificacao").insert(row).execute().data[0])
     except Exception:
         # O upload pro Storage já tinha sido concluído — sem isso, ficaria um
         # arquivo órfão lá (sem linha nenhuma apontando pra ele) toda vez que
         # essa gravação falhasse.
-        excluir_do_storage_silenciosamente(sb, storage_path)
+        await run_in_threadpool(excluir_do_storage_silenciosamente, sb, storage_path)
         raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
 
 

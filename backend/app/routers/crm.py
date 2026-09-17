@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from postgrest.exceptions import APIError
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -477,7 +478,19 @@ async def anexar_documento_proposta(
     rejeitar sozinho (422) um tipo fora da lista aceita, antes mesmo de
     chegar aqui."""
     sb = get_supabase()
-    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    # _carregar_proposta_ou_404, o upload pro Storage e o insert abaixo são
+    # todos chamadas SÍNCRONAS (bloqueantes) do cliente do Supabase. Numa
+    # rota "async def" como essa (precisa ser async por causa do
+    # `await validar_e_ler`, que lê o arquivo enviado de forma assíncrona),
+    # chamar uma função bloqueante direto — sem `run_in_threadpool` — trava
+    # a ÚNICA thread do event loop do uvicorn até ela terminar. Na prática
+    # isso significa: enquanto um anexo está subindo, TODO o resto do
+    # sistema (outros corretores, outras abas, até o /health) fica sem
+    # resposta — foi o que causava aqueles erros "não foi possível
+    # conectar"/CORS aleatórios em telas completamente diferentes. As rotas
+    # "def" (não-async) do resto do arquivo não têm esse problema porque o
+    # FastAPI já roda elas numa threadpool sozinho.
+    proposta = await run_in_threadpool(_carregar_proposta_ou_404, sb, proposta_id)
     if not _pode_mexer_na_proposta(corretor, proposta):
         raise HTTPException(403, "Esta proposta é de outro corretor.")
 
@@ -485,7 +498,9 @@ async def anexar_documento_proposta(
 
     storage_path = caminho_no_bucket(f"proposta/{proposta_id}", tipo, arquivo.filename)
     try:
-        sb.storage.from_(BUCKET).upload(storage_path, conteudo, {"content-type": content_type})
+        await run_in_threadpool(
+            sb.storage.from_(BUCKET).upload, storage_path, conteudo, {"content-type": content_type}
+        )
     except Exception:
         raise HTTPException(502, "Não foi possível enviar o arquivo agora. Tente novamente em instantes.")
 
@@ -499,13 +514,14 @@ async def anexar_documento_proposta(
         "enviado_em": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        return sb.table("documentos_proposta").insert(row).execute().data[0]
+        inserido = await run_in_threadpool(lambda: sb.table("documentos_proposta").insert(row).execute().data[0])
     except Exception:
         # O arquivo já subiu pro Storage — sem isso, uma falha só na gravação
         # da linha (ex.: Supabase instável por um instante) deixaria um
         # arquivo órfão no bucket, sem nenhum registro apontando pra ele.
-        excluir_do_storage_silenciosamente(sb, storage_path)
+        await run_in_threadpool(excluir_do_storage_silenciosamente, sb, storage_path)
         raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
+    return inserido
 
 
 @router.get("/propostas/{proposta_id}/documentos/{documento_id}/arquivo")
