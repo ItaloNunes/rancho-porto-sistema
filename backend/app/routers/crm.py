@@ -515,11 +515,24 @@ async def anexar_documento_proposta(
     }
     try:
         inserido = await run_in_threadpool(lambda: sb.table("documentos_proposta").insert(row).execute().data[0])
-    except Exception:
+    except Exception as e:
         # O arquivo já subiu pro Storage — sem isso, uma falha só na gravação
         # da linha (ex.: Supabase instável por um instante) deixaria um
         # arquivo órfão no bucket, sem nenhum registro apontando pra ele.
         await run_in_threadpool(excluir_do_storage_silenciosamente, sb, storage_path)
+        if isinstance(e, APIError) and e.code == "42P01":
+            # undefined_table: a migration 0015 (cria documentos_proposta)
+            # ainda não rodou no banco. Isso é permanente, não uma
+            # instabilidade passageira — devolver 502 aqui faria o
+            # `fetchComRetry` do frontend insistir por até ~75s achando que
+            # é algo temporário, travando a tela em "Enviando..." sem motivo.
+            # Um 500 imediato evita o retry e mostra o erro real na hora.
+            logger.error("documentos_proposta não existe — migration 0015 pendente: %s", e)
+            raise HTTPException(
+                500,
+                "O sistema de documentos ainda não foi configurado no banco de dados "
+                "(falta rodar uma migration pendente). Avise o administrador do sistema.",
+            )
         raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
     return inserido
 
