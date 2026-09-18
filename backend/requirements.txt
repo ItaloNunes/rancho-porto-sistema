@@ -20,3 +20,8 @@ pillow-heif==0.21.0
 # Importação de planilha de lotes (painel, só admin) — só .xlsx precisa de
 # lib externa, .csv usa o módulo csv da stdlib (ver app/importacao.py).
 openpyxl==3.1.5
+# Importação de planilha de lotes: além de .xlsx/.csv, aceita a tabela
+# oficial em PDF da construtora (status vem só como cor de fundo da linha,
+# não como texto — ver app/importacao.py::ler_planilha_pdf).
+pdfplumber==0.11.4
+pymupdf==1.24.11

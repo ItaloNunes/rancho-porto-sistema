@@ -2,18 +2,24 @@
 routers/condominios.py::preview_importacao_lotes/confirmar_importacao_lotes).
 
 Cobre o caso de venda/reserva feita fora do sistema: o admin mantém sua
-própria planilha de controle (mesmas colunas de sempre: quadra, lote,
-status) e sobe ela aqui de vez em quando pra refletir no painel, em vez de
-marcar lote por lote na mão. Só o status é lido daqui — tamanho/valores
-continuam só pela tabela oficial do empreendimento (ver reset_e_atualizacao.sql).
+própria planilha/tabela de controle e sobe ela aqui de vez em quando pra
+refletir no painel, em vez de marcar lote por lote na mão. Só o status é
+lido daqui — tamanho/valores continuam só pela tabela oficial do
+empreendimento (ver reset_e_atualizacao.sql).
 
-Aceita .xlsx ou .csv, com cabeçalhos flexíveis (maiúsculo/minúsculo, com ou
-sem acento, alguns sinônimos comuns) — ver _ALIASES_* abaixo.
+Aceita três formatos:
+- .xlsx/.csv com colunas Quadra, Lote, Status (cabeçalho flexível — ver
+  _ALIASES_* abaixo);
+- .pdf — a própria tabela oficial da construtora (mesmo arquivo que vem por
+  WhatsApp/e-mail), onde o status NÃO é texto: é só a cor de fundo da linha
+  inteira (vermelho = vendido, amarelo = reservado, sem cor = disponível).
+  Ver ler_planilha_pdf abaixo.
 """
 
 import csv
 import io
 import unicodedata
+from collections import Counter
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -107,12 +113,143 @@ def _ler_xlsx(conteudo: bytes) -> list[list]:
     return [["" if c is None else c for c in row] for row in ws.iter_rows(values_only=True)]
 
 
-async def ler_planilha(arquivo: UploadFile) -> list[dict]:
-    """Lê um .xlsx ou .csv de importação e devolve uma lista de
+# Nas duas tabelas oficiais (Rancho Texas, Porto Franco) o número da
+# quadra/lote fica sempre nos primeiros ~140pt da página — é essa faixa que
+# a amostragem de pixel usa pra descobrir a cor de fundo da linha.
+_LARGURA_COLUNA_IDENTIFICACAO_PT = 140
+_DPI_RENDER_PDF = 150
+
+
+def _classificar_cor_linha(rgb: tuple[int, int, int]) -> str:
+    """Vermelho = vendido, amarelo = reservado, qualquer outra cor (inclui
+    "sem cor", já que quem chama filtra preto/branco antes) = disponível."""
+    r, g, b = rgb
+    if r > 200 and g < 100 and b < 100:
+        return "vendido"
+    if r > 200 and g > 200 and b < 100:
+        return "reservado"
+    return "disponivel"
+
+
+def ler_planilha_pdf(conteudo: bytes, tem_quadra_propria: bool) -> list[dict]:
+    """Lê a tabela oficial em PDF do jeito que a construtora manda: o status
+    não vem como texto, só como a COR DE FUNDO da linha inteira. Processo:
+    1) pdfplumber acha onde cada linha começa/termina e qual quadra/lote ela
+       é (pelas palavras); 2) PyMuPDF renderiza a página como imagem e a
+       gente amostra os pixels dessa faixa da linha pra achar a cor de fundo
+       predominante (ignorando preto de texto/borda e branco de fundo).
+
+    `tem_quadra_propria` diz se esse empreendimento tem quadra separada do
+    número do lote (Porto Franco: duas colunas) ou se quadra == número do
+    lote (Rancho Texas: uma coluna só) — quem chama decide isso olhando os
+    lotes já cadastrados desse condomínio (ver preview_importacao_lotes)."""
+    try:
+        import pymupdf
+    except ImportError:
+        raise HTTPException(500, "Suporte a PDF não está instalado no servidor.")
+    try:
+        import pdfplumber
+    except ImportError:
+        raise HTTPException(500, "Suporte a PDF não está instalado no servidor.")
+    try:
+        from PIL import Image
+    except ImportError:
+        raise HTTPException(500, "Suporte a PDF não está instalado no servidor.")
+
+    try:
+        doc_imagens = pymupdf.open(stream=conteudo, filetype="pdf")
+    except Exception:
+        raise HTTPException(422, "Não consegui abrir o PDF — confira se o arquivo não está corrompido.")
+
+    resultado: list[dict] = []
+    try:
+        try:
+            pdf = pdfplumber.open(io.BytesIO(conteudo))
+        except Exception:
+            raise HTTPException(422, "Não consegui abrir o PDF — confira se o arquivo não está corrompido.")
+        with pdf:
+            escala = _DPI_RENDER_PDF / 72
+            for indice, page in enumerate(pdf.pages):
+                if indice >= len(doc_imagens):
+                    break
+                palavras = page.extract_words()
+                pix = doc_imagens[indice].get_pixmap(dpi=_DPI_RENDER_PDF)
+                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+
+                linhas: dict[int, list] = {}
+                for w in sorted(palavras, key=lambda w: (round(w["top"]), w["x0"])):
+                    chave = round(w["top"] / 3)
+                    linhas.setdefault(chave, []).append(w)
+
+                for palavras_linha in linhas.values():
+                    palavras_linha.sort(key=lambda w: w["x0"])
+                    numeros = [
+                        w
+                        for w in palavras_linha
+                        if w["text"].replace(",", "").replace(".", "").isdigit()
+                        and w["x0"] < _LARGURA_COLUNA_IDENTIFICACAO_PT
+                    ]
+                    if not numeros:
+                        continue
+                    if tem_quadra_propria:
+                        if len(numeros) < 2:
+                            continue
+                        quadra_txt, lote_txt = numeros[0]["text"], numeros[1]["text"]
+                        ultima_palavra = numeros[1]
+                    else:
+                        quadra_txt = lote_txt = numeros[0]["text"]
+                        ultima_palavra = numeros[0]
+                    try:
+                        lote_numero = int(lote_txt)
+                        # A tabela em PDF imprime a quadra com zero à esquerda
+                        # ("01", "08"...) mas o banco guarda sem ("1", "8"...)
+                        # — sem isso a quadra nunca bate e a linha vira
+                        # "não encontrado" à toa.
+                        quadra = str(int(quadra_txt))
+                    except ValueError:
+                        continue
+
+                    topo = min(w["top"] for w in palavras_linha)
+                    base = max(w["bottom"] for w in palavras_linha)
+                    cy = (topo + base) / 2 * escala
+                    x_ini = int(numeros[0]["x0"] * escala) - 5
+                    x_fim = int(ultima_palavra["x1"] * escala) + 5
+
+                    cores = Counter()
+                    for x in range(x_ini, x_fim, 2):
+                        for dy in (-3, 0, 3):
+                            y = int(cy + dy)
+                            if 0 <= x < img.width and 0 <= y < img.height:
+                                cores[img.getpixel((x, y))] += 1
+
+                    melhor, melhor_contagem = None, 0
+                    for cor, n in cores.items():
+                        r, g, b = cor
+                        if r < 80 and g < 80 and b < 80:  # texto/borda (preto)
+                            continue
+                        if r > 240 and g > 240 and b > 240:  # fundo branco (sem tingimento)
+                            continue
+                        if n > melhor_contagem:
+                            melhor_contagem, melhor = n, cor
+
+                    status = _classificar_cor_linha(melhor) if melhor else "disponivel"
+                    resultado.append({"quadra": quadra, "lote_numero": lote_numero, "status": status})
+    finally:
+        doc_imagens.close()
+
+    return resultado
+
+
+async def ler_planilha(arquivo: UploadFile, tem_quadra_propria: bool = False) -> list[dict]:
+    """Lê a planilha/tabela de importação e devolve uma lista de
     {quadra, lote_numero, status} — uma por linha reconhecida. Linhas em
     branco ou com status ilegível são simplesmente ignoradas (não interrompem
     o import inteiro); só erros que impedem ler o arquivo todo (formato
-    errado, coluna obrigatória faltando) levantam HTTPException."""
+    errado, coluna obrigatória faltando) levantam HTTPException.
+
+    `tem_quadra_propria` só é usado pra .pdf (ver ler_planilha_pdf) — o
+    .xlsx/.csv já traz a quadra na própria coluna (ou cai pro número do lote
+    quando não tem, via _normalizar_quadra)."""
     conteudo = await arquivo.read()
     if not conteudo:
         raise HTTPException(400, "Arquivo vazio.")
@@ -120,12 +257,14 @@ async def ler_planilha(arquivo: UploadFile) -> list[dict]:
         raise HTTPException(413, "Arquivo muito grande — envie até 5MB.")
 
     nome = (arquivo.filename or "").lower()
+    if nome.endswith(".pdf"):
+        return ler_planilha_pdf(conteudo, tem_quadra_propria)
     if nome.endswith(".csv"):
         linhas_brutas = _ler_csv(conteudo)
     elif nome.endswith(".xlsx") or nome.endswith(".xlsm"):
         linhas_brutas = _ler_xlsx(conteudo)
     else:
-        raise HTTPException(422, "Formato não reconhecido — envie um arquivo .xlsx ou .csv.")
+        raise HTTPException(422, "Formato não reconhecido — envie um arquivo .xlsx, .csv ou .pdf.")
 
     linhas_brutas = [linha for linha in linhas_brutas if any(str(c).strip() for c in linha)]
     if not linhas_brutas:

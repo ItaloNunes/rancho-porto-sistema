@@ -14,12 +14,15 @@ const STATUS_COR: Record<LoteStatus, string> = {
   vendido: "text-rust",
 };
 
-/** Aceita .xlsx/.xlsm (mimetype real varia entre navegadores/planilhas) e
- * .csv — a validação séria (colunas, conteúdo) é toda no backend; aqui é só
- * um filtro grosseiro pra não deixar a pessoa selecionar um PDF sem querer. */
+/** Aceita a própria tabela oficial em PDF (o status é lido pela cor de
+ * fundo da linha, sem precisar reformatar nada) ou uma planilha .xlsx/.csv
+ * com colunas Quadra/Lote/Status — a validação séria (conteúdo reconhecível)
+ * é toda no backend; aqui é só um filtro grosseiro contra extensão errada. */
 function pareceArquivoValido(arquivo: File): boolean {
   const nome = arquivo.name.toLowerCase();
-  return nome.endsWith(".xlsx") || nome.endsWith(".xlsm") || nome.endsWith(".csv");
+  return (
+    nome.endsWith(".xlsx") || nome.endsWith(".xlsm") || nome.endsWith(".csv") || nome.endsWith(".pdf")
+  );
 }
 
 export default function PainelImportarPlanilha() {
@@ -115,7 +118,8 @@ export default function PainelImportarPlanilha() {
       <div className="mb-5">
         <h1 className="text-xl font-bold text-ink">Importar planilha</h1>
         <p className="text-sm text-ink-soft mt-1 max-w-2xl">
-          Suba a planilha de controle (colunas Quadra, Lote e Status) pra atualizar o estoque quando uma venda ou
+          Suba a própria tabela oficial em PDF (o status é lido pela cor da linha, sem precisar reformatar nada) ou
+          uma planilha .xlsx/.csv com colunas Quadra, Lote e Status, pra atualizar o estoque quando uma venda ou
           reserva acontecer fora do sistema. Só o <span className="font-medium text-ink">status</span> é atualizado —
           valores, tamanho e outros dados do lote não mudam por aqui.
         </p>
@@ -152,20 +156,20 @@ export default function PainelImportarPlanilha() {
           </div>
           <div>
             <label className="block text-xs font-medium text-ink-soft mb-1.5" htmlFor="import-arquivo">
-              Planilha (.xlsx ou .csv)
+              Tabela (PDF, .xlsx ou .csv)
             </label>
             <input
               ref={inputRef}
               id="import-arquivo"
               type="file"
-              accept=".xlsx,.xlsm,.csv"
+              accept=".xlsx,.xlsm,.csv,.pdf"
               className="input !py-1.5"
               disabled={analisando}
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 limparResultadoDaAnalise();
                 if (f && !pareceArquivoValido(f)) {
-                  setErro("Esse arquivo não parece ser uma planilha (.xlsx ou .csv).");
+                  setErro("Esse arquivo não parece ser uma tabela (.pdf, .xlsx ou .csv).");
                   setArquivo(null);
                   return;
                 }

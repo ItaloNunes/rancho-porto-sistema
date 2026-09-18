@@ -110,10 +110,6 @@ async def preview_importacao_lotes(
         raise HTTPException(404, "Condomínio não encontrado.")
     condo = condo[0]
 
-    linhas_planilha = await ler_planilha(arquivo)
-    if not linhas_planilha:
-        raise HTTPException(422, "Não encontrei nenhuma linha válida (com lote e status reconhecidos) na planilha.")
-
     lotes_db = (
         sb.table("lotes")
         .select("id,quadra,lote_numero,identificador,status")
@@ -121,6 +117,17 @@ async def preview_importacao_lotes(
         .execute()
         .data
     )
+    if not lotes_db:
+        raise HTTPException(404, "Esse condomínio não tem lotes cadastrados.")
+    # Só usado quando a planilha é um PDF (ver ler_planilha_pdf) — decide se a
+    # tabela tem quadra separada do número do lote (Porto Franco) ou não
+    # (Rancho Texas), olhando os lotes que já existem nesse condomínio.
+    tem_quadra_propria = any(l["quadra"] != str(l["lote_numero"]) for l in lotes_db)
+
+    linhas_planilha = await ler_planilha(arquivo, tem_quadra_propria)
+    if not linhas_planilha:
+        raise HTTPException(422, "Não encontrei nenhuma linha válida (com lote e status reconhecidos) na planilha.")
+
     por_chave = {(l["quadra"], l["lote_numero"]): l for l in lotes_db}
 
     alteracoes: list[ImportacaoLinha] = []
