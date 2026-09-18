@@ -112,6 +112,44 @@ class LoteStatusUpdate(BaseModel):
     status: LoteStatus
 
 
+class ImportacaoLinha(BaseModel):
+    """Uma linha da planilha importada cujo status difere do que está hoje no
+    banco (ver POST /condominios/lotes/importar/preview) — só as diferenças
+    aparecem aqui, não a planilha inteira."""
+
+    lote_id: str
+    quadra: str
+    lote_numero: int
+    identificador: str
+    status_atual: LoteStatus
+    status_planilha: LoteStatus
+
+
+class ImportacaoPreview(BaseModel):
+    condominio_id: str
+    condominio_nome: str
+    total_linhas_planilha: int
+    total_casadas: int
+    total_alteracoes: int
+    linhas: list[ImportacaoLinha]
+    # Linhas da planilha (quadra/lote) que não bateram com nenhum lote do
+    # empreendimento — normalmente erro de digitação na planilha do admin.
+    nao_encontrados: list[str]
+
+
+class ImportacaoConfirmarItem(BaseModel):
+    lote_id: str
+    status: LoteStatus
+
+
+class ImportacaoConfirmarPayload(BaseModel):
+    """O front manda de volta só os itens que ficaram marcados na tela de
+    preview — não reprocessa a planilha, evitando reler o arquivo (que já
+    pode ter sido fechado/trocado do lado do admin) uma segunda vez."""
+
+    itens: list[ImportacaoConfirmarItem]
+
+
 class LotePoligonoUpdate(BaseModel):
     """Marca manual dos cantos do lote sobre a planta real (ferramenta do
     painel, admin) — mesmo espaço de coordenadas de CondominioDetalhe

@@ -9,6 +9,7 @@ import type {
   DocumentoProposta,
   DocumentoQualificacao,
   DocumentoTipo,
+  ImportacaoPreview,
   Lote,
   LoteComCondominio,
   LoteStatus,
@@ -292,6 +293,31 @@ export const api = {
   // Painel — ferramenta de marcação manual dos lotes na planta real (só admin)
   atualizarPoligonoLote: (loteId: string, poligono: number[][]) =>
     request<Lote>(`/condominios/lotes/${loteId}/poligono`, { method: "PATCH", body: JSON.stringify({ poligono }) }, true),
+  // Painel — importação de planilha de lotes (só admin): cobre venda/reserva
+  // feita fora do sistema. Preview sobe o arquivo e só mostra o que mudaria;
+  // confirmar manda de volta os itens marcados na tela, sem reenviar o arquivo.
+  importarLotesPreview: async (condominioId: string, arquivo: File): Promise<ImportacaoPreview> => {
+    const form = new FormData();
+    form.append("condominio_id", condominioId);
+    form.append("arquivo", arquivo);
+    const token = getToken();
+    const res = await fetchComRetry(`${API_URL}/condominios/lotes/importar/preview`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(extrairErro(body, `Erro ${res.status} ao analisar a planilha`));
+    }
+    return res.json();
+  },
+  importarLotesConfirmar: (itens: { lote_id: string; status: LoteStatus }[]) =>
+    request<Lote[]>(
+      "/condominios/lotes/importar/confirmar",
+      { method: "POST", body: JSON.stringify({ itens }) },
+      true,
+    ),
 
   // Painel — corretores (logins); CRUD restrito a admin no backend
   listarCorretores: () => request<Corretor[]>("/crm/corretores", undefined, true),

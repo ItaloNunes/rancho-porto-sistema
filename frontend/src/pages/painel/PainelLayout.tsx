@@ -27,6 +27,7 @@ const TABS_ADMIN = [
   { to: "/painel/lotes", label: "Lotes" },
   { to: "/painel/visao-geral", label: "Visão geral" },
   { to: "/painel/corretores", label: "Corretores" },
+  { to: "/painel/importar", label: "Importar planilha" },
 ];
 
 // Intervalo de checagem do indicador de "reserva nova" na aba Reservas —

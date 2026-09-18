@@ -388,3 +388,25 @@ export interface CondominioDetalhe extends CondominioResumo {
   base_precos_em?: string | null;
   lotes: Lote[];
 }
+
+// Importação de planilha de lotes (painel, só admin — ver
+// pages/painel/PainelImportarPlanilha.tsx e lib/api.ts::importarLotesPreview/
+// importarLotesConfirmar). Cobre venda/reserva feita fora do sistema.
+export interface ImportacaoLinha {
+  lote_id: string;
+  quadra: string;
+  lote_numero: number;
+  identificador: string;
+  status_atual: LoteStatus;
+  status_planilha: LoteStatus;
+}
+
+export interface ImportacaoPreview {
+  condominio_id: string;
+  condominio_nome: string;
+  total_linhas_planilha: number;
+  total_casadas: number;
+  total_alteracoes: number;
+  linhas: ImportacaoLinha[];
+  nao_encontrados: string[];
+}

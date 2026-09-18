@@ -17,3 +17,6 @@ PyJWT==2.9.0
 pypdf==5.1.0
 Pillow==11.0.0
 pillow-heif==0.21.0
+# Importação de planilha de lotes (painel, só admin) — só .xlsx precisa de
+# lib externa, .csv usa o módulo csv da stdlib (ver app/importacao.py).
+openpyxl==3.1.5
