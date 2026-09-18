@@ -79,10 +79,15 @@ export default function PropostaFormularioCompleto({
     return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
   }, [lotes]);
 
-  const lotesDoEmpreendimento = useMemo(
-    () => (condominioSlug ? lotes.filter((l) => l.condominio_slug === condominioSlug) : lotes),
-    [lotes, condominioSlug],
-  );
+  // Só lotes 'disponivel' entram na busca — desde que criar uma proposta já
+  // reserva o lote na hora (sem esperar aprovação de admin, ver
+  // routers/crm.py::criar_proposta), deixar um lote já reservado/vendido
+  // aparecer aqui só levaria o corretor a preencher o formulário inteiro
+  // pra descobrir o erro 409 só no fim, ao salvar.
+  const lotesDoEmpreendimento = useMemo(() => {
+    const disponiveis = lotes.filter((l) => l.status === "disponivel");
+    return condominioSlug ? disponiveis.filter((l) => l.condominio_slug === condominioSlug) : disponiveis;
+  }, [lotes, condominioSlug]);
 
   const loteSelecionado = lotes.find((l) => l.id === loteId) ?? null;
   const casado = dados.estado_civil === "casado";

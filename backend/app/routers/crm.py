@@ -409,20 +409,65 @@ def listar_propostas(corretor: dict = Depends(get_current_corretor)):
 
 @router.post("/propostas", response_model=Proposta)
 def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current_corretor)):
+    """Assim que o corretor cria a proposta, o lote já sai do estoque na hora
+    (vira 'reservado') — não espera um admin aprovar. A aprovação
+    ('aprovada', ver atualizar_status_proposta/_gerar_reserva_da_proposta_aprovada)
+    continua existindo pra liberar a geração do PDF formal e outras etapas
+    administrativas, mas não é mais o que trava o lote — isso já acontece
+    aqui, na criação."""
     sb = get_supabase()
-    lote = sb.table("lotes").select("id").eq("id", payload.lote_id).limit(1).execute().data
+    lote = sb.table("lotes").select("id, status").eq("id", payload.lote_id).limit(1).execute().data
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
     cliente = sb.table("clientes").select("id").eq("id", payload.cliente_id).limit(1).execute().data
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado.")
+    if lote[0]["status"] != "disponivel":
+        raise HTTPException(409, f"Este lote não está disponível (status atual: {lote[0]['status']}).")
+
+    # Trava o lote de forma atômica — mesmo padrão de reservas.py::criar_reserva:
+    # só marca 'reservado' se ele AINDA estiver 'disponivel' nesse exato
+    # instante (0 linhas afetadas = outra proposta/reserva ganhou a corrida
+    # entre a checagem acima e esta escrita).
+    travou = (
+        sb.table("lotes")
+        .update({"status": "reservado"})
+        .eq("id", payload.lote_id)
+        .eq("status", "disponivel")
+        .execute()
+        .data
+    )
+    if not travou:
+        raise HTTPException(409, "Este lote acabou de ser reservado por outra proposta — atualize a página.")
+
     # mode="json" pra dados_qualificacao (formulário completo, quando vem do
     # PropostaFormularioCompleto.tsx do painel) sair como dict puro, pronto
     # pro Supabase gravar na coluna jsonb.
     data = payload.model_dump(mode="json")
     if corretor["papel"] != "admin":
         data["corretor_id"] = corretor["id"]
-    return sb.table("propostas").insert(data).execute().data[0]
+    try:
+        proposta = sb.table("propostas").insert(data).execute().data[0]
+    except Exception:
+        # A proposta não chegou a ser criada — desfaz a trava pra não deixar
+        # o lote preso em 'reservado' sem nenhuma proposta por trás.
+        sb.table("lotes").update({"status": "disponivel"}).eq("id", payload.lote_id).execute()
+        raise
+
+    try:
+        # Mesmo registro de reserva que antes só nascia na aprovação — criado
+        # aqui já na origem, pra a fila de Reservas do painel refletir a
+        # proposta desde o início. Idempotente/defensivo (checa duplicata,
+        # só mexe no lote se ainda precisar) — ver a função abaixo.
+        _gerar_reserva_da_proposta_aprovada(sb, proposta["id"], proposta)
+    except Exception:
+        logger.warning(
+            "Não foi possível criar o registro de reserva da proposta %s — o lote já está reservado, "
+            "mas a fila de Reservas não vai mostrar esse pedido.",
+            proposta["id"],
+        )
+
+    return proposta
 
 
 @router.patch("/propostas/{proposta_id}", response_model=Proposta)
@@ -769,17 +814,43 @@ def atualizar_status_proposta(
             )
     elif payload.status == "aprovada":
         _gerar_reserva_da_proposta_aprovada(sb, proposta_id, existente)
+    elif payload.status in ("recusada", "cancelada"):
+        _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"])
     return atualizado
 
 
+def _liberar_lote_da_proposta(sb, proposta_id: str, lote_id: str) -> None:
+    """Recusar ou cancelar uma proposta libera o lote de volta pra
+    'disponivel'. Necessário desde que criar_proposta passou a reservar o
+    lote já na criação (sem esperar aprovação de admin): sem isso, toda
+    proposta recusada deixaria o lote travado em 'reservado' pra sempre, sem
+    ninguém mais poder propor por ele. Só mexe no lote se ele AINDA estiver
+    'reservado' nesse instante — nunca destrava um lote que já virou
+    'vendido' por outra via (ex.: outra proposta pro mesmo lote que já foi
+    aceita antes desta ser recusada)."""
+    sb.table("lotes").update({"status": "disponivel"}).eq("id", lote_id).eq("status", "reservado").execute()
+    # Mantém a fila de Reservas em sincronia: se essa proposta já tinha
+    # gerado uma reserva (ver _gerar_reserva_da_proposta_aprovada), cancela
+    # ela também — sem isso ficaria um registro "pendente" órfão apontando
+    # pra um lote que já voltou a ficar disponível.
+    sb.table("reservas").update({"status": "cancelada"}).eq("proposta_id", proposta_id).neq(
+        "status", "cancelada"
+    ).execute()
+
+
 def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) -> None:
-    """Aprovar a proposta já tranca o lote com esse cliente pra valer — em vez
-    de o admin precisar abrir "Novo pedido" em Reservas e digitar tudo de
-    novo, a reserva nasce sozinha aqui, reaproveitando nome/telefone/CPF do
-    cliente que o corretor já cadastrou ao criar a proposta (ver
-    PropostaFormularioCompleto.tsx). Confere antes se já não existe uma
-    reserva com esse proposta_id: reprocessar a aprovação (ex.: um retry no
-    front) não pode duplicar a reserva.
+    """Gera o registro de reserva atrelado a uma proposta, reaproveitando
+    nome/telefone/CPF do cliente que o corretor já cadastrou ao criar a
+    proposta (ver PropostaFormularioCompleto.tsx), em vez de alguém precisar
+    abrir "Novo pedido" em Reservas e digitar tudo de novo.
+
+    Chamada em dois pontos: (1) direto em criar_proposta — hoje o caminho
+    normal, já que a proposta reserva o lote assim que é criada, sem esperar
+    aprovação de admin; e (2) aqui em atualizar_status_proposta, quando a
+    proposta é aprovada — mantida como rede de segurança pra proposta antiga
+    (criada antes dessa mudança) que ainda não tinha reserva. Confere antes
+    se já não existe uma reserva com esse proposta_id, então é seguro chamar
+    dos dois lugares sem duplicar nada.
     """
     ja_existe = sb.table("reservas").select("id").eq("proposta_id", proposta_id).limit(1).execute().data
     if ja_existe:
@@ -800,7 +871,7 @@ def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) ->
             "contato": cliente.get("telefone"),
             "cpf": cliente.get("cpf"),
             "status": "pendente",
-            "observacao": "Reserva gerada automaticamente pela aprovação da proposta.",
+            "observacao": "Reserva gerada automaticamente pela criação/aprovação da proposta.",
         }
     ).execute()
     # Atualização condicional (atômica no Postgres): só sobe pra 'reservado'
