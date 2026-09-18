@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import { api } from "../../lib/api";
 import type { Corretor, Papel } from "../../types";
@@ -25,6 +25,32 @@ export default function PainelCorretores() {
   const [desativando, setDesativando] = useState<{ corretor: Corretor; passo: 1 | 2; digitado: string } | null>(
     null,
   );
+  // Filtro rápido (nome, usuário ou telefone) — útil já que a lista tende a
+  // crescer bastante (dezenas de corretores) e não tem paginação nenhuma.
+  const [busca, setBusca] = useState("");
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return corretores ?? [];
+    return (corretores ?? []).filter((c) => {
+      const alvo = `${c.nome} ${c.usuario ?? ""} ${c.telefone ?? ""}`.toLowerCase();
+      return alvo.includes(termo);
+    });
+  }, [corretores, busca]);
+
+  // Índice rápido pra bater o olho e saber quantos tem, sem precisar contar
+  // linha por linha — sobretudo ativos vs. desativados, que é o que costuma
+  // importar no dia a dia.
+  const contagem = useMemo(() => {
+    const base = { total: 0, ativos: 0, desativados: 0, admins: 0 };
+    for (const c of corretores ?? []) {
+      base.total++;
+      if (c.ativo) base.ativos++;
+      else base.desativados++;
+      if (c.papel === "admin") base.admins++;
+    }
+    return base;
+  }, [corretores]);
 
   function recarregar() {
     setErro(null);
@@ -51,17 +77,45 @@ export default function PainelCorretores() {
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <h1 className="text-xl font-bold text-ink">Corretores</h1>
-        <button className="btn btn-primary" onClick={() => setEditando("novo")}>
-          + Novo login
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {corretores && (
+            <span className="text-xs text-ink-soft whitespace-nowrap">
+              <span className="font-semibold text-ink">{contagem.total}</span> corretor{contagem.total === 1 ? "" : "es"}
+              {" · "}
+              {contagem.ativos} ativo{contagem.ativos === 1 ? "" : "s"}
+              {" · "}
+              {contagem.desativados} desativado{contagem.desativados === 1 ? "" : "s"}
+              {" · "}
+              {contagem.admins} admin{contagem.admins === 1 ? "" : "s"}
+            </span>
+          )}
+          <input
+            className="input sm:w-64"
+            placeholder="Buscar por nome, usuário ou telefone..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={() => setEditando("novo")}>
+            + Novo login
+          </button>
+        </div>
       </div>
 
       {erro && <p className="text-rust text-sm mb-4">{erro}</p>}
 
       {!corretores ? (
         <p className="text-ink-soft text-sm">Carregando...</p>
+      ) : filtrados.length === 0 ? (
+        <p className="text-ink-soft text-sm">
+          {busca.trim() ? `Nenhum corretor encontrado para "${busca.trim()}".` : "Nenhum corretor cadastrado ainda."}
+        </p>
       ) : (
         <div className="card overflow-x-auto">
+          {busca.trim() && (
+            <p className="px-4 pt-3 text-xs text-ink-soft">
+              Mostrando {filtrados.length} de {contagem.total}
+            </p>
+          )}
           <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
@@ -73,7 +127,7 @@ export default function PainelCorretores() {
               </tr>
             </thead>
             <tbody>
-              {corretores.map((c) => (
+              {filtrados.map((c) => (
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
                   <td className="px-4 py-3 font-medium text-ink">{c.nome}</td>
                   <td className="px-4 py-3 text-ink-soft font-mono text-xs">{c.usuario || "—"}</td>
