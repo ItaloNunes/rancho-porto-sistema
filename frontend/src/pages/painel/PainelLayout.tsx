@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import BotaoSuporte from "../../components/BotaoSuporte";
+import { temAcessoAdmin } from "../../types";
 
 // Mudança de setembro/2026: não tem mais Cadastro de Cliente nem
 // Qualificação de Leads (o corretor informa nome/CPF direto no pedido de
@@ -38,7 +39,11 @@ const INTERVALO_RESERVAS_MS = 45_000;
 
 export default function PainelLayout() {
   const { perfil, sair } = useAuth();
-  const tabs = perfil?.papel === "admin" ? [...TABS_BASE, ...TABS_ADMIN] : TABS_BASE;
+  const tabs = temAcessoAdmin(perfil?.papel) ? [...TABS_BASE, ...TABS_ADMIN] : TABS_BASE;
+  // Aba de Atividade: só a conta developer vê — nem os outros admins (ver
+  // security.py::require_developer no backend, mesma regra espelhada aqui).
+  const tabsComAtividade =
+    perfil?.papel === "developer" ? [...tabs, { to: "/painel/atividade", label: "Atividade" }] : tabs;
   const [menuAberto, setMenuAberto] = useState(false);
   const [reservasPendentes, setReservasPendentes] = useState(0);
 
@@ -111,7 +116,7 @@ export default function PainelLayout() {
 
       <nav className="hidden sm:block border-b border-border bg-surface min-w-0 overflow-x-auto">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 flex gap-1">
-          {tabs.map((t) => (
+          {tabsComAtividade.map((t) => (
             <TabLink key={t.to} to={t.to} label={t.label} badge={badgeDe(t.to, reservasPendentes)} />
           ))}
         </div>
@@ -139,7 +144,7 @@ export default function PainelLayout() {
               </button>
             </div>
             <div className="px-3 py-3 grid gap-1">
-              {tabs.map((t) => (
+              {tabsComAtividade.map((t) => (
                 <TabLink
                   key={t.to}
                   to={t.to}

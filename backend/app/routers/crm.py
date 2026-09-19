@@ -29,6 +29,7 @@ from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..schemas import (
+    AtividadeItem,
     Cliente,
     ClienteCreate,
     ClienteUpdate,
@@ -50,7 +51,7 @@ from ..schemas import (
     TrocarSenhaRequest,
     VisaoGeralCondominio,
 )
-from ..security import criar_token, get_current_corretor, require_admin
+from ..security import criar_token, eh_admin, get_current_corretor, require_admin, require_developer
 from .reservas import _pode_mexer_na_reserva
 from ..usuarios import gerar_usuario_unico, hash_senha, senha_de_telefone, verificar_senha
 from ..usuarios import slug as slug_usuario
@@ -115,6 +116,12 @@ def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin
     usar, com senha = telefone (só dígitos). O admin repassa usuário+senha
     pro corretor por fora (WhatsApp, etc.); essa é a única resposta que traz
     a senha em texto puro."""
+    if payload.papel == "developer":
+        # 'developer' não é um papel que se escolhe num formulário — ver
+        # comentário em schemas.py::Papel. Setado direto no banco, de
+        # propósito, pra continuar sendo só de uma conta mesmo com alguém
+        # chamando essa API na mão.
+        raise HTTPException(400, "Este papel não pode ser atribuído por aqui.")
     sb = get_supabase()
     ja_usados = {
         c["usuario"] for c in sb.table("corretores").select("usuario").execute().data if c.get("usuario")
@@ -254,6 +261,8 @@ def importar_corretores(_admin: dict = Depends(require_admin)):
 
 @router.patch("/corretores/{corretor_id}", response_model=Corretor)
 def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict = Depends(require_admin)):
+    if payload.papel == "developer":
+        raise HTTPException(400, "Este papel não pode ser atribuído por aqui.")
     sb = get_supabase()
     existente = sb.table("corretores").select("*").eq("id", corretor_id).limit(1).execute().data
     if not existente:
@@ -321,14 +330,14 @@ def desativar_corretor(corretor_id: str, admin: dict = Depends(require_admin)):
 
 
 def _pode_mexer_no_cliente(corretor: dict, cliente: dict) -> bool:
-    return corretor["papel"] == "admin" or cliente.get("corretor_id") in (None, corretor["id"])
+    return eh_admin(corretor) or cliente.get("corretor_id") in (None, corretor["id"])
 
 
 @router.get("/clientes", response_model=list[Cliente])
 def listar_clientes(corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
     query = sb.table("clientes").select("*").order("nome")
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     return query.execute().data
 
@@ -336,7 +345,7 @@ def listar_clientes(corretor: dict = Depends(get_current_corretor)):
 @router.post("/clientes", response_model=Cliente)
 def criar_cliente(payload: ClienteCreate, corretor: dict = Depends(get_current_corretor)):
     data = payload.model_dump()
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         data["corretor_id"] = corretor["id"]
     return get_supabase().table("clientes").insert(data).execute().data[0]
 
@@ -351,7 +360,7 @@ def atualizar_cliente(cliente_id: str, payload: ClienteUpdate, corretor: dict = 
     if not _pode_mexer_no_cliente(corretor, existente):
         raise HTTPException(403, "Este cliente é de outro corretor.")
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         updates.pop("corretor_id", None)  # corretor comum não reatribui cliente pra outro
     if not updates:
         return existente
@@ -375,7 +384,7 @@ def excluir_cliente(cliente_id: str, corretor: dict = Depends(get_current_corret
 
 
 def _pode_mexer_na_proposta(corretor: dict, proposta: dict) -> bool:
-    return corretor["papel"] == "admin" or proposta.get("corretor_id") in (None, corretor["id"])
+    return eh_admin(corretor) or proposta.get("corretor_id") in (None, corretor["id"])
 
 
 def _query_propostas(sb, corretor: dict, com_documentos: bool):
@@ -383,7 +392,7 @@ def _query_propostas(sb, corretor: dict, com_documentos: bool):
     if com_documentos:
         campos += ", documentos:documentos_proposta(*)"
     query = sb.table("propostas").select(campos).order("created_at", desc=True)
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     return query
 
@@ -490,7 +499,7 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         # dela, mesmo que seja um admin clicando "Gerar proposta" em nome
         # de outra pessoa — sem isso a proposta nasceria sem corretor_id.
         data["corretor_id"] = reserva.get("corretor_id")
-    elif corretor["papel"] != "admin":
+    elif not eh_admin(corretor):
         data["corretor_id"] = corretor["id"]
 
     try:
@@ -734,7 +743,7 @@ def _montar_pdf_proposta(sb, proposta_id: str, corretor: dict) -> tuple[bytes, s
     corretor_vinculado = proposta.get("corretor_vinculado")
     if corretor_vinculado:
         responsavel = corretor_vinculado
-    elif corretor["papel"] != "admin":
+    elif not eh_admin(corretor):
         responsavel = corretor
     else:
         responsavel = None
@@ -840,7 +849,7 @@ def atualizar_status_proposta(
     existente = existente[0]
     if not _pode_mexer_na_proposta(corretor, existente):
         raise HTTPException(403, "Esta proposta é de outro corretor.")
-    if payload.status == "aprovada" and corretor["papel"] != "admin":
+    if payload.status == "aprovada" and not eh_admin(corretor):
         raise HTTPException(403, "Só um administrador pode aprovar a proposta.")
     atualizado = sb.table("propostas").update({"status": payload.status}).eq("id", proposta_id).execute().data[
         0
@@ -938,6 +947,89 @@ def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) ->
     sb.table("lotes").update({"status": "reservado"}).eq("id", proposta["lote_id"]).eq(
         "status", "disponivel"
     ).execute()
+
+
+# ---------------------------------------------------------------------------
+# Atividade (só a conta 'developer', ver security.py::require_developer) —
+# feed de "quem fez o quê e quando" pra acompanhar o painel de fora, sem
+# depender de ninguém avisar. Hoje só cobre criação (reserva, proposta,
+# cliente) porque nenhuma tabela guarda histórico de mudança de status —
+# uma reserva confirmada ou um lote marcado na mão (ver
+# condominios.py::atualizar_status_lote) não deixa rastro de "quando" além
+# do updated_at, que sobrescreve a cada mudança. Dá pra evoluir isso com uma
+# tabela de auditoria de verdade se precisar rastrear mudança de status
+# também, não só criação.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/atividade", response_model=list[AtividadeItem])
+def listar_atividade(_dev: dict = Depends(require_developer)):
+    sb = get_supabase()
+    corretor_nome_por_id = {c["id"]: c["nome"] for c in sb.table("corretores").select("id, nome").execute().data}
+
+    itens: list[dict] = []
+
+    reservas = (
+        sb.table("reservas")
+        .select("nome, corretor_id, status, created_at, lote:lotes(identificador)")
+        .order("created_at", desc=True)
+        .limit(80)
+        .execute()
+        .data
+    )
+    for r in reservas:
+        itens.append(
+            {
+                "tipo": "reserva",
+                "lote_identificador": (r.get("lote") or {}).get("identificador"),
+                "nome_pessoa": r.get("nome"),
+                "status": r.get("status"),
+                "corretor_nome": corretor_nome_por_id.get(r.get("corretor_id")),
+                "created_at": r["created_at"],
+            }
+        )
+
+    propostas = (
+        sb.table("propostas")
+        .select("valor_proposto, corretor_id, status, created_at, lote:lotes(identificador), cliente:clientes(nome)")
+        .order("created_at", desc=True)
+        .limit(80)
+        .execute()
+        .data
+    )
+    for p in propostas:
+        itens.append(
+            {
+                "tipo": "proposta",
+                "lote_identificador": (p.get("lote") or {}).get("identificador"),
+                "nome_pessoa": (p.get("cliente") or {}).get("nome"),
+                "valor_proposto": p.get("valor_proposto"),
+                "status": p.get("status"),
+                "corretor_nome": corretor_nome_por_id.get(p.get("corretor_id")),
+                "created_at": p["created_at"],
+            }
+        )
+
+    clientes = (
+        sb.table("clientes")
+        .select("nome, corretor_id, created_at")
+        .order("created_at", desc=True)
+        .limit(80)
+        .execute()
+        .data
+    )
+    for c in clientes:
+        itens.append(
+            {
+                "tipo": "cliente",
+                "nome_pessoa": c.get("nome"),
+                "corretor_nome": corretor_nome_por_id.get(c.get("corretor_id")),
+                "created_at": c["created_at"],
+            }
+        )
+
+    itens.sort(key=lambda i: i["created_at"], reverse=True)
+    return itens[:150]
 
 
 # ---------------------------------------------------------------------------

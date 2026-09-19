@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
 import { api, formatDateTime, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { temAcessoAdmin } from "../../types";
 import type { LoteComCondominio, Reserva, ReservaComLote, ReservaStatus } from "../../types";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 
@@ -92,7 +93,7 @@ export default function PainelReservas() {
 
   function podeGerarProposta(r: ReservaComLote): boolean {
     if (r.status === "cancelada" || r.proposta_id) return false;
-    return perfil?.papel === "admin" || r.corretor_id == null || r.corretor_id === perfil?.id;
+    return temAcessoAdmin(perfil?.papel) || r.corretor_id == null || r.corretor_id === perfil?.id;
   }
 
   function recarregar() {
@@ -218,7 +219,7 @@ export default function PainelReservas() {
                         onChange={(e) => selecionarStatus(r, e.target.value as ReservaStatus)}
                       >
                         {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                          <option key={v} value={v} disabled={v === "confirmada" && perfil?.papel !== "admin"}>
+                          <option key={v} value={v} disabled={v === "confirmada" && !temAcessoAdmin(perfil?.papel)}>
                             {label}
                           </option>
                         ))}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { temAcessoAdmin } from "../../types";
 import type { Corretor, LoteComCondominio, LoteStatus, ReservaComLote } from "../../types";
 
 // Reserva ainda conta como responsável pela indisponibilidade do lote em
@@ -60,7 +61,7 @@ export default function PainelDisponibilidade() {
   const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
   const [exportando, setExportando] = useState(false);
 
-  const ehAdmin = perfil?.papel === "admin";
+  const ehAdmin = temAcessoAdmin(perfil?.papel);
 
   function recarregar() {
     setErro(null);

@@ -10,7 +10,7 @@ from ..schemas import (
     ReservaStatusUpdate,
     ReservaUpdate,
 )
-from ..security import get_current_corretor
+from ..security import eh_admin, get_current_corretor
 
 router = APIRouter(prefix="/lotes", tags=["reservas"])
 admin_router = APIRouter(prefix="/reservas", tags=["reservas"])
@@ -21,7 +21,7 @@ _STATUS_ATIVOS = ["pendente", "em_atendimento", "aguardando_qualificacao", "em_a
 
 
 def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
-    return corretor["papel"] == "admin" or reserva.get("corretor_id") in (None, corretor["id"])
+    return eh_admin(corretor) or reserva.get("corretor_id") in (None, corretor["id"])
 
 
 def _expirar_vencidas(sb) -> int:
@@ -67,7 +67,7 @@ def listar_reservas(corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
     _expirar_vencidas(sb)
     query = sb.table("reservas").select("*, lote:lotes(*), corretor:corretores(nome)").order("created_at", desc=True)
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     return query.execute().data
 
@@ -116,7 +116,7 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
         raise HTTPException(409, "Este lote acabou de ser reservado por outra pessoa — atualize a página.")
 
     data = payload.model_dump()
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         data["corretor_id"] = corretor["id"]
     try:
         return sb.table("reservas").insert(data).execute().data[0]
@@ -184,13 +184,13 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
     reserva = reserva[0]
     if not _pode_mexer_na_reserva(corretor, reserva):
         raise HTTPException(403, "Esta reserva é de outro corretor.")
-    if payload.status == "confirmada" and corretor["papel"] != "admin":
+    if payload.status == "confirmada" and not eh_admin(corretor):
         raise HTTPException(403, "Só um administrador pode confirmar a reserva.")
 
     updates: dict = {"status": payload.status}
     if payload.corretor_id:
         updates["corretor_id"] = payload.corretor_id
-    elif reserva.get("corretor_id") is None and corretor["papel"] != "admin":
+    elif reserva.get("corretor_id") is None and not eh_admin(corretor):
         updates["corretor_id"] = corretor["id"]
 
     updated = sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]

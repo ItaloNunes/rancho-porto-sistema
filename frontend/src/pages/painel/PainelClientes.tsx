@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { temAcessoAdmin } from "../../types";
 import type { Cliente, Corretor } from "../../types";
 
 export default function PainelClientes() {
   const { perfil } = useAuth();
-  const isAdmin = perfil?.papel === "admin";
+  const isAdmin = temAcessoAdmin(perfil?.papel);
   const [clientes, setClientes] = useState<Cliente[] | null>(null);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [erro, setErro] = useState<string | null>(null);

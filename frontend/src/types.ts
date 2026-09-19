@@ -64,7 +64,16 @@ export interface QuadraZona {
 // reservas. Só usado dentro de /painel (autenticado) — nunca no catálogo público.
 // ---------------------------------------------------------------------------
 
-export type Papel = "admin" | "corretor";
+export type Papel = "admin" | "corretor" | "developer";
+
+/** 'developer' é uma conta admin "e mais um pouco" (só ela vê a aba
+ * Atividade, ver PainelLayout.tsx/PainelAtividade.tsx) — mas em tudo que já
+ * era admin-only antes dela existir, ela continua valendo como admin. Usar
+ * isso em vez de comparar `papel === "admin"` direto em qualquer checagem
+ * de permissão nova, senão essa conta perde acesso a admin-only por engano. */
+export function temAcessoAdmin(papel?: Papel | null): boolean {
+  return papel === "admin" || papel === "developer";
+}
 
 export interface Corretor {
   id: string;
@@ -213,6 +222,18 @@ export interface LoteComCondominio extends Lote {
   // não tem nenhuma proposta pendente no momento.
   proposta_pendente_status?: string | null;
   proposta_pendente_desde?: string | null;
+}
+
+/** Uma linha do feed de Atividade (só developer, ver GET /crm/atividade e
+ * PainelAtividade.tsx) — reserva/proposta/cliente criados recentemente. */
+export interface AtividadeItem {
+  tipo: "reserva" | "proposta" | "cliente";
+  lote_identificador?: string | null;
+  nome_pessoa?: string | null;
+  valor_proposto?: number | null;
+  status?: string | null;
+  corretor_nome?: string | null;
+  created_at: string;
 }
 
 export interface VisaoGeralCondominio {

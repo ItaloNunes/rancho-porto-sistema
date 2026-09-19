@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import { api } from "../../lib/api";
+import { temAcessoAdmin } from "../../types";
 import type { Corretor, Papel } from "../../types";
 
 /** Essa tela (e toda a API de /crm/corretores por trás dela) já é travada
@@ -47,7 +48,7 @@ export default function PainelCorretores() {
       base.total++;
       if (c.ativo) base.ativos++;
       else base.desativados++;
-      if (c.papel === "admin") base.admins++;
+      if (temAcessoAdmin(c.papel)) base.admins++;
     }
     return base;
   }, [corretores]);
@@ -131,7 +132,11 @@ export default function PainelCorretores() {
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
                   <td className="px-4 py-3 font-medium text-ink">{c.nome}</td>
                   <td className="px-4 py-3 text-ink-soft font-mono text-xs">{c.usuario || "—"}</td>
-                  <td className="px-4 py-3 text-ink-soft uppercase text-xs">{c.papel}</td>
+                  <td className="px-4 py-3 text-ink-soft uppercase text-xs">
+                    {/* 'developer' fica invisível aqui de propósito — é uma conta admin
+                        "e mais um pouco" que só existe pra uma pessoa, ver types.ts::temAcessoAdmin */}
+                    {c.papel === "developer" ? "admin" : c.papel}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`badge ${c.ativo ? "badge-disponivel" : "badge-vendido"}`}>
                       {c.ativo ? "Ativo" : "Desativado"}

@@ -4,6 +4,7 @@ import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba, mostrarPdf
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import PropostaDocumentos from "./PropostaDocumentos";
+import { temAcessoAdmin } from "../../types";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
 const STATUS_LABEL: Record<PropostaStatus, string> = {
@@ -122,7 +123,7 @@ export default function PainelPropostas() {
                       onChange={(e) => mudarStatus(p, e.target.value as PropostaStatus)}
                     >
                       {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                        <option key={v} value={v} disabled={v === "aprovada" && perfil?.papel !== "admin"}>
+                        <option key={v} value={v} disabled={v === "aprovada" && !temAcessoAdmin(perfil?.papel)}>
                           {label}
                         </option>
                       ))}

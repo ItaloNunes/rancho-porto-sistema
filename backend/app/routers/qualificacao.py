@@ -35,7 +35,7 @@ from ..schemas import (
     QualificacaoDecisao,
     QualificacaoPublica,
 )
-from ..security import get_current_corretor, require_admin
+from ..security import eh_admin, get_current_corretor, require_admin
 
 router = APIRouter(prefix="/qualificacao", tags=["qualificacao"])
 admin_router = APIRouter(prefix="/qualificacoes", tags=["qualificacao"])
@@ -45,7 +45,7 @@ def _gerar_token() -> str:
 
 
 def _pode_mexer(corretor: dict, registro: dict) -> bool:
-    return corretor["papel"] == "admin" or registro.get("corretor_id") in (None, corretor["id"])
+    return eh_admin(corretor) or registro.get("corretor_id") in (None, corretor["id"])
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ def gerar_link_qualificacao(
         cliente_id = payload.cliente_id
     elif payload.cliente_novo:
         dados_cliente = payload.cliente_novo.model_dump()
-        if corretor["papel"] != "admin":
+        if not eh_admin(corretor):
             dados_cliente["corretor_id"] = corretor["id"]
         cliente_id = sb.table("clientes").insert(dados_cliente).execute().data[0]["id"]
     else:
@@ -89,7 +89,7 @@ def gerar_link_qualificacao(
         "reserva_id": reserva_id,
         "lote_id": reserva["lote_id"],
         "cliente_id": cliente_id,
-        "corretor_id": reserva.get("corretor_id") or (corretor["id"] if corretor["papel"] != "admin" else None),
+        "corretor_id": reserva.get("corretor_id") or (corretor["id"] if not eh_admin(corretor) else None),
         "token": _gerar_token(),
     }
     qualificacao = sb.table("formularios_qualificacao").insert(row).execute().data[0]
@@ -128,7 +128,7 @@ def listar_qualificacoes(corretor: dict = Depends(get_current_corretor)):
     query = sb.table("formularios_qualificacao").select(
         "*, lote:lotes(*), cliente:clientes(*), corretor:corretores!corretor_id(*)"
     ).order("created_at", desc=True)
-    if corretor["papel"] != "admin":
+    if not eh_admin(corretor):
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     resultado = query.execute().data
     ids = [r["id"] for r in resultado]

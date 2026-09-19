@@ -56,9 +56,31 @@ def get_current_corretor(authorization: str | None = Header(default=None)) -> di
     return corretor[0]
 
 
+def eh_admin(corretor: dict) -> bool:
+    """'developer' é um admin "e mais um pouco" (ver require_developer) —
+    tem todo o acesso de admin, mais a tela de Atividade, só pra essa conta.
+    Centraliza aqui pra nenhuma checagem de permissão espalhada pelo código
+    (routers/crm.py, reservas.py, qualificacao.py) esquecer de tratar
+    'developer' como admin e acabar rebaixando essa conta pra corretor comum
+    em alguma ação."""
+    return corretor["papel"] in ("admin", "developer")
+
+
 def require_admin(corretor: dict = Depends(get_current_corretor)) -> dict:
     """Mais restrito que get_current_corretor: só deixa passar quem tem
-    papel='admin' (gestão de logins de outros corretores, por exemplo)."""
-    if corretor["papel"] != "admin":
+    papel='admin' (ou 'developer', ver eh_admin) — gestão de logins de
+    outros corretores, por exemplo."""
+    if not eh_admin(corretor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Apenas administradores podem fazer isso.")
+    return corretor
+
+
+def require_developer(corretor: dict = Depends(get_current_corretor)) -> dict:
+    """Mais restrito ainda que require_admin: só o login pessoal marcado
+    papel='developer' passa — usado só pela tela de Atividade (ver
+    routers/crm.py::listar_atividade), que nem os outros admins têm acesso.
+    Não existe like nenhum jeito de virar 'developer' pelo painel (ver
+    criar_corretor/atualizar_corretor) — só é setado direto no banco."""
+    if corretor["papel"] != "developer":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acesso restrito.")
     return corretor

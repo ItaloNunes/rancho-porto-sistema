@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { abrirAbaComCarregamento, api, formatDateTime, formatMoney, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS } from "../../types";
+import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS, temAcessoAdmin } from "../../types";
 import type { DocumentoTipo, EstadoCivil, QualificacaoComRelacoes, QualificacaoStatus } from "../../types";
 
 const STATUS_LABEL: Record<QualificacaoStatus, string> = {
@@ -29,7 +29,7 @@ const ESTADO_CIVIL_LABEL: Record<EstadoCivil, string> = {
 
 export default function PainelQualificacoes() {
   const { perfil } = useAuth();
-  const isAdmin = perfil?.papel === "admin";
+  const isAdmin = temAcessoAdmin(perfil?.papel);
   const [lista, setLista] = useState<QualificacaoComRelacoes[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberta, setAberta] = useState<QualificacaoComRelacoes | null>(null);

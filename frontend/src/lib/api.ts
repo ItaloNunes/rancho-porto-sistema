@@ -1,5 +1,6 @@
 import { getToken } from "./token";
 import type {
+  AtividadeItem,
   Cliente,
   CondominioDetalhe,
   CondominioResumo,
@@ -534,6 +535,10 @@ export const api = {
     request<{ url: string }>(`/crm/qualificacoes/${qualificacaoId}/documentos/${documentoId}/arquivo`, undefined, true),
   decidirQualificacao: (id: string, payload: { aprovado: boolean; motivo_reprovacao?: string | null }) =>
     request<Qualificacao>(`/crm/qualificacoes/${id}/decisao`, { method: "PATCH", body: JSON.stringify(payload) }, true),
+
+  // Painel — Atividade (só a conta developer, ver PainelAtividade.tsx):
+  // feed de reservas/propostas/clientes criados recentemente, com quem fez.
+  listarAtividade: () => request<AtividadeItem[]>("/crm/atividade", undefined, true),
 
   // Painel — visão geral (só admin): números por empreendimento + relatório em PDF
   visaoGeral: () => request<VisaoGeralCondominio[]>("/crm/visao-geral", undefined, true),

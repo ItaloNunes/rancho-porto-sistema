@@ -436,7 +436,12 @@ class Cliente(ClienteCreate):
     created_at: datetime
 
 
-Papel = Literal["admin", "corretor"]
+# "developer" é uma conta admin "e mais um pouco" — só ela vê a tela de
+# Atividade (ver routers/crm.py::listar_atividade e security.py::eh_admin/
+# require_developer). Não é escolhível em nenhum formulário do painel (ver
+# criar_corretor/atualizar_corretor) — só setada direto no banco, de
+# propósito, pra continuar sendo "só pra mim" mesmo com o código aberto.
+Papel = Literal["admin", "corretor", "developer"]
 
 
 class CorretorCreate(BaseModel):
@@ -589,6 +594,22 @@ class PropostaDetalhe(Proposta):
 # Visão geral (painel gerencial, só admin): números consolidados por
 # empreendimento — pra dashboard e pro relatório em PDF.
 # ---------------------------------------------------------------------------
+
+
+class AtividadeItem(BaseModel):
+    """Uma linha do feed de Atividade (só developer, ver
+    routers/crm.py::listar_atividade e security.py::require_developer) —
+    reserva/proposta/cliente criados recentemente, com quem fez e quando.
+    Baseado só em created_at (não existe um log de toda mudança de status
+    ainda — ver comentário na função)."""
+
+    tipo: Literal["reserva", "proposta", "cliente"]
+    lote_identificador: Optional[str] = None
+    nome_pessoa: Optional[str] = None
+    valor_proposto: Optional[float] = None
+    status: Optional[str] = None
+    corretor_nome: Optional[str] = None
+    created_at: datetime
 
 
 class VisaoGeralCondominio(BaseModel):
