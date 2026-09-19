@@ -6,7 +6,9 @@ import type { Lote } from "../types";
  * Condominio.tsx); a própria Condominio lê essa query pra reabrir o modal
  * certo quando alguém clica num link recebido. */
 function linkDoLote(condominioSlug: string, lote: Lote): string {
-  return `${window.location.origin}/condominios/${condominioSlug}?lote=${lote.lote_numero}`;
+  // Número do lote sozinho não é único entre quadras (ver Condominio.tsx) — o
+  // link carrega a quadra também pra abrir exatamente o lote certo.
+  return `${window.location.origin}/condominios/${condominioSlug}?lote=${lote.lote_numero}&quadra=${encodeURIComponent(lote.quadra)}`;
 }
 
 function mensagemWhatsApp(condominioNome: string, condominioSlug: string, lote: Lote): string {

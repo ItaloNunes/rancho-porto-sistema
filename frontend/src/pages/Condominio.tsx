@@ -19,7 +19,7 @@ export default function Condominio() {
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>("todos");
   const [zonaFiltro, setZonaFiltro] = useState<QuadraZona | null>(null);
-  const [selecionado, setSelecionado] = useState<number | null>(null);
+  const [selecionado, setSelecionado] = useState<string | null>(null);
 
   useEffect(() => {
     // Troca de empreendimento (ex.: veio de outro /condominios/:slug sem recarregar a
@@ -42,18 +42,27 @@ export default function Condominio() {
   useEffect(() => {
     // Deep link vindo de um "Compartilhar no WhatsApp" (ver DetalheLote.tsx):
     // abre direto o modal do lote indicado assim que o condomínio carrega.
+    // Importante: o número do lote sozinho NÃO é único — vários empreendimentos
+    // têm "Lote 01" repetido em cada quadra — por isso casamos lote+quadra e
+    // guardamos o id (esse sim único) no estado de seleção.
     if (!condo) return;
     const loteParam = searchParams.get("lote");
-    if (!loteParam) return;
-    const numero = Number(loteParam);
-    if (!Number.isNaN(numero) && condo.lotes.some((l) => l.lote_numero === numero)) {
-      setSelecionado(numero);
+    const quadraParam = searchParams.get("quadra");
+    if (loteParam) {
+      const numero = Number(loteParam);
+      if (!Number.isNaN(numero)) {
+        const alvo = condo.lotes.find(
+          (l) => l.lote_numero === numero && (quadraParam == null || l.quadra === quadraParam),
+        );
+        if (alvo) setSelecionado(alvo.id);
+      }
     }
     // Limpa a query pra não reabrir o modal se o usuário fechar e navegar de volta.
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
         next.delete("lote");
+        next.delete("quadra");
         return next;
       },
       { replace: true },
@@ -76,7 +85,8 @@ export default function Condominio() {
       .sort((a, b) => a.lote_numero - b.lote_numero);
   }, [condo, statusFiltro, zonaFiltro, busca]);
 
-  const loteSelecionado = condo?.lotes.find((l) => l.lote_numero === selecionado) ?? null;
+  // Seleção é por id (único) — ver comentário acima sobre número de lote repetido entre quadras.
+  const loteSelecionado = condo?.lotes.find((l) => l.id === selecionado) ?? null;
 
   if (erro) {
     return (

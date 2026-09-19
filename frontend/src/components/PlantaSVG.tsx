@@ -17,8 +17,8 @@ const MAX_SCALE = 3.5;
 
 interface Props {
   condo: CondominioDetalhe;
-  selecionado: number | null;
-  onSelecionar: (loteNumero: number) => void;
+  selecionado: string | null;
+  onSelecionar: (id: string) => void;
   /** Só é chamado no modo planta-em-imagem (condo.plan_image_url preenchido): clique numa zona. */
   onSelecionarZona?: (zona: QuadraZona) => void;
 }
@@ -30,7 +30,7 @@ export default function PlantaSVG({ condo, selecionado, onSelecionar, onSelecion
   const viewportRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredQuadra, setHoveredQuadra] = useState<string | null>(null);
   const drag = useRef({ active: false, moved: false, startX: 0, startY: 0, origX: 0, origY: 0 });
 
@@ -200,8 +200,8 @@ export default function PlantaSVG({ condo, selecionado, onSelecionar, onSelecion
                     <LotePolygon
                       key={l.id}
                       lote={l}
-                      selecionado={selecionado === l.lote_numero}
-                      hovered={hovered === l.lote_numero}
+                      selecionado={selecionado === l.id}
+                      hovered={hovered === l.id}
                       onHover={setHovered}
                       onSelecionar={onSelecionar}
                       moved={() => drag.current.moved}
@@ -236,8 +236,8 @@ export default function PlantaSVG({ condo, selecionado, onSelecionar, onSelecion
                   <LotePolygon
                     key={l.id}
                     lote={l}
-                    selecionado={selecionado === l.lote_numero}
-                    hovered={hovered === l.lote_numero}
+                    selecionado={selecionado === l.id}
+                    hovered={hovered === l.id}
                     onHover={setHovered}
                     onSelecionar={onSelecionar}
                     moved={() => drag.current.moved}
@@ -282,8 +282,8 @@ function LotePolygon({
   lote: Lote;
   selecionado: boolean;
   hovered: boolean;
-  onHover: (n: number | null) => void;
-  onSelecionar: (n: number) => void;
+  onHover: (id: string | null) => void;
+  onSelecionar: (id: string) => void;
   moved: () => boolean;
 }) {
   const points = lote.poligono.map((p) => `${p[0]},${p[1]}`).join(" ");
@@ -292,9 +292,9 @@ function LotePolygon({
   return (
     <g
       onClick={() => {
-        if (!moved()) onSelecionar(lote.lote_numero);
+        if (!moved()) onSelecionar(lote.id);
       }}
-      onPointerEnter={() => onHover(lote.lote_numero)}
+      onPointerEnter={() => onHover(lote.id)}
       onPointerLeave={() => onHover(null)}
       style={{ cursor: "pointer" }}
     >

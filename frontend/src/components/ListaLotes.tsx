@@ -9,7 +9,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const ROW_COLS = "1.4fr 1fr 1.3fr 1.1fr 1.1fr 1fr";
 
-export default function ListaLotes({ lotes, onSelecionar }: { lotes: Lote[]; onSelecionar: (n: number) => void }) {
+export default function ListaLotes({ lotes, onSelecionar }: { lotes: Lote[]; onSelecionar: (id: string) => void }) {
   if (lotes.length === 0) {
     return (
       <div className="card p-16 text-center text-ink-soft text-sm">
@@ -33,7 +33,7 @@ export default function ListaLotes({ lotes, onSelecionar }: { lotes: Lote[]; onS
       </div>
       <div className="max-h-[560px] overflow-y-auto scrollbar-thin divide-y divide-border">
         {lotes.map((l) => (
-          <button key={l.id} onClick={() => onSelecionar(l.lote_numero)} className="w-full text-left hover:bg-surface-alt transition-colors">
+          <button key={l.id} onClick={() => onSelecionar(l.id)} className="w-full text-left hover:bg-surface-alt transition-colors">
             {/* Linha em tabela — telas médias/grandes */}
             <div className="hidden md:grid items-center gap-3 px-5 py-3.5 text-sm" style={{ gridTemplateColumns: ROW_COLS }}>
               <span className="font-medium text-ink">
