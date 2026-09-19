@@ -41,6 +41,24 @@
     />
     <meta name="twitter:image" content="https://rancho-porto-frontend.vercel.app/og-image.jpg" />
     <meta name="theme-color" content="#1a1959" />
+
+    <!-- Microsoft Clarity — heatmap de clique e gravação de sessão.
+    Troque SEU_PROJECT_ID pelo Project ID gerado em clarity.microsoft.com
+    (crie um projeto gratuito apontando pra rancho-porto-frontend.vercel.app). -->
+    <script type="text/javascript">
+      (function (c, l, a, r, i, t, y) {
+        c[a] =
+          c[a] ||
+          function () {
+            (c[a].q = c[a].q || []).push(arguments);
+          };
+        t = l.createElement(r);
+        t.async = 1;
+        t.src = "https://www.clarity.ms/tag/" + i;
+        y = l.getElementsByTagName(r)[0];
+        y.parentNode.insertBefore(t, y);
+      })(window, document, "clarity", "script", "SEU_PROJECT_ID");
+    </script>
   </head>
   <body>
     <div id="root"></div>

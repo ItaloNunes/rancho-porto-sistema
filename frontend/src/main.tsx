@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import "./styles/index.css";
 import Home from "./pages/Home";
@@ -22,6 +23,7 @@ import PainelImportarPlanilha from "./pages/painel/PainelImportarPlanilha";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <Analytics />
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Home />} />
