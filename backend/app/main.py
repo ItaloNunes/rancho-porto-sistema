@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import get_supabase
-from .routers import condominios, crm, qualificacao, reservas
+from .routers import condominios, crm, qualificacao, reservas, suporte
 from .routers.reservas import _expirar_vencidas
 
 logger = logging.getLogger(__name__)
@@ -83,6 +83,7 @@ app.include_router(reservas.admin_router)
 app.include_router(crm.router, prefix="/crm")
 app.include_router(qualificacao.router)
 app.include_router(qualificacao.admin_router, prefix="/crm")
+app.include_router(suporte.router)
 
 
 @app.get("/health")

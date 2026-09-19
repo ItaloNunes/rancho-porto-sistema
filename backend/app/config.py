@@ -6,6 +6,13 @@ class Settings(BaseSettings):
     supabase_service_key: str
     supabase_anon_key: str = ""
     notificacao_email: str = ""
+    # Chave da API do Resend (resend.com) — usada só pelo botão de suporte
+    # do painel (ver app/email_service.py e app/routers/suporte.py). Sem
+    # essa chave configurada, abrir um chamado falha com um erro explícito
+    # em vez de fingir que o e-mail foi enviado.
+    resend_api_key: str = ""
+    # Pra onde o chamado de suporte é mandado.
+    suporte_email: str = "italonunesdev@proton.me"
     cors_origins: str = "http://localhost:5173"
     # URL pública do frontend — hoje não é mais usada por nenhum e-mail (o
     # login de corretor não depende mais disso, ver app/usuarios.py), mas

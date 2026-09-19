@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import BotaoSuporte from "../../components/BotaoSuporte";
 
 // Mudança de setembro/2026: não tem mais Cadastro de Cliente nem
 // Qualificação de Leads (o corretor informa nome/CPF direto no pedido de
@@ -165,6 +166,8 @@ export default function PainelLayout() {
       <main className="max-w-6xl mx-auto px-6 sm:px-8 py-6 sm:py-8 w-full min-w-0">
         <Outlet />
       </main>
+
+      <BotaoSuporte />
     </div>
   );
 }

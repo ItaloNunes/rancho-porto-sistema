@@ -543,6 +543,27 @@ export const api = {
     const query = params.toString();
     return requestBlob(`/crm/visao-geral/relatorio${query ? `?${query}` : ""}`);
   },
+
+  // Botão de suporte do painel (corretor e admin) — vira um e-mail com os
+  // anexos como link (ver backend/app/routers/suporte.py). Multipart igual
+  // ao de importarLotesPreview acima: não passa por `request()` porque esse
+  // helper sempre manda Content-Type: application/json.
+  abrirChamadoSuporte: async (assunto: string, descricao: string, arquivos: File[]): Promise<void> => {
+    const form = new FormData();
+    form.append("assunto", assunto);
+    form.append("descricao", descricao);
+    arquivos.forEach((a) => form.append("arquivos", a));
+    const token = getToken();
+    const res = await fetchComRetry(`${API_URL}/suporte/chamados`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(extrairErro(body, `Erro ${res.status} ao abrir o chamado`));
+    }
+  },
 };
 
 export function formatMoney(v?: number | null): string {

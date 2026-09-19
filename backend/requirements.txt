@@ -25,3 +25,4 @@ openpyxl==3.1.5
 # não como texto — ver app/importacao.py::ler_planilha_pdf).
 pdfplumber==0.11.4
 pymupdf==1.24.11
+httpx==0.27.2  # Chamada HTTP à API do Resend (envio de e-mail — ver app/email_service.py)
