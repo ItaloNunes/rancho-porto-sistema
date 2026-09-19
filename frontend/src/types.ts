@@ -196,6 +196,9 @@ export interface Reserva {
 
 export interface ReservaComLote extends Reserva {
   lote?: Lote | null;
+  // Nome do corretor responsável (junto de `created_at`, herdado de Reserva)
+  // — mostrado na fila de Reservas (ver PainelReservas.tsx).
+  corretor?: { nome: string } | null;
 }
 
 export interface LoteComCondominio extends Lote {
@@ -399,6 +402,21 @@ export interface ImportacaoLinha {
   identificador: string;
   status_atual: LoteStatus;
   status_planilha: LoteStatus;
+  // Presente quando esse lote já tem uma reserva ou proposta ATIVA no
+  // sistema — avisa antes de confirmar uma troca por cima de uma negociação
+  // em andamento (ver PainelImportarPlanilha.tsx).
+  pendencia_tipo?: "reserva" | "proposta" | null;
+  pendencia_corretor?: string | null;
+  pendencia_desde?: string | null;
+}
+
+/** Resposta de POST /condominios/lotes/importar/confirmar — `ignorados` é a
+ * contagem de itens que não foram aplicados porque o lote mudou de status
+ * entre a análise da planilha e a confirmação (ver
+ * ImportacaoConfirmarItem.status_atual no backend). */
+export interface ImportacaoConfirmarResultado {
+  atualizados: Lote[];
+  ignorados: number;
 }
 
 export interface ImportacaoPreview {

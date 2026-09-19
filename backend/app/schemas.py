@@ -123,6 +123,14 @@ class ImportacaoLinha(BaseModel):
     identificador: str
     status_atual: LoteStatus
     status_planilha: LoteStatus
+    # Preenchido quando esse lote já tem uma reserva ou proposta ATIVA no
+    # sistema (alguém já está negociando ele por dentro do painel) — avisa o
+    # admin antes de sobrescrever o status por cima dessa negociação em
+    # andamento (ver preview_importacao_lotes). None quando o lote está livre
+    # de qualquer pendência.
+    pendencia_tipo: Optional[Literal["reserva", "proposta"]] = None
+    pendencia_corretor: Optional[str] = None
+    pendencia_desde: Optional[datetime] = None
 
 
 class ImportacaoPreview(BaseModel):
@@ -140,6 +148,14 @@ class ImportacaoPreview(BaseModel):
 class ImportacaoConfirmarItem(BaseModel):
     lote_id: str
     status: LoteStatus
+    # Status que a tela de preview mostrou pra esse lote no momento em que a
+    # planilha foi analisada — o backend só aplica a troca se o lote AINDA
+    # estiver nesse status no instante da confirmação (ver
+    # confirmar_importacao_lotes). Protege contra a janela de tempo entre o
+    # admin analisar a planilha e clicar em "Confirmar": se um corretor
+    # reservou/vendeu o lote nesse meio tempo pelo fluxo normal, a importação
+    # não sobrescreve essa mudança às cegas.
+    status_atual: LoteStatus
 
 
 class ImportacaoConfirmarPayload(BaseModel):
@@ -148,6 +164,16 @@ class ImportacaoConfirmarPayload(BaseModel):
     pode ter sido fechado/trocado do lado do admin) uma segunda vez."""
 
     itens: list[ImportacaoConfirmarItem]
+
+
+class ImportacaoConfirmarResultado(BaseModel):
+    """`ignorados` conta os itens cujo status mudou entre a análise da
+    planilha e a confirmação (ver ImportacaoConfirmarItem.status_atual) — o
+    front avisa o admin pra revisar esses lotes de novo, em vez de assumir
+    que tudo que foi marcado na tela realmente foi aplicado."""
+
+    atualizados: list[Lote]
+    ignorados: int
 
 
 class LotePoligonoUpdate(BaseModel):
@@ -251,8 +277,21 @@ class Reserva(BaseModel):
     created_at: datetime
 
 
+class CorretorNome(BaseModel):
+    """Recorte mínimo de Corretor (só o nome) pra embutir em listagens que só
+    precisam mostrar "quem" — como a fila de Reservas (ver ReservaComLote) —
+    sem expor usuário/telefone/papel à toa."""
+
+    nome: str
+
+
 class ReservaComLote(Reserva):
     lote: Optional[Lote] = None
+    # Nome do corretor responsável pelo pedido — junto de `created_at`
+    # (herdado de Reserva), dá pra fila de Reservas mostrar quem reservou
+    # cada lote e desde quando, sem a pessoa precisar abrir/editar o pedido
+    # pra descobrir.
+    corretor: Optional[CorretorNome] = None
 
 
 class ReservaStatusUpdate(BaseModel):

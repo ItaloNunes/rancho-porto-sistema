@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../lib/api";
+import { api, formatDateTime } from "../../lib/api";
 import type { CondominioResumo, ImportacaoPreview, LoteStatus } from "../../types";
 
 const STATUS_LABEL: Record<LoteStatus, string> = {
@@ -33,7 +33,10 @@ export default function PainelImportarPlanilha() {
   const [confirmando, setConfirmando] = useState(false);
   const [preview, setPreview] = useState<ImportacaoPreview | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [cienteDesfazerVenda, setCienteDesfazerVenda] = useState(false);
+  // Cobre os dois avisos que pedem uma segunda confirmação antes de aplicar:
+  // desfazer uma venda concluída, ou sobrescrever um lote com reserva/proposta
+  // ativa no sistema (ver `desfazVenda`/`temPendenciaAtiva` abaixo).
+  const [cienteAlerta, setCienteAlerta] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -52,11 +55,19 @@ export default function PainelImportarPlanilha() {
     () => (preview?.linhas ?? []).some((l) => l.status_atual === "vendido" && selecionados.has(l.lote_id)),
     [preview, selecionados],
   );
+  // Lote com reserva ou proposta ATIVA no sistema (ver preview_importacao_lotes
+  // no backend) que está marcado pra ter o status sobrescrito pela planilha —
+  // sem esse aviso, dava pra apagar o rastro de uma negociação em andamento
+  // sem perceber.
+  const temPendenciaAtiva = useMemo(
+    () => (preview?.linhas ?? []).some((l) => l.pendencia_tipo && selecionados.has(l.lote_id)),
+    [preview, selecionados],
+  );
 
   function limparResultadoDaAnalise() {
     setPreview(null);
     setSelecionados(new Set());
-    setCienteDesfazerVenda(false);
+    setCienteAlerta(false);
     setResultado(null);
     setErro(null);
   }
@@ -70,7 +81,7 @@ export default function PainelImportarPlanilha() {
       const p = await api.importarLotesPreview(condominioId, arquivo);
       setPreview(p);
       setSelecionados(new Set(p.linhas.map((l) => l.lote_id)));
-      setCienteDesfazerVenda(false);
+      setCienteAlerta(false);
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
@@ -82,13 +93,19 @@ export default function PainelImportarPlanilha() {
     if (!preview) return;
     const itens = preview.linhas
       .filter((l) => selecionados.has(l.lote_id))
-      .map((l) => ({ lote_id: l.lote_id, status: l.status_planilha }));
+      .map((l) => ({ lote_id: l.lote_id, status: l.status_planilha, status_atual: l.status_atual }));
     if (itens.length === 0) return;
     setConfirmando(true);
     setErro(null);
     try {
-      await api.importarLotesConfirmar(itens);
-      setResultado(`${itens.length} lote(s) atualizado(s) com sucesso.`);
+      const r = await api.importarLotesConfirmar(itens);
+      let msg = `${r.atualizados.length} lote(s) atualizado(s) com sucesso.`;
+      if (r.ignorados > 0) {
+        msg +=
+          ` ${r.ignorados} item(ns) NÃO foram aplicados porque o status desses lotes mudou depois da análise` +
+          ` (alguém reservou/vendeu pelo painel nesse meio tempo) — suba a planilha de novo pra revisar.`;
+      }
+      setResultado(msg);
       setPreview(null);
       setSelecionados(new Set());
       setArquivo(null);
@@ -237,11 +254,12 @@ export default function PainelImportarPlanilha() {
                     {preview.linhas.map((l) => {
                       const marcado = selecionados.has(l.lote_id);
                       const desfazendoVenda = l.status_atual === "vendido";
+                      const temPendencia = !!l.pendencia_tipo;
                       return (
                         <tr
                           key={l.lote_id}
                           className={`border-b border-border last:border-0 ${
-                            desfazendoVenda ? "bg-rust/10" : marcado ? "bg-sage/10" : ""
+                            desfazendoVenda || temPendencia ? "bg-rust/10" : marcado ? "bg-sage/10" : ""
                           }`}
                         >
                           <td className="px-4 py-2.5">
@@ -255,6 +273,12 @@ export default function PainelImportarPlanilha() {
                           <td className={`px-4 py-2.5 font-medium ${STATUS_COR[l.status_atual]}`}>
                             {STATUS_LABEL[l.status_atual]}
                             {desfazendoVenda && <span className="ml-1.5 text-[11px] text-rust">(desfaz venda)</span>}
+                            {temPendencia && (
+                              <div className="text-[11px] font-normal text-rust mt-0.5">
+                                ⚠️ {l.pendencia_tipo === "reserva" ? "Reserva" : "Proposta"} ativa com{" "}
+                                {l.pendencia_corretor} desde {formatDateTime(l.pendencia_desde)}
+                              </div>
+                            )}
                           </td>
                           <td className={`px-4 py-2.5 font-medium ${STATUS_COR[l.status_planilha]}`}>
                             {STATUS_LABEL[l.status_planilha]}
@@ -267,16 +291,29 @@ export default function PainelImportarPlanilha() {
               </div>
 
               <div className="px-5 py-4 border-t border-border">
-                {desfazVenda && (
+                {(desfazVenda || temPendenciaAtiva) && (
                   <label className="flex items-start gap-2 text-sm text-ink mb-4 cursor-pointer">
                     <input
                       type="checkbox"
                       className="mt-0.5"
-                      checked={cienteDesfazerVenda}
-                      onChange={(e) => setCienteDesfazerVenda(e.target.checked)}
+                      checked={cienteAlerta}
+                      onChange={(e) => setCienteAlerta(e.target.checked)}
                     />
-                    Pelo menos um lote marcado está saindo de <span className="font-semibold">Vendido</span> — isso
-                    desfaz o registro de uma venda concluída. Estou ciente e quero continuar mesmo assim.
+                    <span>
+                      {desfazVenda && (
+                        <>
+                          Pelo menos um lote marcado está saindo de <span className="font-semibold">Vendido</span> —
+                          isso desfaz o registro de uma venda concluída.{" "}
+                        </>
+                      )}
+                      {temPendenciaAtiva && (
+                        <>
+                          Pelo menos um lote marcado tem uma reserva/proposta ativa de um corretor no sistema — a
+                          importação vai sobrescrever o status por cima dessa negociação em andamento.{" "}
+                        </>
+                      )}
+                      Estou ciente e quero continuar mesmo assim.
+                    </span>
                   </label>
                 )}
                 <div className="flex justify-end gap-2">
@@ -285,7 +322,9 @@ export default function PainelImportarPlanilha() {
                   </button>
                   <button
                     className="btn btn-primary"
-                    disabled={selecionados.size === 0 || confirmando || (desfazVenda && !cienteDesfazerVenda)}
+                    disabled={
+                      selecionados.size === 0 || confirmando || ((desfazVenda || temPendenciaAtiva) && !cienteAlerta)
+                    }
                     onClick={confirmar}
                   >
                     {confirmando

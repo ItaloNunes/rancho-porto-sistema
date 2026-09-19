@@ -9,6 +9,7 @@ import type {
   DocumentoProposta,
   DocumentoQualificacao,
   DocumentoTipo,
+  ImportacaoConfirmarResultado,
   ImportacaoPreview,
   Lote,
   LoteComCondominio,
@@ -412,8 +413,8 @@ export const api = {
     }
     return res.json();
   },
-  importarLotesConfirmar: (itens: { lote_id: string; status: LoteStatus }[]) =>
-    request<Lote[]>(
+  importarLotesConfirmar: (itens: { lote_id: string; status: LoteStatus; status_atual: LoteStatus }[]) =>
+    request<ImportacaoConfirmarResultado>(
       "/condominios/lotes/importar/confirmar",
       { method: "POST", body: JSON.stringify({ itens }) },
       true,

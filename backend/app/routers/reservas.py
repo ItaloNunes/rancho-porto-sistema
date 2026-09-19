@@ -66,7 +66,7 @@ def listar_reservas(corretor: dict = Depends(get_current_corretor)):
     qualquer um pode assumir)."""
     sb = get_supabase()
     _expirar_vencidas(sb)
-    query = sb.table("reservas").select("*, lote:lotes(*)").order("created_at", desc=True)
+    query = sb.table("reservas").select("*, lote:lotes(*), corretor:corretores(nome)").order("created_at", desc=True)
     if corretor["papel"] != "admin":
         query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
     return query.execute().data

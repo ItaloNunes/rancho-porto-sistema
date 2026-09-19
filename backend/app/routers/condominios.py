@@ -6,6 +6,7 @@ from ..schemas import (
     CondominioDetalhe,
     CondominioResumo,
     ImportacaoConfirmarPayload,
+    ImportacaoConfirmarResultado,
     ImportacaoLinha,
     ImportacaoPreview,
     Lote,
@@ -130,6 +131,41 @@ async def preview_importacao_lotes(
 
     por_chave = {(l["quadra"], l["lote_numero"]): l for l in lotes_db}
 
+    # Avisa o admin, ANTES de confirmar, quando um lote que a planilha quer
+    # mudar já tem uma reserva ou proposta ATIVA por dentro do painel — sem
+    # isso, a importação sobrescreveria silenciosamente o status por cima de
+    # uma negociação em andamento (ex.: planilha diz "disponível" mas um
+    # corretor já reservou esse lote no sistema há 2 dias). Reserva/proposta
+    # "cancelada"/"recusada" já são estado morto, não contam como pendência.
+    lote_ids = [l["id"] for l in lotes_db]
+    pendencia_por_lote: dict[str, tuple[str, str, str]] = {}  # lote_id -> (tipo, corretor, desde)
+    reservas_ativas = (
+        sb.table("reservas")
+        .select("lote_id, created_at, corretor:corretores(nome)")
+        .in_("lote_id", lote_ids)
+        .neq("status", "cancelada")
+        .order("created_at")
+        .execute()
+        .data
+    )
+    for r in reservas_ativas:
+        corretor_nome = (r.get("corretor") or {}).get("nome") or "corretor não identificado"
+        pendencia_por_lote[r["lote_id"]] = ("reserva", corretor_nome, r["created_at"])
+    propostas_abertas = (
+        sb.table("propostas")
+        .select("lote_id, created_at, corretor:corretores(nome)")
+        .in_("lote_id", lote_ids)
+        .not_.in_("status", ["recusada", "cancelada"])
+        .order("created_at")
+        .execute()
+        .data
+    )
+    for p in propostas_abertas:
+        if p["lote_id"] in pendencia_por_lote:
+            continue  # já tem reserva ativa marcada pra esse lote — não sobrescreve
+        corretor_nome = (p.get("corretor") or {}).get("nome") or "corretor não identificado"
+        pendencia_por_lote[p["lote_id"]] = ("proposta", corretor_nome, p["created_at"])
+
     alteracoes: list[ImportacaoLinha] = []
     nao_encontrados: list[str] = []
     vistos = set()
@@ -143,6 +179,7 @@ async def preview_importacao_lotes(
             nao_encontrados.append(f"Quadra {linha['quadra']}, Lote {linha['lote_numero']}")
             continue
         if lote["status"] != linha["status"]:
+            pendencia = pendencia_por_lote.get(lote["id"])
             alteracoes.append(
                 ImportacaoLinha(
                     lote_id=lote["id"],
@@ -151,6 +188,9 @@ async def preview_importacao_lotes(
                     identificador=lote["identificador"],
                     status_atual=lote["status"],
                     status_planilha=linha["status"],
+                    pendencia_tipo=pendencia[0] if pendencia else None,
+                    pendencia_corretor=pendencia[1] if pendencia else None,
+                    pendencia_desde=pendencia[2] if pendencia else None,
                 )
             )
 
@@ -172,19 +212,38 @@ async def preview_importacao_lotes(
     )
 
 
-@router.post("/lotes/importar/confirmar", response_model=list[Lote])
+@router.post("/lotes/importar/confirmar", response_model=ImportacaoConfirmarResultado)
 def confirmar_importacao_lotes(payload: ImportacaoConfirmarPayload, _admin=Depends(require_admin)):
     """Aplica só as trocas de status que o admin confirmou na tela de preview
     (ver endpoint acima) — recebe de volta a lista exata de lote_id/status que
-    ficou marcada na tela, não reprocessa a planilha."""
+    ficou marcada na tela, não reprocessa a planilha.
+
+    Escrita condicional (mesmo padrão de reservas.py::criar_reserva e
+    crm.py::criar_proposta): só aplica a troca se o lote AINDA estiver no
+    status que a tela de preview mostrou (`item.status_atual`) — pode ter
+    passado minutos entre o admin analisar a planilha e clicar em
+    "Confirmar", tempo de sobra pra um corretor reservar/vender esse mesmo
+    lote pelo fluxo normal do painel. Sem essa checagem, a importação
+    sobrescreveria esse status novo às cegas. Item que não bate mais entra em
+    `ignorados` — o front avisa o admin pra reanalisar a planilha."""
     if not payload.itens:
         raise HTTPException(422, "Nenhuma alteração selecionada.")
     if len(payload.itens) > 1000:
         raise HTTPException(422, "Muitos itens de uma vez.")
     sb = get_supabase()
     atualizados = []
+    ignorados = 0
     for item in payload.itens:
-        r = sb.table("lotes").update({"status": item.status}).eq("id", item.lote_id).execute().data
+        r = (
+            sb.table("lotes")
+            .update({"status": item.status})
+            .eq("id", item.lote_id)
+            .eq("status", item.status_atual)
+            .execute()
+            .data
+        )
         if r:
             atualizados.append(r[0])
-    return atualizados
+        else:
+            ignorados += 1
+    return ImportacaoConfirmarResultado(atualizados=atualizados, ignorados=ignorados)

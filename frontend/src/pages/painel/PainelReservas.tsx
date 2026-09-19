@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
-import { api, horasRestantes } from "../../lib/api";
+import { api, formatDateTime, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { LoteComCondominio, Reserva, ReservaComLote, ReservaStatus } from "../../types";
 
@@ -169,12 +169,14 @@ export default function PainelReservas() {
         <p className="text-ink-soft text-sm">Nenhum pedido de reserva no momento.</p>
       ) : (
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[820px]">
+          <table className="w-full text-sm min-w-[980px]">
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 font-medium">Lote</th>
                 <th className="px-4 py-3 font-medium">Interessado</th>
                 <th className="px-4 py-3 font-medium">Contato</th>
+                <th className="px-4 py-3 font-medium">Corretor</th>
+                <th className="px-4 py-3 font-medium">Pedido em</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
@@ -185,6 +187,10 @@ export default function PainelReservas() {
                   <td className="px-4 py-3 text-ink">{r.lote ? r.lote.identificador : "—"}</td>
                   <td className="px-4 py-3 text-ink">{r.nome || "—"}</td>
                   <td className="px-4 py-3 text-ink-soft">{r.contato || "—"}</td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {r.corretor?.nome || <span className="italic">sem corretor</span>}
+                  </td>
+                  <td className="px-4 py-3 text-ink-soft whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                   <td className="px-4 py-3">
                     {salvandoId === r.id ? (
                       <span className="inline-flex items-center gap-2 text-xs text-ink-soft">
