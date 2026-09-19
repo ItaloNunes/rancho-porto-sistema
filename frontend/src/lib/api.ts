@@ -245,6 +245,106 @@ export function mostrarErroNaAba(aba: Window | null, mensagem: string): void {
   }
 }
 
+function _escaparHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** Mostra um PDF já pronto na aba que abrirAbaComCarregamento() deixou
+ * aberta, com um botão de Compartilhar (usa o share nativo do celular —
+ * WhatsApp, e-mail, Drive etc. — quando o navegador suporta; no desktop, ou
+ * em navegadores sem suporte, cai pra um link de abrir/baixar).
+ *
+ * Por que existe: o fluxo antigo navegava a aba direto pro PDF
+ * (`aba.location.href = blobUrl`), o que TROCA de página dentro da aba e
+ * empilha uma entrada nova no histórico dela. No celular, apertar "Voltar"
+ * então caía na entrada anterior — a tela de "Gerando PDF..." parada do
+ * jeito que ficou, sem nenhuma atualização depois disso — parecendo uma
+ * tela quebrada/travada. Aqui a aba nunca navega pra outra URL: só troca o
+ * próprio conteúdo (document.write, mesma entrada de histórico o tempo
+ * todo), então não sobra nada "morto" pra apertar Voltar cair em cima. */
+export function mostrarPdfNaAba(aba: Window | null, blob: Blob, nomeArquivo: string, titulo: string): void {
+  if (!aba || aba.closed) return;
+  (aba as unknown as { __pdfBlob?: Blob }).__pdfBlob = blob;
+  try {
+    aba.document.open();
+    aba.document.write(`<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${_escaparHtml(titulo)}</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    background: #EEF1F5;
+  }
+  header {
+    flex: none; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center;
+    padding: 10px 12px; background: #fff; border-bottom: 1px solid #DCE1E8;
+  }
+  header p { margin: 0; width: 100%; text-align: center; font-size: 13px; color: #54607A; }
+  .botoes { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  button, a.botao {
+    font: inherit; font-size: 14px; font-weight: 600; border-radius: 8px; padding: 10px 18px;
+    border: none; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  #btn-compartilhar { background: #0B3D5C; color: #fff; }
+  #btn-compartilhar:disabled { opacity: .5; cursor: default; }
+  #btn-voltar { background: #fff; color: #54607A; border: 1px solid #C7CEDA; }
+  a.botao { background: #fff; color: #0B3D5C; border: 1px solid #0B3D5C; }
+  main { flex: 1; min-height: 0; }
+  iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+  .aviso { font-size: 12px; color: #8791A6; text-align: center; padding: 8px; margin: 0; }
+</style>
+<header>
+  <p>${_escaparHtml(titulo)}</p>
+  <div class="botoes">
+    <button id="btn-voltar" type="button">&larr; Voltar</button>
+    <button id="btn-compartilhar" type="button">Compartilhar</button>
+    <a id="link-abrir" class="botao" target="_blank" rel="noopener">Abrir / baixar</a>
+  </div>
+</header>
+<main><iframe id="preview" title="Pré-visualização do PDF"></iframe></main>
+<p class="aviso" id="aviso-preview" hidden>Não deu pra mostrar o PDF aqui — use "Abrir / baixar" acima.</p>
+<script>
+(function () {
+  var blob = window.__pdfBlob;
+  var nome = ${JSON.stringify(nomeArquivo)};
+  var url = URL.createObjectURL(blob);
+  var preview = document.getElementById("preview");
+  preview.src = url;
+  preview.addEventListener("error", function () {
+    document.getElementById("aviso-preview").hidden = false;
+  });
+  var linkAbrir = document.getElementById("link-abrir");
+  linkAbrir.href = url;
+  linkAbrir.download = nome;
+  var btnVoltar = document.getElementById("btn-voltar");
+  btnVoltar.addEventListener("click", function () {
+    try { window.close(); } catch (e) { /* nada mais a fazer aqui */ }
+  });
+  var btn = document.getElementById("btn-compartilhar");
+  btn.addEventListener("click", async function () {
+    try {
+      var file = new File([blob], nome, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nome });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // usuário cancelou o share — não é erro
+    }
+    linkAbrir.click();
+  });
+})();
+</script>`);
+    aba.document.close();
+  } catch {
+    // Se nem escrever na aba funcionar, não sobra mais nada que dê pra fazer
+    // por ela — o alert() no catch de cada tela continua como último recurso.
+  }
+}
+
 export const api = {
   // Catálogo público
   listarCondominios: () => request<CondominioResumo[]>("/condominios"),

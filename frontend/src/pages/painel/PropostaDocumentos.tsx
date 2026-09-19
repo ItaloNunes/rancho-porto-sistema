@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { abrirAbaComCarregamento, api, mostrarErroNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { DOCUMENTO_LABEL } from "../../types";
 import type { DocumentoProposta, DocumentoTipo, PropostaDetalhe } from "../../types";
 
@@ -93,16 +93,17 @@ export default function PropostaDocumentos({
     setGerandoRelatorio(true);
     try {
       const blob = await api.gerarRelatorioCompletoProposta(proposta.id);
-      const url = URL.createObjectURL(blob);
+      const nomeArquivo = `proposta-completa-${proposta.lote?.identificador ?? proposta.id}.pdf`;
       if (aba) {
-        aba.location.href = url;
+        mostrarPdfNaAba(aba, blob, nomeArquivo, `Proposta completa — ${proposta.lote?.identificador ?? ""}`);
       } else {
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `proposta-completa-${proposta.lote?.identificador ?? proposta.id}.pdf`;
+        link.download = nomeArquivo;
         link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : String(err);
       mostrarErroNaAba(aba, mensagem);

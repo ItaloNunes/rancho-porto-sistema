@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import PropostaDocumentos from "./PropostaDocumentos";
@@ -59,18 +59,19 @@ export default function PainelPropostas() {
     setGerandoPdf(p.id);
     try {
       const blob = await api.gerarPdfProposta(p.id);
-      const url = URL.createObjectURL(blob);
+      const nomeArquivo = `proposta-${p.lote?.identificador ?? p.id}.pdf`;
       if (aba) {
-        aba.location.href = url;
+        mostrarPdfNaAba(aba, blob, nomeArquivo, `Proposta — ${p.lote?.identificador ?? ""}`);
       } else {
         // Mesmo a abertura em branco pode ser bloqueada (config restritiva do
         // navegador) — nesse caso, baixa o arquivo direto em vez de silenciar.
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `proposta-${p.lote?.identificador ?? p.id}.pdf`;
+        link.download = nomeArquivo;
         link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
       const mensagem = e instanceof Error ? e.message : String(e);
       mostrarErroNaAba(aba, mensagem);
