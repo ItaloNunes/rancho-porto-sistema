@@ -4,6 +4,7 @@ import Modal from "../../components/Modal";
 import { api, formatDateTime, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { LoteComCondominio, Reserva, ReservaComLote, ReservaStatus } from "../../types";
+import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 
 const STATUS_LABEL: Record<ReservaStatus, string> = {
   pendente: "Pendente",
@@ -84,6 +85,15 @@ export default function PainelReservas() {
     digitado: string;
     ciente: boolean;
   } | null>(null);
+  // Reserva pra qual o modal "Gerar proposta" está aberto — só quem
+  // reservou (ou admin) pode gerar, mesma regra do backend (ver
+  // _pode_mexer_na_reserva em routers/reservas.py).
+  const [gerandoPropostaDe, setGerandoPropostaDe] = useState<ReservaComLote | null>(null);
+
+  function podeGerarProposta(r: ReservaComLote): boolean {
+    if (r.status === "cancelada" || r.proposta_id) return false;
+    return perfil?.papel === "admin" || r.corretor_id == null || r.corretor_id === perfil?.id;
+  }
 
   function recarregar() {
     setErro(null);
@@ -219,6 +229,18 @@ export default function PainelReservas() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {r.proposta_id ? (
+                      <span className="text-xs text-ink-soft italic mr-1.5">proposta gerada</span>
+                    ) : (
+                      podeGerarProposta(r) && (
+                        <button
+                          className="btn-row btn-row-primary mr-1.5"
+                          onClick={() => setGerandoPropostaDe(r)}
+                        >
+                          gerar proposta
+                        </button>
+                      )
+                    )}
                     <button className="btn-row btn-row-primary mr-1.5" onClick={() => setEditando(r)}>
                       editar
                     </button>
@@ -248,6 +270,19 @@ export default function PainelReservas() {
             onSalvo={() => {
               setEditando(null);
               setLoteIdPreSelecionado(null);
+              recarregar();
+            }}
+          />
+        </Modal>
+      )}
+
+      {gerandoPropostaDe && (
+        <Modal onClose={() => setGerandoPropostaDe(null)} labelledBy="proposta-modal-title">
+          <PropostaFormularioCompleto
+            lotes={lotes}
+            reservaOrigem={gerandoPropostaDe}
+            onSalvo={() => {
+              setGerandoPropostaDe(null);
               recarregar();
             }}
           />

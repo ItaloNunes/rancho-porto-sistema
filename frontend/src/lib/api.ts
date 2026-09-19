@@ -464,6 +464,11 @@ export const api = {
     // sem passar pelo link de qualificação do cliente final. Sem isso, o
     // PDF cai de volta pro resumo simples (nome/CPF/telefone do cliente).
     dados_qualificacao?: QualificacaoDados | null;
+    // Preenchido quando a proposta nasce do botão "Gerar proposta" na fila
+    // de Reservas (ver PainelReservas.tsx) — o backend pula a trava normal
+    // de lote 'disponivel' (já está reservado por essa reserva) e linka a
+    // proposta de volta nela, em vez de criar uma reserva duplicada.
+    reserva_id?: string;
   }) => request<Proposta>("/crm/propostas", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarStatusProposta: (id: string, status: PropostaStatus) =>
     request<Proposta>(`/crm/propostas/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, true),

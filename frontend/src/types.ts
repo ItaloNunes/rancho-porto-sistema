@@ -191,6 +191,10 @@ export interface Reserva {
   /** Prazo duro de 24h — passou disso sem confirmar a compra, o backend expira a
    * reserva sozinho e libera o lote (ver _expirar_vencidas no backend). */
   expira_em?: string | null;
+  /** Preenchido quando essa reserva já gerou uma proposta (criada do zero
+   * já linkada, ou via botão "Gerar proposta" em PainelReservas.tsx) — a
+   * partir daí não dá mais pra gerar outra proposta pra mesma reserva. */
+  proposta_id?: string | null;
   created_at: string;
 }
 

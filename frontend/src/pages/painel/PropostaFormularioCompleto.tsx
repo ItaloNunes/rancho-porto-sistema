@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../../components/qualificacaoCampos";
 import { api, prewarmBackend } from "../../lib/api";
 import { qualificacaoDadosVazio } from "../../types";
-import type { EstadoCivil, LoteComCondominio, QualificacaoDados } from "../../types";
+import type { EstadoCivil, LoteComCondominio, QualificacaoDados, ReservaComLote } from "../../types";
 
 /** Mesmas etapas e campos do formulário de qualificação que o cliente final
  * preenche pelo link público (ver QualificacaoPublica.tsx) — só que aqui é
@@ -43,13 +43,30 @@ function ProgressBar({ passo, total }: { passo: number; total: number }) {
 export default function PropostaFormularioCompleto({
   lotes,
   onSalvo,
+  reservaOrigem = null,
 }: {
   lotes: LoteComCondominio[];
   onSalvo: () => void;
+  /** Quando a proposta nasce do botão "Gerar proposta" na fila de Reservas
+   * (ver PainelReservas.tsx) em vez de "+ Nova proposta": o lote já vem
+   * fixo (é o da própria reserva, já 'reservado' — não passaria no filtro
+   * de disponíveis do passo 0 de qualquer jeito) e nome/CPF/contato já
+   * vêm pré-preenchidos do que a reserva já tinha. */
+  reservaOrigem?: ReservaComLote | null;
 }) {
-  const [loteId, setLoteId] = useState("");
-  const [condominioSlug, setCondominioSlug] = useState("");
-  const [dados, setDados] = useState<QualificacaoDados>(qualificacaoDadosVazio());
+  const [loteId, setLoteId] = useState(reservaOrigem?.lote_id ?? "");
+  const [condominioSlug, setCondominioSlug] = useState(
+    () => lotes.find((l) => l.id === reservaOrigem?.lote_id)?.condominio_slug ?? "",
+  );
+  const [dados, setDados] = useState<QualificacaoDados>(() => {
+    const vazio = qualificacaoDadosVazio();
+    if (!reservaOrigem) return vazio;
+    return {
+      ...vazio,
+      proponente: { ...vazio.proponente, nome: reservaOrigem.nome ?? null, cpf_cnpj: reservaOrigem.cpf ?? null },
+      telefone_celular: reservaOrigem.contato ?? null,
+    };
+  });
   const [condicoesPagamento, setCondicoesPagamento] = useState("");
   const [passo, setPasso] = useState(0);
   // "Cadastro rápido": o corretor quer garantir o lote com só nome + lote
@@ -85,9 +102,11 @@ export default function PropostaFormularioCompleto({
   // aparecer aqui só levaria o corretor a preencher o formulário inteiro
   // pra descobrir o erro 409 só no fim, ao salvar.
   const lotesDoEmpreendimento = useMemo(() => {
-    const disponiveis = lotes.filter((l) => l.status === "disponivel");
+    const disponiveis = lotes.filter(
+      (l) => l.status === "disponivel" || l.id === reservaOrigem?.lote_id,
+    );
     return condominioSlug ? disponiveis.filter((l) => l.condominio_slug === condominioSlug) : disponiveis;
-  }, [lotes, condominioSlug]);
+  }, [lotes, condominioSlug, reservaOrigem]);
 
   const loteSelecionado = lotes.find((l) => l.id === loteId) ?? null;
   const casado = dados.estado_civil === "casado";
@@ -217,6 +236,7 @@ export default function PropostaFormularioCompleto({
         condicoes_pagamento: condicoesPagamento.trim() || null,
         observacoes: dados.forma_pagamento.observacoes || null,
         dados_qualificacao: dados,
+        reserva_id: reservaOrigem?.id,
       });
       onSalvo();
     } catch (e) {
@@ -229,42 +249,61 @@ export default function PropostaFormularioCompleto({
   return (
     <div className="p-5 sm:p-6" id="proposta-formulario-topo">
       <h2 id="proposta-modal-title" className="text-lg font-bold text-ink mb-1">
-        Nova proposta
+        {reservaOrigem ? "Gerar proposta desta reserva" : "Nova proposta"}
       </h2>
       <p className="text-xs text-ink-soft mb-4">
-        Mesmos dados da Proposta de Compra/Venda em papel — preencha aqui e o PDF já sai pronto.
+        {reservaOrigem
+          ? "O lote já está reservado — falta só completar os dados da Proposta de Compra/Venda pra gerar o PDF."
+          : "Mesmos dados da Proposta de Compra/Venda em papel — preencha aqui e o PDF já sai pronto."}
       </p>
       <ProgressBar passo={passo} total={PASSOS.length} />
 
       <div className="grid gap-4">
         {passo === 0 && (
           <>
-            {empreendimentos.length > 1 && (
-              <Field label="Empreendimento">
-                <select
-                  className="input"
-                  value={condominioSlug}
-                  onChange={(e) => {
-                    setCondominioSlug(e.target.value);
-                    setLoteId("");
-                  }}
-                >
-                  <option value="">Todos os empreendimentos</option>
-                  {empreendimentos.map((c) => (
-                    <option key={c.slug} value={c.slug}>
-                      {c.nome}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-            <Field label="Lote *">
-              <LoteCombobox key={condominioSlug} lotes={lotesDoEmpreendimento} value={loteId} onChange={setLoteId} />
-            </Field>
-            {loteSelecionado?.valor_total != null && (
-              <p className="text-xs text-ink-soft -mt-1">
-                Valor de tabela: {formatMoneySimples(loteSelecionado.valor_total)}
-              </p>
+            {reservaOrigem ? (
+              <div className="rounded-lg border border-border bg-surface-alt/60 p-3">
+                <p className="text-xs text-ink-soft mb-0.5">Lote desta reserva</p>
+                <p className="text-sm font-semibold text-ink">
+                  {loteSelecionado?.identificador ?? "—"}
+                  {loteSelecionado ? ` — ${loteSelecionado.condominio_nome}` : ""}
+                </p>
+                {loteSelecionado?.valor_total != null && (
+                  <p className="text-xs text-ink-soft mt-1">
+                    Valor de tabela: {formatMoneySimples(loteSelecionado.valor_total)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                {empreendimentos.length > 1 && (
+                  <Field label="Empreendimento">
+                    <select
+                      className="input"
+                      value={condominioSlug}
+                      onChange={(e) => {
+                        setCondominioSlug(e.target.value);
+                        setLoteId("");
+                      }}
+                    >
+                      <option value="">Todos os empreendimentos</option>
+                      {empreendimentos.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <Field label="Lote *">
+                  <LoteCombobox key={condominioSlug} lotes={lotesDoEmpreendimento} value={loteId} onChange={setLoteId} />
+                </Field>
+                {loteSelecionado?.valor_total != null && (
+                  <p className="text-xs text-ink-soft -mt-1">
+                    Valor de tabela: {formatMoneySimples(loteSelecionado.valor_total)}
+                  </p>
+                )}
+              </>
             )}
           </>
         )}

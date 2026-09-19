@@ -539,6 +539,14 @@ class PropostaCreate(BaseModel):
     # sem passar pelo link de qualificação do cliente final. Mesmo formato
     # de formularios_qualificacao.dados — usado por gerar_proposta_pdf.
     dados_qualificacao: Optional[QualificacaoDados] = None
+    # Preenchido quando a proposta nasce "a partir de uma reserva" já
+    # existente (botão "Gerar proposta" na fila de Reservas, ver
+    # PainelReservas.tsx) — nesse caminho o lote já está travado pela
+    # própria reserva, então criar_proposta pula a trava atômica normal
+    # (que exige o lote 'disponivel') e só linka a proposta nova de volta
+    # na reserva (reservas.proposta_id), em vez de gerar uma segunda
+    # reserva duplicada (ver routers/crm.py::criar_proposta).
+    reserva_id: Optional[str] = None
 
 
 class PropostaStatusUpdate(BaseModel):
