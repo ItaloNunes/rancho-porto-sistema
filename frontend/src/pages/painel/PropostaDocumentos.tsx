@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { abrirAbaComCarregamento, api, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
-import { DOCUMENTO_LABEL } from "../../types";
+import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS } from "../../types";
 import type { DocumentoProposta, DocumentoTipo, PropostaDetalhe } from "../../types";
 
 const TIPOS: DocumentoTipo[] = [
@@ -49,6 +49,17 @@ export default function PropostaDocumentos({
   const documentos = [...proposta.documentos].sort(
     (a, b) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime(),
   );
+
+  // Mesma lista de obrigatórios da qualificação pública (ver
+  // PainelQualificacoes.tsx e QualificacaoPublica.tsx) — aqui reaproveitada
+  // pra mostrar o que ainda falta anexar nesta proposta, já que as duas
+  // alimentam o mesmo PDF/contrato e têm as mesmas exigências. Casado só é
+  // conhecido quando a proposta nasceu do formulário completo ou de uma
+  // qualificação aprovada (dados_qualificacao preenchido) — sem esse dado,
+  // assume-se solteiro (não pede documento do cônjuge à toa).
+  const casado = proposta.dados_qualificacao?.estado_civil === "casado";
+  const obrigatorios: DocumentoTipo[] = [...DOCUMENTOS_OBRIGATORIOS, ...(casado ? DOCUMENTOS_CONJUGE : [])];
+  const faltando = obrigatorios.filter((tipo) => !documentos.some((d) => d.tipo === tipo));
 
   async function onArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
@@ -133,6 +144,40 @@ export default function PropostaDocumentos({
         <p className="text-sm text-ink-soft">
           {proposta.lote?.identificador ?? "Lote"} — {proposta.cliente?.nome ?? "Cliente"}
         </p>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft mb-2">
+          Documentos obrigatórios {faltando.length > 0 && <span className="text-rust normal-case font-medium">({faltando.length} faltando)</span>}
+        </h3>
+        <div className="grid gap-1.5">
+        {obrigatorios.map((tipo) => {
+          const doc = documentos.find((d) => d.tipo === tipo);
+          return (
+            <div key={tipo} className="flex items-center justify-between gap-3 text-sm">
+              <span className={doc ? "text-ink" : "text-rust font-medium"}>
+                {DOCUMENTO_LABEL[tipo]} {!doc && "— faltando"}
+              </span>
+              {doc ? (
+                <span className="text-sage text-xs font-semibold shrink-0">✓ anexado</span>
+              ) : (
+                <button
+                  className="btn-row btn-row-primary shrink-0"
+                  onClick={() => {
+                    setTipo(tipo);
+                    inputRef.current?.click();
+                  }}
+                >
+                  anexar
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {faltando.length === 0 && (
+          <p className="text-xs text-sage font-medium">Todos os documentos obrigatórios já foram anexados.</p>
+        )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border border-border rounded-lg p-3 bg-surface-alt/60">
