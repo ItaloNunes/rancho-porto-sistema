@@ -18,6 +18,7 @@ import PainelLotes from "./pages/painel/PainelLotes";
 import PainelVisaoGeral from "./pages/painel/PainelVisaoGeral";
 import PainelImportarPlanilha from "./pages/painel/PainelImportarPlanilha";
 import PainelAtividade from "./pages/painel/PainelAtividade";
+import PainelLogs from "./pages/painel/PainelLogs";
 // PainelPlantas e PainelAcompanhamento saíram da navegação (ver comentário em
 // PainelLayout.tsx) — os arquivos continuam no projeto, só não são mais importados aqui.
 
@@ -95,6 +96,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={
                 <RequireAuth developerOnly>
                   <PainelAtividade />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="logs"
+              element={
+                <RequireAuth developerOnly>
+                  <PainelLogs />
                 </RequireAuth>
               }
             />

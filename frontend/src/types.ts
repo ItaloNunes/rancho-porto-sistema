@@ -236,6 +236,24 @@ export interface AtividadeItem {
   created_at: string;
 }
 
+/** Uma linha do log de auditoria completo (só developer, ver GET /crm/logs e
+ * PainelLogs.tsx) — toda ação relevante do painel: quem fez, o quê, quando e
+ * em qual registro. ator_* é uma foto de quando aconteceu (não muda se a
+ * pessoa for renomeada/desativada depois); vem null só em ação automática
+ * do próprio sistema (ex.: reserva expirando sozinha). */
+export interface LogAuditoria {
+  id: string;
+  created_at: string;
+  ator_id?: string | null;
+  ator_nome?: string | null;
+  ator_papel?: string | null;
+  acao: string;
+  entidade: string;
+  entidade_id?: string | null;
+  descricao: string;
+  detalhes?: Record<string, unknown> | null;
+}
+
 export interface VisaoGeralCondominio {
   condominio_id: string;
   nome: string;

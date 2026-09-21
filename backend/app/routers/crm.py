@@ -16,8 +16,9 @@ Compra/Venda Castel, operada com a JR Imóveis) — ver app/pdf.py.
 
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from postgrest.exceptions import APIError
 from starlette.concurrency import run_in_threadpool
@@ -42,6 +43,7 @@ from ..schemas import (
     DocumentoTipo,
     LoginRequest,
     LoginResponse,
+    LogAuditoria,
     LoteComCondominio,
     Proposta,
     PropostaCreate,
@@ -52,6 +54,7 @@ from ..schemas import (
     VisaoGeralCondominio,
 )
 from ..security import criar_token, eh_admin, get_current_corretor, require_admin, require_developer
+from ..auditoria import registrar_log
 from .reservas import _pode_mexer_na_reserva
 from ..usuarios import gerar_usuario_unico, hash_senha, senha_de_telefone, verificar_senha
 from ..usuarios import slug as slug_usuario
@@ -71,6 +74,7 @@ def login(payload: LoginRequest):
     if not corretor[0]["ativo"]:
         raise HTTPException(403, "Este login não tem acesso ao painel.")
     token = criar_token(corretor[0]["id"])
+    registrar_log(sb, corretor[0], "login", "corretor", corretor[0]["id"], "Fez login no painel.")
     return {"access_token": token, "corretor": corretor[0]}
 
 
@@ -111,7 +115,7 @@ def listar_corretores(_admin: dict = Depends(require_admin)):
 
 
 @router.post("/corretores", response_model=CorretorCriado)
-def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin)):
+def criar_corretor(payload: CorretorCreate, admin: dict = Depends(require_admin)):
     """Login por usuário (ver app/usuarios.py): a conta já nasce pronta pra
     usar, com senha = telefone (só dígitos). O admin repassa usuário+senha
     pro corretor por fora (WhatsApp, etc.); essa é a única resposta que traz
@@ -158,6 +162,10 @@ def criar_corretor(payload: CorretorCreate, _admin: dict = Depends(require_admin
         if e.code == "23505":
             raise HTTPException(409, "Já existe um login com esse usuário — tente outro.")
         raise
+    registrar_log(
+        sb, admin, "criou_corretor", "corretor", inserido["id"],
+        f"Criou o login de {inserido['nome']} (usuário: {inserido['usuario']}, papel: {inserido['papel']}).",
+    )
     return {**inserido, "senha": senha}
 
 
@@ -260,7 +268,7 @@ def importar_corretores(_admin: dict = Depends(require_admin)):
 
 
 @router.patch("/corretores/{corretor_id}", response_model=Corretor)
-def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict = Depends(require_admin)):
+def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, admin: dict = Depends(require_admin)):
     if payload.papel == "developer":
         raise HTTPException(400, "Este papel não pode ser atribuído por aqui.")
     sb = get_supabase()
@@ -302,6 +310,15 @@ def atualizar_corretor(corretor_id: str, payload: CorretorUpdate, _admin: dict =
 
     atualizado = sb.table("corretores").update(updates).eq("id", corretor_id).execute().data[0]
 
+    campos_logados = [c for c in updates if c not in ("senha_hash", "senha_customizada")]
+    if campos_logados or nova_senha:
+        detalhe_senha = " (+ senha redefinida)" if nova_senha else ""
+        registrar_log(
+            sb, admin, "editou_corretor", "corretor", corretor_id,
+            f"Editou o cadastro de {existente['nome']} (campos: {', '.join(campos_logados) or 'senha'}){detalhe_senha}.",
+            {"campos_alterados": campos_logados, "senha_redefinida": bool(nova_senha)},
+        )
+
     resposta = dict(atualizado)
     if nova_senha:
         # Única vez que essa senha (re)sincronizada aparece em texto puro —
@@ -318,10 +335,14 @@ def desativar_corretor(corretor_id: str, admin: dict = Depends(require_admin)):
     if corretor_id == admin["id"]:
         raise HTTPException(400, "Você não pode desativar o próprio login.")
     sb = get_supabase()
-    existente = sb.table("corretores").select("id").eq("id", corretor_id).limit(1).execute().data
+    existente = sb.table("corretores").select("id, nome").eq("id", corretor_id).limit(1).execute().data
     if not existente:
         raise HTTPException(404, "Corretor não encontrado.")
     sb.table("corretores").update({"ativo": False}).eq("id", corretor_id).execute()
+    registrar_log(
+        sb, admin, "desativou_corretor", "corretor", corretor_id,
+        f"Desativou o login de {existente[0]['nome']}.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -344,10 +365,13 @@ def listar_clientes(corretor: dict = Depends(get_current_corretor)):
 
 @router.post("/clientes", response_model=Cliente)
 def criar_cliente(payload: ClienteCreate, corretor: dict = Depends(get_current_corretor)):
+    sb = get_supabase()
     data = payload.model_dump()
     if not eh_admin(corretor):
         data["corretor_id"] = corretor["id"]
-    return get_supabase().table("clientes").insert(data).execute().data[0]
+    criado = sb.table("clientes").insert(data).execute().data[0]
+    registrar_log(sb, corretor, "criou_cliente", "cliente", criado["id"], f"Cadastrou o cliente {criado['nome']}.")
+    return criado
 
 
 @router.patch("/clientes/{cliente_id}", response_model=Cliente)
@@ -364,7 +388,13 @@ def atualizar_cliente(cliente_id: str, payload: ClienteUpdate, corretor: dict = 
         updates.pop("corretor_id", None)  # corretor comum não reatribui cliente pra outro
     if not updates:
         return existente
-    return sb.table("clientes").update(updates).eq("id", cliente_id).execute().data[0]
+    atualizado = sb.table("clientes").update(updates).eq("id", cliente_id).execute().data[0]
+    registrar_log(
+        sb, corretor, "editou_cliente", "cliente", cliente_id,
+        f"Editou o cadastro de {existente.get('nome')} (campos: {', '.join(updates.keys())}).",
+        {"campos_alterados": list(updates.keys())},
+    )
+    return atualizado
 
 
 @router.delete("/clientes/{cliente_id}", status_code=204)
@@ -376,6 +406,10 @@ def excluir_cliente(cliente_id: str, corretor: dict = Depends(get_current_corret
     if not _pode_mexer_no_cliente(corretor, existente[0]):
         raise HTTPException(403, "Este cliente é de outro corretor.")
     sb.table("clientes").delete().eq("id", cliente_id).execute()
+    registrar_log(
+        sb, corretor, "excluiu_cliente", "cliente", cliente_id,
+        f"Excluiu o cliente {existente[0].get('nome')}.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -536,6 +570,12 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
                 proposta["id"],
             )
 
+    origem = f"a partir da reserva {reserva['id']}" if reserva is not None else "direto (sem reserva prévia)"
+    registrar_log(
+        sb, corretor, "criou_proposta", "proposta", proposta["id"],
+        f"Gerou proposta pro lote {lote_id} ({origem}).",
+        {"lote_id": lote_id, "reserva_id": reserva["id"] if reserva else None},
+    )
     return proposta
 
 
@@ -551,7 +591,13 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existente
-    return sb.table("propostas").update(updates).eq("id", proposta_id).execute().data[0]
+    atualizado = sb.table("propostas").update(updates).eq("id", proposta_id).execute().data[0]
+    registrar_log(
+        sb, corretor, "editou_proposta", "proposta", proposta_id,
+        f"Editou a proposta (campos: {', '.join(updates.keys())}).",
+        {"campos_alterados": list(updates.keys())},
+    )
+    return atualizado
 
 
 def _carregar_proposta_ou_404(sb, proposta_id: str) -> dict:
@@ -648,6 +694,11 @@ async def anexar_documento_proposta(
                 "(falta rodar uma migration pendente). Avise o administrador do sistema.",
             )
         raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
+    await run_in_threadpool(
+        registrar_log, sb, corretor, "anexou_documento", "proposta", proposta_id,
+        f"Anexou documento '{tipo}' ({arquivo.filename or 'sem nome'}) na proposta.",
+        {"tipo": tipo, "documento_id": inserido["id"]},
+    )
     return inserido
 
 
@@ -698,6 +749,11 @@ def excluir_documento_proposta(proposta_id: str, documento_id: str, corretor: di
         raise HTTPException(404, "Documento não encontrado.")
     sb.table("documentos_proposta").delete().eq("id", documento_id).execute()
     excluir_do_storage_silenciosamente(sb, doc[0]["storage_path"])
+    registrar_log(
+        sb, corretor, "removeu_documento", "proposta", proposta_id,
+        f"Removeu documento '{doc[0].get('tipo')}' ({doc[0].get('nome_arquivo')}) da proposta.",
+        {"documento_id": documento_id},
+    )
     return {"ok": True}
 
 
@@ -885,6 +941,11 @@ def atualizar_status_proposta(
         _gerar_reserva_da_proposta_aprovada(sb, proposta_id, existente)
     elif payload.status in ("recusada", "cancelada"):
         _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"])
+    registrar_log(
+        sb, corretor, "mudou_status_proposta", "proposta", proposta_id,
+        f"Mudou status da proposta pra '{payload.status}'.",
+        {"status_novo": payload.status},
+    )
     return atualizado
 
 
@@ -1035,6 +1096,37 @@ def listar_atividade(_dev: dict = Depends(require_developer)):
 
     itens.sort(key=lambda i: i["created_at"], reverse=True)
     return itens[:150]
+
+
+@router.get("/logs", response_model=list[LogAuditoria])
+def listar_logs(
+    _dev: dict = Depends(require_developer),
+    entidade: Optional[str] = Query(None, description="Filtra por tipo: reserva, proposta, cliente, lote, corretor, qualificacao"),
+    ator_id: Optional[str] = Query(None, description="Filtra pelas ações de um corretor/admin específico"),
+    acao: Optional[str] = Query(None, description="Filtra por ação exata (ex.: cancelou_reserva)"),
+    limite: int = Query(200, ge=1, le=500),
+    antes_de: Optional[datetime] = Query(None, description="Pagina pro passado: só logs criados antes desse instante"),
+):
+    """Log de auditoria completo — toda ação relevante do painel (criar,
+    editar, excluir, mudar status, login, anexar/remover documento etc.),
+    com quem fez, quando e em qual registro (ver app/auditoria.py). Só
+    developer, mesmo padrão de /crm/atividade — é a trilha de quem fez o
+    quê, então fica restrita ao mesmo login exclusivo.
+
+    Paginação simples por cursor de tempo (antes_de) em vez de offset —
+    mais barato no Postgres e não perde/repete linha se um log novo chegar
+    entre uma página e outra."""
+    sb = get_supabase()
+    query = sb.table("logs_auditoria").select("*").order("created_at", desc=True).limit(limite)
+    if entidade:
+        query = query.eq("entidade", entidade)
+    if ator_id:
+        query = query.eq("ator_id", ator_id)
+    if acao:
+        query = query.eq("acao", acao)
+    if antes_de:
+        query = query.lt("created_at", antes_de.isoformat())
+    return query.execute().data
 
 
 # ---------------------------------------------------------------------------

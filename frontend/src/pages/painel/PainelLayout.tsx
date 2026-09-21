@@ -40,10 +40,13 @@ const INTERVALO_RESERVAS_MS = 45_000;
 export default function PainelLayout() {
   const { perfil, sair } = useAuth();
   const tabs = temAcessoAdmin(perfil?.papel) ? [...TABS_BASE, ...TABS_ADMIN] : TABS_BASE;
-  // Aba de Atividade: só a conta developer vê — nem os outros admins (ver
-  // security.py::require_developer no backend, mesma regra espelhada aqui).
+  // Aba de Atividade e Logs: só a conta developer vê — nem os outros admins
+  // (ver security.py::require_developer no backend, mesma regra espelhada
+  // aqui).
   const tabsComAtividade =
-    perfil?.papel === "developer" ? [...tabs, { to: "/painel/atividade", label: "Atividade" }] : tabs;
+    perfil?.papel === "developer"
+      ? [...tabs, { to: "/painel/atividade", label: "Atividade" }, { to: "/painel/logs", label: "Logs" }]
+      : tabs;
   const [menuAberto, setMenuAberto] = useState(false);
   const [reservasPendentes, setReservasPendentes] = useState(0);
 

@@ -600,8 +600,9 @@ class AtividadeItem(BaseModel):
     """Uma linha do feed de Atividade (só developer, ver
     routers/crm.py::listar_atividade e security.py::require_developer) —
     reserva/proposta/cliente criados recentemente, com quem fez e quando.
-    Baseado só em created_at (não existe um log de toda mudança de status
-    ainda — ver comentário na função)."""
+    Baseado só em created_at (visão rápida de "o que é novo"; pra ver TODA
+    ação — cancelamentos, edições, mudanças de status etc. — ver LogAuditoria
+    /crm/logs, abaixo)."""
 
     tipo: Literal["reserva", "proposta", "cliente"]
     lote_identificador: Optional[str] = None
@@ -610,6 +611,27 @@ class AtividadeItem(BaseModel):
     status: Optional[str] = None
     corretor_nome: Optional[str] = None
     created_at: datetime
+
+
+class LogAuditoria(BaseModel):
+    """Uma linha do log de auditoria (só developer, ver
+    routers/crm.py::listar_logs, security.py::require_developer e
+    app/auditoria.py::registrar_log) — toda ação relevante do painel: quem
+    (ator_nome/ator_papel — foto de quando aconteceu, não muda se a pessoa
+    for renomeada depois), o quê (acao/descricao), em qual registro
+    (entidade/entidade_id) e quando (created_at). ator_* vem null só nas
+    ações automáticas do próprio sistema (ex.: reserva expirando sozinha)."""
+
+    id: str
+    created_at: datetime
+    ator_id: Optional[str] = None
+    ator_nome: Optional[str] = None
+    ator_papel: Optional[str] = None
+    acao: str
+    entidade: str
+    entidade_id: Optional[str] = None
+    descricao: str
+    detalhes: Optional[dict] = None
 
 
 class VisaoGeralCondominio(BaseModel):

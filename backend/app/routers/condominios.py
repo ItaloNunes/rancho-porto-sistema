@@ -13,6 +13,7 @@ from ..schemas import (
     LotePoligonoUpdate,
     LoteStatusUpdate,
 )
+from ..auditoria import registrar_log
 from ..security import require_admin
 
 router = APIRouter(prefix="/condominios", tags=["condominios"])
@@ -58,16 +59,29 @@ def obter_condominio(slug: str):
 
 
 @router.patch("/lotes/{lote_id}/status", response_model=Lote)
-def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, _admin=Depends(require_admin)):
+def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, admin: dict = Depends(require_admin)):
     """Painel interno: marcar um lote como vendido/reservado/disponível manualmente.
     Só admin — o corretor comum controla o estoque indiretamente (reserva +
-    qualificação + proposta aprovada), não editando o status do lote na mão."""
+    qualificação + proposta aprovada), não editando o status do lote na mão.
+
+    Ação sensível: mudar o status por aqui NÃO cria nem mexe em nenhuma
+    reserva/proposta — é só a etiqueta do lote. Usar isso pra "reservar" ou
+    "vender" sem uma reserva/proposta por trás deixa o lote sem histórico
+    (foi exatamente essa combinação que causou um caso real de lote preso
+    sem ninguém saber por quê — daí o log abaixo)."""
     sb = get_supabase()
-    existing = sb.table("lotes").select("id").eq("id", lote_id).limit(1).execute().data
+    existing = sb.table("lotes").select("id, identificador, status").eq("id", lote_id).limit(1).execute().data
     if not existing:
         raise HTTPException(404, "Lote não encontrado.")
+    status_anterior = existing[0]["status"]
     updated = (
         sb.table("lotes").update({"status": payload.status}).eq("id", lote_id).execute().data
+    )
+    registrar_log(
+        sb, admin, "mudou_status_lote_manualmente", "lote", lote_id,
+        f"Mudou manualmente o status do lote {existing[0]['identificador']} de "
+        f"'{status_anterior}' pra '{payload.status}' (fora do fluxo normal de reserva/proposta).",
+        {"status_anterior": status_anterior, "status_novo": payload.status},
     )
     return updated[0]
 

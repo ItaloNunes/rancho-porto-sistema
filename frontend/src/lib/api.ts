@@ -1,6 +1,7 @@
 import { getToken } from "./token";
 import type {
   AtividadeItem,
+  LogAuditoria,
   Cliente,
   CondominioDetalhe,
   CondominioResumo,
@@ -539,6 +540,19 @@ export const api = {
   // Painel — Atividade (só a conta developer, ver PainelAtividade.tsx):
   // feed de reservas/propostas/clientes criados recentemente, com quem fez.
   listarAtividade: () => request<AtividadeItem[]>("/crm/atividade", undefined, true),
+
+  // Painel — Logs (só a conta developer, ver PainelLogs.tsx): log de
+  // auditoria completo (toda ação, não só criação) com filtros e paginação
+  // por cursor de tempo (antesDe).
+  listarLogs: (filtros?: { entidade?: string; atorId?: string; acao?: string; antesDe?: string }) => {
+    const params = new URLSearchParams();
+    if (filtros?.entidade) params.set("entidade", filtros.entidade);
+    if (filtros?.atorId) params.set("ator_id", filtros.atorId);
+    if (filtros?.acao) params.set("acao", filtros.acao);
+    if (filtros?.antesDe) params.set("antes_de", filtros.antesDe);
+    const qs = params.toString();
+    return request<LogAuditoria[]>(`/crm/logs${qs ? `?${qs}` : ""}`, undefined, true);
+  },
 
   // Painel — visão geral (só admin): números por empreendimento + relatório em PDF
   visaoGeral: () => request<VisaoGeralCondominio[]>("/crm/visao-geral", undefined, true),

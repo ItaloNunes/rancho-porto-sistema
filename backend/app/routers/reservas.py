@@ -10,6 +10,7 @@ from ..schemas import (
     ReservaStatusUpdate,
     ReservaUpdate,
 )
+from ..auditoria import registrar_log
 from ..security import eh_admin, get_current_corretor
 
 router = APIRouter(prefix="/lotes", tags=["reservas"])
@@ -47,6 +48,10 @@ def _expirar_vencidas(sb) -> int:
     for r in vencidas:
         sb.table("reservas").update({"status": "cancelada"}).eq("id", r["id"]).execute()
         sb.table("lotes").update({"status": "disponivel"}).eq("id", r["lote_id"]).execute()
+        registrar_log(
+            sb, None, "reserva_expirou", "reserva", r["id"],
+            "Reserva expirou sozinha (venceu o prazo sem confirmação) e o lote voltou a ficar disponível.",
+        )
     return len(vencidas)
 
 
@@ -123,13 +128,19 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
     if not eh_admin(corretor):
         data["corretor_id"] = corretor["id"]
     try:
-        return sb.table("reservas").insert(data).execute().data[0]
+        criada = sb.table("reservas").insert(data).execute().data[0]
     except Exception:
         # Já travamos o lote como 'reservado' antes de tentar gravar a
         # reserva em si — se essa gravação falhar, desfaz a trava pra não
         # deixar o lote preso em 'reservado' sem nenhuma reserva por trás.
         sb.table("lotes").update({"status": "disponivel"}).eq("id", payload.lote_id).execute()
         raise
+    registrar_log(
+        sb, corretor, "criou_reserva", "reserva", criada["id"],
+        f"Criou reserva pro lote (cliente: {criada.get('nome') or 'sem nome'}).",
+        {"lote_id": payload.lote_id},
+    )
+    return criada
 
 
 @admin_router.patch("/{reserva_id}", response_model=Reserva)
@@ -145,7 +156,13 @@ def atualizar_reserva(reserva_id: str, payload: ReservaUpdate, corretor: dict = 
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existente
-    return sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]
+    atualizado = sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]
+    registrar_log(
+        sb, corretor, "editou_reserva", "reserva", reserva_id,
+        f"Editou dados da reserva (campos: {', '.join(updates.keys())}).",
+        {"campos_alterados": list(updates.keys())},
+    )
+    return atualizado
 
 
 @admin_router.delete("/{reserva_id}", status_code=204)
@@ -164,6 +181,10 @@ def excluir_reserva(reserva_id: str, corretor: dict = Depends(get_current_corret
         lote = sb.table("lotes").select("status").eq("id", existente["lote_id"]).limit(1).execute().data
         if lote and lote[0]["status"] == "reservado":
             sb.table("lotes").update({"status": "disponivel"}).eq("id", existente["lote_id"]).execute()
+    registrar_log(
+        sb, corretor, "excluiu_reserva", "reserva", reserva_id,
+        f"Excluiu a reserva (cliente: {existente.get('nome') or 'sem nome'}).",
+    )
 
 
 @admin_router.patch("/{reserva_id}/status", response_model=Reserva)
@@ -200,4 +221,12 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
     updated = sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]
     if payload.status == "cancelada":
         sb.table("lotes").update({"status": "disponivel"}).eq("id", reserva["lote_id"]).execute()
+    acao = "confirmou_reserva" if payload.status == "confirmada" else (
+        "cancelou_reserva" if payload.status == "cancelada" else "mudou_status_reserva"
+    )
+    registrar_log(
+        sb, corretor, acao, "reserva", reserva_id,
+        f"Mudou status da reserva (cliente: {reserva.get('nome') or 'sem nome'}) pra '{payload.status}'.",
+        {"status_anterior": reserva["status"], "status_novo": payload.status},
+    )
     return updated

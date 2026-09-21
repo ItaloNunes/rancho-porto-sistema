@@ -35,6 +35,7 @@ from ..schemas import (
     QualificacaoDecisao,
     QualificacaoPublica,
 )
+from ..auditoria import registrar_log
 from ..security import eh_admin, get_current_corretor, require_admin
 
 router = APIRouter(prefix="/qualificacao", tags=["qualificacao"])
@@ -94,6 +95,11 @@ def gerar_link_qualificacao(
     }
     qualificacao = sb.table("formularios_qualificacao").insert(row).execute().data[0]
     sb.table("reservas").update({"status": "aguardando_qualificacao"}).eq("id", reserva_id).execute()
+    registrar_log(
+        sb, corretor, "gerou_link_qualificacao", "reserva", reserva_id,
+        "Gerou o link de qualificação (documentos) pra essa reserva.",
+        {"qualificacao_id": qualificacao["id"]},
+    )
     return qualificacao
 
 
@@ -252,6 +258,12 @@ def decidir_qualificacao(
         sb.table("reservas").update({"status": "cancelada"}).eq("id", q["reserva_id"]).execute()
         sb.table("lotes").update({"status": "disponivel"}).eq("id", q["lote_id"]).execute()
 
+    registrar_log(
+        sb, admin, "decidiu_qualificacao", "qualificacao", qualificacao_id,
+        f"{'Aprovou' if payload.aprovado else 'Reprovou'} a análise financeira do cliente"
+        + (f" (motivo: {payload.motivo_reprovacao})" if not payload.aprovado and payload.motivo_reprovacao else "") + ".",
+        {"aprovado": payload.aprovado, "reserva_id": q["reserva_id"], "lote_id": q["lote_id"]},
+    )
     return atualizado
 
 
