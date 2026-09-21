@@ -449,7 +449,12 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         if not _pode_mexer_na_reserva(corretor, reserva):
             raise HTTPException(403, "Esta reserva é de outro corretor — só quem reservou (ou um admin) pode gerar a proposta.")
         if reserva["status"] == "cancelada":
-            raise HTTPException(409, "Esta reserva já foi cancelada — não dá pra gerar proposta a partir dela.")
+            raise HTTPException(
+                409,
+                "Esta reserva já foi cancelada (provavelmente expirou) — não dá pra gerar proposta a "
+                "partir dela. Se o lote ainda estiver disponível, crie uma nova reserva pra esse cliente "
+                "e gere a proposta a partir dela.",
+            )
         if reserva.get("proposta_id"):
             raise HTTPException(409, "Esta reserva já tem uma proposta gerada.")
 

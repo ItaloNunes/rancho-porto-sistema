@@ -25,12 +25,16 @@ def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
 
 
 def _expirar_vencidas(sb) -> int:
-    """Regra de negócio: reserva que passou de 24h sem confirmar a compra
+    """Regra de negócio: reserva que passou de 72h sem confirmar a compra
     expira sozinha e libera o lote de volta pra 'disponivel' (só admin pode
-    confirmar — ver atualizar_status_reserva). Chamada em toda listagem
-    (checagem "preguiçosa" — não depende de ninguém ter o painel aberto);
-    POST /reservas/expirar-vencidas existe à parte pra um cron externo
-    reforçar isso mesmo sem ninguém abrir o painel."""
+    confirmar — ver atualizar_status_reserva). O prazo em si é o DEFAULT da
+    coluna reservas.expira_em no banco (ver migration 0018) — não um valor
+    fixo aqui no Python; já foi 24h (migration 0009) e subiu pra 72h depois
+    de um caso real onde a reserva expirou antes do corretor terminar a
+    qualificação e tentar gerar a proposta a partir dela. Chamada em toda
+    listagem (checagem "preguiçosa" — não depende de ninguém ter o painel
+    aberto); POST /reservas/expirar-vencidas existe à parte pra um cron
+    externo reforçar isso mesmo sem ninguém abrir o painel."""
     agora = datetime.now(timezone.utc).isoformat()
     vencidas = (
         sb.table("reservas")
