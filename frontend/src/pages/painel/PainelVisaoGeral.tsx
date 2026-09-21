@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { abrirAbaComCarregamento, api, formatMoney, horasRestantes, mostrarErroNaAba } from "../../lib/api";
-import type { ReservaComLote, ReservaStatus, VisaoGeralCondominio } from "../../types";
+import type { LoteComCondominio, ReservaComLote, ReservaStatus, VisaoGeralCondominio } from "../../types";
 
 // Status que ainda contam como "reserva ativa" pro contador do topo — mesmo
 // conjunto que o backend usa pra checar expiração das 24h (ver _STATUS_ATIVOS
@@ -36,9 +36,14 @@ interface TooltipState {
 export default function PainelVisaoGeral() {
   const [itens, setItens] = useState<VisaoGeralCondominio[] | null>(null);
   const [reservas, setReservas] = useState<ReservaComLote[] | null>(null);
+  const [lotes, setLotes] = useState<LoteComCondominio[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
   const [empreendimentoPdf, setEmpreendimentoPdf] = useState<string>("todos");
+  // Recorte por quadra só do PDF (mesma ideia do filtro de empreendimento
+  // logo abaixo) — os cartões/gráficos da tela continuam mostrando o
+  // estoque inteiro, só o relatório exportado sai fatiado.
+  const [quadraPdf, setQuadraPdf] = useState("");
   // Filtro executivo: "todos" ou o id de um empreendimento — recorta o
   // resumo do topo, o gráfico e o ranking, tudo junto (filtros escopam tudo
   // abaixo deles, nunca por gráfico separado).
@@ -51,9 +56,23 @@ export default function PainelVisaoGeral() {
     setErro(null);
     api.visaoGeral().then(setItens).catch((e) => setErro(e.message));
     api.listarReservas().then(setReservas).catch(() => {});
+    api.listarTodosLotes().then(setLotes).catch(() => {});
   }
 
   useEffect(recarregar, []);
+
+  // Quadras existentes no empreendimento escolhido pro PDF (ou em todos, se
+  // "todos" estiver selecionado) — mesmo padrão de PainelDisponibilidade.tsx.
+  const quadrasDisponiveisPdf = useMemo(() => {
+    if (!lotes) return [];
+    const escopo = empreendimentoPdf === "todos" ? lotes : lotes.filter((l) => l.condominio_id === empreendimentoPdf);
+    const vistas = new Set(escopo.map((l) => l.quadra));
+    return [...vistas].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [lotes, empreendimentoPdf]);
+
+  useEffect(() => {
+    if (quadraPdf && !quadrasDisponiveisPdf.includes(quadraPdf)) setQuadraPdf("");
+  }, [quadrasDisponiveisPdf, quadraPdf]);
 
   async function exportarPdf() {
     // A aba precisa abrir *na hora do clique* (síncrono) — se esperarmos o
@@ -67,6 +86,7 @@ export default function PainelVisaoGeral() {
     try {
       const blob = await api.exportarVisaoGeralPdf({
         condominioId: empreendimentoPdf === "todos" ? undefined : empreendimentoPdf,
+        quadra: quadraPdf || undefined,
       });
       const url = URL.createObjectURL(blob);
       if (aba) {
@@ -171,6 +191,20 @@ export default function PainelVisaoGeral() {
               </option>
             ))}
           </select>
+          {quadrasDisponiveisPdf.length > 1 && (
+            <select
+              className="input !w-auto text-sm"
+              value={quadraPdf}
+              onChange={(e) => setQuadraPdf(e.target.value)}
+            >
+              <option value="">Todas as quadras</option>
+              {quadrasDisponiveisPdf.map((q) => (
+                <option key={q} value={q}>
+                  Quadra {q}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             className="btn btn-ghost whitespace-nowrap"
             aria-pressed={tabelaVisivel}

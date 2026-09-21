@@ -667,6 +667,22 @@ STATUS_LOTE_FUNDO = {
 }
 
 
+def _chave_ordenacao_lote(lote: dict) -> tuple:
+    """Ordena a tabela por quadra (numérica quando possível — "10" depois de
+    "2", não antes) e, dentro da mesma quadra, pelo número do lote. Antes
+    disso a tabela saía ordenada por `identificador` como texto puro
+    ("LOTE 01 - QUADRA 1", "LOTE 01 - QUADRA 10", "LOTE 01 - QUADRA 11", ...,
+    "LOTE 01 - QUADRA 2", ...) — lia como se as quadras estivessem
+    embaralhadas. Quadra não-numérica (raro, mas o campo é texto livre) cai
+    pro final, ordenada alfabeticamente entre si."""
+    quadra = lote.get("quadra") or ""
+    try:
+        chave_quadra = (0, int(quadra))
+    except (TypeError, ValueError):
+        chave_quadra = (1, quadra)
+    return (chave_quadra, lote.get("lote_numero") or 0, lote.get("identificador") or "")
+
+
 class _RelatorioPDF(_CastelPDF):
     TITULO = "RELATÓRIO DE DISPONIBILIDADE"
     RODAPE = "Documento de uso interno, gerado automaticamente a partir dos dados cadastrados no sistema."
@@ -716,7 +732,7 @@ class _RelatorioPDF(_CastelPDF):
 
     def tabela_lotes(self, lotes: list[dict]):
         self._linha_cabecalho()
-        for lote in sorted(lotes, key=lambda l: l.get("identificador", "")):
+        for lote in sorted(lotes, key=_chave_ordenacao_lote):
             if self.get_y() > self.h - 32:
                 self.add_page()
                 self._linha_cabecalho()

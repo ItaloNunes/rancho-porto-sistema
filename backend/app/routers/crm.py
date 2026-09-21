@@ -1143,7 +1143,7 @@ def _montar_visao_geral() -> tuple[list[dict], dict[str, list[dict]]]:
     lotes = (
         sb.table("lotes")
         .select(
-            "id, condominio_id, quadra, identificador, tamanho_m2, valor_total, entrada, entrega, "
+            "id, condominio_id, quadra, lote_numero, identificador, tamanho_m2, valor_total, entrada, entrega, "
             "parcela_mensal, qtd_parcelas, prazo_entrega_meses, status"
         )
         .execute()
