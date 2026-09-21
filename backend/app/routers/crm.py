@@ -1190,17 +1190,20 @@ def visao_geral_pdf(
     condominio_id: str | None = None,
     status: str | None = None,
     busca: str | None = None,
+    quadra: str | None = None,
     admin: dict = Depends(require_admin),
 ):
     """Exporta o relatório em PDF — de todos os empreendimentos, ou só de um
     (`?condominio_id=...`), conforme o seletor do painel.
 
-    `status` e `busca` (opcionais) recortam só a TABELA de lotes de cada
-    empreendimento — os mesmos filtros da tela de Disponibilidade, aplicados
-    do mesmo jeito, pra o PDF sair batendo com o que está na tela quando ela
-    os usa. Os cartões de totais no topo continuam mostrando o estoque
-    inteiro do empreendimento (mesmo comportamento da legenda da tela, que
-    também não muda com o filtro de status)."""
+    `status`, `busca` e `quadra` (opcionais) recortam só a TABELA de lotes de
+    cada empreendimento — os mesmos filtros da tela de Disponibilidade,
+    aplicados do mesmo jeito, pra o PDF sair batendo com o que está na tela
+    quando ela os usa. `quadra` é comparação exata (vem de um seletor, não de
+    texto livre) — diferente de `busca`, que casa por substring em
+    identificador OU quadra. Os cartões de totais no topo continuam
+    mostrando o estoque inteiro do empreendimento (mesmo comportamento da
+    legenda da tela, que também não muda com esses filtros)."""
     resumo, lotes_por_condominio = _montar_visao_geral()
     sufixo_arquivo = "todos-os-empreendimentos"
     if condominio_id:
@@ -1210,11 +1213,13 @@ def visao_geral_pdf(
         resumo = [item]
         lotes_por_condominio = {condominio_id: lotes_por_condominio.get(condominio_id, [])}
         sufixo_arquivo = item["slug"]
-    if status or busca:
+    if status or busca or quadra:
         termo = (busca or "").strip().lower()
 
         def combina(lote: dict) -> bool:
             if status and lote.get("status") != status:
+                return False
+            if quadra and lote.get("quadra") != quadra:
                 return False
             if termo and termo not in f"{lote.get('identificador', '')} {lote.get('quadra', '')}".lower():
                 return False

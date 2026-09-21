@@ -70,6 +70,16 @@ export default function Condominio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [condo]);
 
+  // Quadras existentes neste empreendimento — alimenta o novo seletor de
+  // quadra na Lista, além do clique numa zona da Planta (zonaFiltro já
+  // existente). Os dois convivem: escolher aqui também usa zonaFiltro por
+  // baixo, reaproveitando o mesmo filtro e o mesmo chip "limpar filtro".
+  const quadrasDisponiveis = useMemo(() => {
+    if (!condo) return [];
+    const vistas = new Set(condo.lotes.map((l) => l.quadra));
+    return [...vistas].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [condo]);
+
   const filtrados = useMemo(() => {
     if (!condo) return [];
     return condo.lotes
@@ -181,6 +191,22 @@ export default function Condominio() {
                 <option value="reservado">Reservado</option>
                 <option value="vendido">Vendido</option>
               </select>
+              {quadrasDisponiveis.length > 1 && (
+                <select
+                  className="input sm:w-48"
+                  value={zonaFiltro?.quadra ?? ""}
+                  onChange={(e) =>
+                    setZonaFiltro(e.target.value ? { quadra: e.target.value, x: 0, y: 0, w: 0, h: 0 } : null)
+                  }
+                >
+                  <option value="">Todas as quadras</option>
+                  {quadrasDisponiveis.map((q) => (
+                    <option key={q} value={q}>
+                      Quadra {q}
+                    </option>
+                  ))}
+                </select>
+              )}
             </>
           )}
         </div>

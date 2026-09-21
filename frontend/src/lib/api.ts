@@ -559,11 +559,12 @@ export const api = {
   // `status`/`busca` (opcionais) recortam a tabela de lotes do PDF pelos
   // mesmos filtros da tela de Disponibilidade — sem eles, exporta o
   // empreendimento inteiro (comportamento usado pela Visão Geral).
-  exportarVisaoGeralPdf: (opts?: { condominioId?: string; status?: LoteStatus; busca?: string }) => {
+  exportarVisaoGeralPdf: (opts?: { condominioId?: string; status?: LoteStatus; busca?: string; quadra?: string }) => {
     const params = new URLSearchParams();
     if (opts?.condominioId) params.set("condominio_id", opts.condominioId);
     if (opts?.status) params.set("status", opts.status);
     if (opts?.busca) params.set("busca", opts.busca);
+    if (opts?.quadra) params.set("quadra", opts.quadra);
     const query = params.toString();
     return requestBlob(`/crm/visao-geral/relatorio${query ? `?${query}` : ""}`);
   },

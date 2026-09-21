@@ -59,6 +59,7 @@ export default function PainelDisponibilidade() {
   const [busca, setBusca] = useState("");
   const [condominioSlug, setCondominioSlug] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<LoteStatus | "todos">("todos");
+  const [quadraFiltro, setQuadraFiltro] = useState("");
   const [exportando, setExportando] = useState(false);
 
   const ehAdmin = temAcessoAdmin(perfil?.papel);
@@ -105,14 +106,27 @@ export default function PainelDisponibilidade() {
     [lotes, condominioSlug],
   );
 
+  // Quadras existentes dentro do empreendimento escolhido — some da lista
+  // (e o filtro é limpo) se o usuário trocar de empreendimento e a quadra
+  // selecionada não existir mais nele, ver efeito abaixo.
+  const quadrasDisponiveis = useMemo(() => {
+    const vistas = new Set(lotesDoEmpreendimento.map((l) => l.quadra));
+    return [...vistas].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [lotesDoEmpreendimento]);
+
+  useEffect(() => {
+    if (quadraFiltro && !quadrasDisponiveis.includes(quadraFiltro)) setQuadraFiltro("");
+  }, [quadrasDisponiveis, quadraFiltro]);
+
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return lotesDoEmpreendimento.filter((l) => {
       if (statusFiltro !== "todos" && l.status !== statusFiltro) return false;
+      if (quadraFiltro && l.quadra !== quadraFiltro) return false;
       if (termo && !`${l.identificador} ${l.quadra}`.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [lotesDoEmpreendimento, busca, statusFiltro]);
+  }, [lotesDoEmpreendimento, busca, statusFiltro, quadraFiltro]);
 
   // Reflete o empreendimento selecionado (não trava pelo status escolhido,
   // senão os outros status da legenda cairiam pra zero ao filtrar por um só).
@@ -137,6 +151,7 @@ export default function PainelDisponibilidade() {
         condominioId,
         status: statusFiltro === "todos" ? undefined : statusFiltro,
         busca: busca.trim() || undefined,
+        quadra: quadraFiltro || undefined,
       });
       const url = URL.createObjectURL(blob);
       if (aba) {
@@ -160,6 +175,7 @@ export default function PainelDisponibilidade() {
   const rotuloExportar = [
     condominioSlug ? empreendimentos.find((c) => c.slug === condominioSlug)?.nome : null,
     statusFiltro !== "todos" ? STATUS_LABEL[statusFiltro] : null,
+    quadraFiltro ? `Quadra ${quadraFiltro}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -218,6 +234,16 @@ export default function PainelDisponibilidade() {
             </option>
           ))}
         </select>
+        {quadrasDisponiveis.length > 1 && (
+          <select className="input !w-auto" value={quadraFiltro} onChange={(e) => setQuadraFiltro(e.target.value)}>
+            <option value="">Todas as quadras</option>
+            {quadrasDisponiveis.map((q) => (
+              <option key={q} value={q}>
+                Quadra {q}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {erro && <p className="text-rust text-sm mb-4">{erro}</p>}
