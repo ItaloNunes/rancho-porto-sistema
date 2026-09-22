@@ -104,6 +104,10 @@ class _CastelPDF(FPDF):
     # instância antes do add_page() quando o documento é de um empreendimento
     # só (ver gerar_visao_geral_pdf). None = mostra só a logo Castel.
     LOGO_EMPREENDIMENTO: Optional[Path] = None
+    # Número/versão do documento (hoje só a Proposta usa, ver
+    # gerar_proposta_pdf) — "Nº 0001-v2", desenhado logo abaixo do título.
+    # None = não desenha nada (relatórios sem número próprio continuam iguais).
+    NUMERO_DOC: Optional[str] = None
 
     def normalize_text(self, text: str) -> str:
         """Sobrescreve o normalize_text do fpdf2 (chamado por cell/multi_cell
@@ -129,7 +133,14 @@ class _CastelPDF(FPDF):
         self.set_font("Helvetica", "B", 16)
         self.set_text_color(*AZUL)
         self.cell(largura_direita, 8, self.TITULO, align="R", new_x="LMARGIN", new_y="NEXT")
-        self.set_xy(0, 22)
+        y_linha = 22
+        if self.NUMERO_DOC:
+            self.set_xy(0, y_linha)
+            self.set_font("Helvetica", "B", 10)
+            self.set_text_color(*VERMELHO)
+            self.cell(largura_direita, 6, self.NUMERO_DOC, align="R", new_x="LMARGIN", new_y="NEXT")
+            y_linha += 6
+        self.set_xy(0, y_linha)
         self.set_font("Helvetica", "", 9)
         self.set_text_color(*CINZA)
         self.cell(
@@ -140,15 +151,24 @@ class _CastelPDF(FPDF):
             new_x="LMARGIN",
             new_y="NEXT",
         )
+        y_linha += 6
         if self.EMISSOR:
-            self.set_xy(0, 28)
+            self.set_xy(0, y_linha)
             self.set_font("Helvetica", "BI", 8.5)
             self.set_text_color(*VERMELHO)
             self.cell(largura_direita, 5, self.EMISSOR, align="R", new_x="LMARGIN", new_y="NEXT")
+            y_linha += 6
+        # Linha divisória e início do corpo — antes eram valores fixos
+        # (34/42), certos só quando "Emitido em" + EMISSOR eram as únicas
+        # duas linhas possíveis abaixo do título. NUMERO_DOC (Nº da proposta)
+        # é uma terceira linha opcional que empurra as demais pra baixo —
+        # calculando a partir de y_linha em vez de um número fixo, a régua
+        # (linha azul) e o início do corpo do documento acompanham, não
+        # importa quantas linhas o cabeçalho desta página tiver.
         self.set_draw_color(*AZUL)
         self.set_line_width(0.6)
-        self.line(15, 34, self.w - 15, 34)
-        self.set_y(42)
+        self.line(15, y_linha, self.w - 15, y_linha)
+        self.set_y(y_linha + 8)
 
     def footer(self):
         self.set_y(-20)
@@ -360,6 +380,9 @@ def gerar_proposta_pdf(
 
     pdf = _PropostaPDF(format="A4", unit="mm")
     pdf.EMISSOR = _fmt_emissor(gerado_por)
+    numero = proposta.get("numero")
+    if numero is not None:
+        pdf.NUMERO_DOC = f"Nº {numero:04d}-v{proposta.get('versao') or 1}"
     pdf.set_auto_page_break(auto=True, margin=26)
     pdf.add_page()
 

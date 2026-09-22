@@ -421,6 +421,17 @@ def _pode_mexer_na_proposta(corretor: dict, proposta: dict) -> bool:
     return eh_admin(corretor) or proposta.get("corretor_id") in (None, corretor["id"])
 
 
+def _numero_proposta(proposta: dict) -> str:
+    """"Nº 0001-v2" — mesmo formato usado no painel e no PDF (ver
+    frontend/src/lib/api.ts::formatarNumeroProposta e pdf.py). Usado só pra
+    deixar as descrições do log de auditoria fáceis de reconhecer sem abrir
+    a proposta."""
+    numero = proposta.get("numero")
+    if numero is None:
+        return "?"
+    return f"{numero:04d}-v{proposta.get('versao') or 1}"
+
+
 def _query_propostas(sb, corretor: dict, com_documentos: bool):
     campos = "*, lote:lotes(*), cliente:clientes(*)"
     if com_documentos:
@@ -573,8 +584,8 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
     origem = f"a partir da reserva {reserva['id']}" if reserva is not None else "direto (sem reserva prévia)"
     registrar_log(
         sb, corretor, "criou_proposta", "proposta", proposta["id"],
-        f"Gerou proposta pro lote {lote_id} ({origem}).",
-        {"lote_id": lote_id, "reserva_id": reserva["id"] if reserva else None},
+        f"Gerou a proposta {_numero_proposta(proposta)} pro lote {lote_id} ({origem}).",
+        {"lote_id": lote_id, "reserva_id": reserva["id"] if reserva else None, "numero": proposta.get("numero")},
     )
     return proposta
 
@@ -591,11 +602,19 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existente
+    # Qualquer edição de verdade sobe a versão — é o "carimbo" que deixa
+    # claro, só de olhar o número (ex.: "0007-v2"), que aquele PDF/print em
+    # mãos de alguém pode não ser mais a versão vigente da proposta. Pedido
+    # explícito: rastreabilidade de qual versão é a atual.
+    versao_anterior = existente.get("versao") or 1
+    updates["versao"] = versao_anterior + 1
     atualizado = sb.table("propostas").update(updates).eq("id", proposta_id).execute().data[0]
+    campos_alterados = [k for k in updates if k != "versao"]
     registrar_log(
         sb, corretor, "editou_proposta", "proposta", proposta_id,
-        f"Editou a proposta (campos: {', '.join(updates.keys())}).",
-        {"campos_alterados": list(updates.keys())},
+        f"Editou a proposta {_numero_proposta(existente)} (campos: {', '.join(campos_alterados)}) "
+        f"— agora {_numero_proposta(atualizado)}.",
+        {"campos_alterados": campos_alterados, "versao_anterior": versao_anterior, "versao_nova": updates["versao"]},
     )
     return atualizado
 
@@ -696,7 +715,7 @@ async def anexar_documento_proposta(
         raise HTTPException(502, "Não foi possível salvar o documento enviado. Tente novamente.")
     await run_in_threadpool(
         registrar_log, sb, corretor, "anexou_documento", "proposta", proposta_id,
-        f"Anexou documento '{tipo}' ({arquivo.filename or 'sem nome'}) na proposta.",
+        f"Anexou documento '{tipo}' ({arquivo.filename or 'sem nome'}) na proposta {_numero_proposta(proposta)}.",
         {"tipo": tipo, "documento_id": inserido["id"]},
     )
     return inserido
@@ -751,7 +770,7 @@ def excluir_documento_proposta(proposta_id: str, documento_id: str, corretor: di
     excluir_do_storage_silenciosamente(sb, doc[0]["storage_path"])
     registrar_log(
         sb, corretor, "removeu_documento", "proposta", proposta_id,
-        f"Removeu documento '{doc[0].get('tipo')}' ({doc[0].get('nome_arquivo')}) da proposta.",
+        f"Removeu documento '{doc[0].get('tipo')}' ({doc[0].get('nome_arquivo')}) da proposta {_numero_proposta(proposta)}.",
         {"documento_id": documento_id},
     )
     return {"ok": True}
@@ -902,9 +921,9 @@ def atualizar_status_proposta(
     proposta_id: str, payload: PropostaStatusUpdate, corretor: dict = Depends(get_current_corretor)
 ):
     sb = get_supabase()
-    existente = sb.table("propostas").select("id, lote_id, cliente_id, corretor_id").eq("id", proposta_id).limit(
-        1
-    ).execute().data
+    existente = sb.table("propostas").select("id, numero, versao, lote_id, cliente_id, corretor_id").eq(
+        "id", proposta_id
+    ).limit(1).execute().data
     if not existente:
         raise HTTPException(404, "Proposta não encontrada.")
     existente = existente[0]
@@ -943,7 +962,7 @@ def atualizar_status_proposta(
         _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"])
     registrar_log(
         sb, corretor, "mudou_status_proposta", "proposta", proposta_id,
-        f"Mudou status da proposta pra '{payload.status}'.",
+        f"Mudou status da proposta {_numero_proposta(existente)} pra '{payload.status}'.",
         {"status_novo": payload.status},
     )
     return atualizado

@@ -600,6 +600,14 @@ export function formatArea(v: number): string {
   return `${v.toLocaleString("pt-BR")} m²`;
 }
 
+/** "Nº 0001-v2" — mesmo formato usado no PDF da proposta (ver
+ * backend/app/pdf.py::gerar_proposta_pdf) e nas descrições do log de
+ * auditoria (backend/app/routers/crm.py::_numero_proposta), pra bater com
+ * o que aparece impresso quando alguém for procurar essa proposta. */
+export function formatarNumeroProposta(numero: number, versao: number): string {
+  return `Nº ${String(numero).padStart(4, "0")}-v${versao}`;
+}
+
 export function formatDateTime(v?: string | null): string {
   if (!v) return "—";
   return new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });

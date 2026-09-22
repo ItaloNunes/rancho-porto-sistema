@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { abrirAbaComCarregamento, api, formatMoney, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatMoney, formatarNumeroProposta, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import PropostaDocumentos from "./PropostaDocumentos";
@@ -102,6 +102,7 @@ export default function PainelPropostas() {
           <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
+                <th className="px-4 py-3 font-medium">Nº</th>
                 <th className="px-4 py-3 font-medium">Lote</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Valor proposto</th>
@@ -113,6 +114,9 @@ export default function PainelPropostas() {
             <tbody>
               {propostas.map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
+                  <td className="px-4 py-3 text-ink-soft whitespace-nowrap font-mono text-xs">
+                    {formatarNumeroProposta(p.numero, p.versao)}
+                  </td>
                   <td className="px-4 py-3 text-ink">{p.lote ? p.lote.identificador : "—"}</td>
                   <td className="px-4 py-3 text-ink">{p.cliente?.nome ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-soft">{formatMoney(p.valor_proposto)}</td>

@@ -140,6 +140,14 @@ export type PropostaStatus =
 
 export interface Proposta {
   id: string;
+  /** Número curto e sequencial (exibido como "Nº 0001-v2") — rastreabilidade
+   * humana, já que o id é um uuid. Atribuído pelo banco na criação, nunca
+   * editável. Ver formatarNumeroProposta em lib/api.ts. */
+  numero: number;
+  /** Sobe em +1 a cada edição de verdade (ver PATCH /crm/propostas/{id}) —
+   * um número junto com a versão deixa claro se um PDF/print em mãos de
+   * alguém ainda é a versão vigente da proposta. */
+  versao: number;
   lote_id: string;
   cliente_id: string;
   corretor_id?: string | null;

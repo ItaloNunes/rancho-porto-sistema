@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { abrirAbaComCarregamento, api, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatarNumeroProposta, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS } from "../../types";
 import type { DocumentoProposta, DocumentoTipo, PropostaDetalhe } from "../../types";
 
@@ -140,7 +140,12 @@ export default function PropostaDocumentos({
   return (
     <div className="grid gap-4">
       <div>
-        <h3 className="text-lg font-bold text-ink">Documentos da proposta</h3>
+        <h3 className="text-lg font-bold text-ink">
+          Documentos da proposta{" "}
+          <span className="text-sm font-mono font-normal text-ink-soft">
+            {formatarNumeroProposta(proposta.numero, proposta.versao)}
+          </span>
+        </h3>
         <p className="text-sm text-ink-soft">
           {proposta.lote?.identificador ?? "Lote"} — {proposta.cliente?.nome ?? "Cliente"}
         </p>

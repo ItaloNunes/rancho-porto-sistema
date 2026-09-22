@@ -568,6 +568,14 @@ class PropostaUpdate(BaseModel):
 
 class Proposta(BaseModel):
     id: str
+    # Número curto e sequencial (Nº 0001, 0002...) — rastreabilidade humana,
+    # já que o id é um uuid ilegível. Atribuído sozinho pelo banco na criação
+    # (default nextval, ver migration 0020) — nunca mandado pelo cliente.
+    numero: int
+    # Sobe em +1 a cada PATCH /crm/propostas/{id} que muda algo de fato (ver
+    # atualizar_proposta) — ajuda a saber, olhando só o número, se aquela
+    # proposta em mãos é a versão mais recente ou uma cópia desatualizada.
+    versao: int
     lote_id: str
     cliente_id: str
     corretor_id: Optional[str] = None
