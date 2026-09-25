@@ -30,6 +30,7 @@ const TABS_ADMIN = [
   { to: "/painel/visao-geral", label: "Visão geral" },
   { to: "/painel/corretores", label: "Corretores" },
   { to: "/painel/importar", label: "Importar planilha" },
+  { to: "/painel/financeiro", label: "Financeiro" },
 ];
 
 // Intervalo de checagem do indicador de "reserva nova" na aba Reservas —

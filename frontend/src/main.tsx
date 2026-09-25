@@ -15,6 +15,7 @@ import PainelPropostas from "./pages/painel/PainelPropostas";
 import PainelReservas from "./pages/painel/PainelReservas";
 import PainelDisponibilidade from "./pages/painel/PainelDisponibilidade";
 import PainelLotes from "./pages/painel/PainelLotes";
+import PainelFinanceiro from "./pages/painel/PainelFinanceiro";
 import PainelVisaoGeral from "./pages/painel/PainelVisaoGeral";
 import PainelImportarPlanilha from "./pages/painel/PainelImportarPlanilha";
 import PainelAtividade from "./pages/painel/PainelAtividade";
@@ -88,6 +89,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={
                 <RequireAuth adminOnly>
                   <PainelImportarPlanilha />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="financeiro"
+              element={
+                <RequireAuth adminOnly>
+                  <PainelFinanceiro />
                 </RequireAuth>
               }
             />
