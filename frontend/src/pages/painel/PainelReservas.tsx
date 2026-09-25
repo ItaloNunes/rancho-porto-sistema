@@ -230,7 +230,7 @@ export default function PainelReservas() {
                         <div className="mt-1.5 text-[11px] text-ink-soft italic">
                           Em análise pelo financeiro — aguardando aprovação.
                         </div>
-                        <PrazoBadge prazoIso={r.analise_prazo_em} rotulo="de análise financeira" />
+                        <PrazoBadge prazoIso={r.analise_prazo_em} rotulo="para conclusão" />
                       </>
                     ) : (
                       r.status !== "confirmada" &&

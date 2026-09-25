@@ -37,10 +37,10 @@ export function PrazoAnaliseBadge({ completosEm }: { completosEm?: string | null
   const vencido = horas <= 0;
   const critico = horas > 0 && horas <= 3;
   const texto = vencido
-    ? "prazo da análise vencido"
+    ? "prazo para conclusão vencido"
     : horas < 1
-      ? `${Math.round(horas * 60)}min de análise financeira`
-      : `${Math.round(horas)}h de análise financeira`;
+      ? `${Math.round(horas * 60)}min para conclusão`
+      : `${Math.round(horas)}h para conclusão`;
   return (
     <div
       className={`mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-sm inline-block ${
