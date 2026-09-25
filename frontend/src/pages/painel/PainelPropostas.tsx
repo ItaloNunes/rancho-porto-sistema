@@ -3,7 +3,7 @@ import Modal from "../../components/Modal";
 import { abrirAbaComCarregamento, api, formatMoney, formatarNumeroProposta, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
-import PropostaDocumentos from "./PropostaDocumentos";
+import PropostaDocumentos, { PrazoAnaliseBadge } from "./PropostaDocumentos";
 import { temAcessoAdmin } from "../../types";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
@@ -137,6 +137,7 @@ export default function PainelPropostas() {
                     <button className="btn-row btn-row-neutral" onClick={() => setVerDocumentosDe(p.id)}>
                       {p.documentos.length > 0 ? `${p.documentos.length} anexo(s)` : "anexar"}
                     </button>
+                    <PrazoAnaliseBadge completosEm={p.documentos_completos_em} />
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button

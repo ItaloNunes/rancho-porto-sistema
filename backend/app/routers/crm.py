@@ -39,6 +39,8 @@ from ..schemas import (
     CorretorCriado,
     CorretorImportadoItem,
     CorretorUpdate,
+    DOCUMENTOS_CONJUGE,
+    DOCUMENTOS_OBRIGATORIOS,
     DocumentoProposta,
     DocumentoTipo,
     LoginRequest,
@@ -626,6 +628,46 @@ def _carregar_proposta_ou_404(sb, proposta_id: str) -> dict:
     return proposta[0]
 
 
+def _documentos_obrigatorios_da_proposta(dados_qualificacao: Optional[dict]) -> tuple[DocumentoTipo, ...]:
+    """Mesma lista (e mesma regra do cônjuge) usada pra qualificação pública
+    — ver _valida_documentos_obrigatorios em routers/qualificacao.py. Uma
+    proposta só sabe o estado civil quando nasceu do formulário completo ou
+    de uma qualificação aprovada (dados_qualificacao preenchido); sem isso,
+    assume solteiro, igual ao checklist do frontend (PropostaDocumentos.tsx)."""
+    dados = dados_qualificacao or {}
+    obrigatorios = list(DOCUMENTOS_OBRIGATORIOS)
+    if dados.get("estado_civil") == "casado":
+        obrigatorios += list(DOCUMENTOS_CONJUGE)
+    return tuple(obrigatorios)
+
+
+def _atualizar_documentos_completos_em(sb, proposta_id: str, dados_qualificacao: Optional[dict]) -> None:
+    """Chamada depois de anexar ou remover um documento de proposta: se todos
+    os obrigatórios já estão presentes, grava o instante em que isso passou a
+    ser verdade — só na primeira vez (não empurra o prazo de 72h toda vez que
+    alguém reenvia ou troca um anexo). Se um documento obrigatório for
+    removido depois e a proposta deixar de estar completa, desfaz a marca —
+    não faz sentido o corretor ver "em análise" com um documento faltando de
+    novo. O painel usa esse campo + 72h pra mostrar o prazo da análise
+    financeira desta etapa (ver PropostaDocumentos.tsx)."""
+    obrigatorios = _documentos_obrigatorios_da_proposta(dados_qualificacao)
+    tipos_presentes = {
+        d["tipo"]
+        for d in sb.table("documentos_proposta").select("tipo").eq("proposta_id", proposta_id).execute().data
+    }
+    completo = all(tipo in tipos_presentes for tipo in obrigatorios)
+    atual = (
+        sb.table("propostas").select("documentos_completos_em").eq("id", proposta_id).limit(1).execute().data
+    )
+    ja_marcado = bool(atual and atual[0].get("documentos_completos_em"))
+    if completo and not ja_marcado:
+        sb.table("propostas").update(
+            {"documentos_completos_em": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", proposta_id).execute()
+    elif not completo and ja_marcado:
+        sb.table("propostas").update({"documentos_completos_em": None}).eq("id", proposta_id).execute()
+
+
 @router.get("/propostas/{proposta_id}/documentos", response_model=list[DocumentoProposta])
 def listar_documentos_proposta(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
@@ -718,6 +760,9 @@ async def anexar_documento_proposta(
         f"Anexou documento '{tipo}' ({arquivo.filename or 'sem nome'}) na proposta {_numero_proposta(proposta)}.",
         {"tipo": tipo, "documento_id": inserido["id"]},
     )
+    await run_in_threadpool(
+        _atualizar_documentos_completos_em, sb, proposta_id, proposta.get("dados_qualificacao")
+    )
     return inserido
 
 
@@ -773,6 +818,7 @@ def excluir_documento_proposta(proposta_id: str, documento_id: str, corretor: di
         f"Removeu documento '{doc[0].get('tipo')}' ({doc[0].get('nome_arquivo')}) da proposta {_numero_proposta(proposta)}.",
         {"documento_id": documento_id},
     )
+    _atualizar_documentos_completos_em(sb, proposta_id, proposta.get("dados_qualificacao"))
     return {"ok": True}
 
 

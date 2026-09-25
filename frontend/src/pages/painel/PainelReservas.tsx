@@ -225,8 +225,16 @@ export default function PainelReservas() {
                         ))}
                       </select>
                     )}
-                    {r.status !== "confirmada" && r.status !== "cancelada" && (
-                      <PrazoBadge prazoIso={r.expira_em} rotulo="pra expirar" />
+                    {r.status === "em_analise_financeira" ? (
+                      <>
+                        <div className="mt-1.5 text-[11px] text-ink-soft italic">
+                          Em análise pelo financeiro — aguardando aprovação.
+                        </div>
+                        <PrazoBadge prazoIso={r.analise_prazo_em} rotulo="de análise financeira" />
+                      </>
+                    ) : (
+                      r.status !== "confirmada" &&
+                      r.status !== "cancelada" && <PrazoBadge prazoIso={r.expira_em} rotulo="pra expirar" />
                     )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -421,8 +429,11 @@ export default function PainelReservas() {
   );
 }
 
-/** Contador/alerta das 48h de retenção do lote durante a análise financeira —
- * não expira nada sozinho, é só pra o corretor/financeiro perceber e decidir. */
+/** Contador/alerta de prazo — reaproveitado tanto pro prazo geral de 72h da
+ * reserva (expira_em) quanto pro prazo de 72h da análise financeira
+ * (analise_prazo_em, contado a partir do envio do formulário de
+ * qualificação). Não expira nada sozinho, é só pra o corretor/financeiro
+ * perceber e decidir. */
 function PrazoBadge({ prazoIso, rotulo = "restantes" }: { prazoIso?: string | null; rotulo?: string }) {
   const horas = horasRestantes(prazoIso);
   if (horas === null) return null;

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { abrirAbaComCarregamento, api, formatarNumeroProposta, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatarNumeroProposta, horasRestantes, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS } from "../../types";
 import type { DocumentoProposta, DocumentoTipo, PropostaDetalhe } from "../../types";
 
@@ -19,6 +19,38 @@ const TIPOS: DocumentoTipo[] = [
 // realmente barra um formato ou um arquivo disfarçado (extensão trocada) é
 // a validação no servidor, então o erro que vier de lá sempre é mostrado.
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp,image/heic";
+
+// Mesmo prazo de 72h da análise financeira da qualificação (ver
+// PainelReservas.tsx/PainelQualificacoes.tsx e migration 0021) — aqui contado
+// a partir de documentos_completos_em, que o backend só preenche quando os
+// documentos obrigatórios abaixo estão todos anexados.
+const PRAZO_ANALISE_HORAS = 72;
+
+/** Deixa explícito, pro corretor, que a proposta está em análise e quanto
+ * falta — pra não precisar perguntar ao administrador se já saiu o
+ * resultado. */
+export function PrazoAnaliseBadge({ completosEm }: { completosEm?: string | null }) {
+  if (!completosEm) return null;
+  const prazo = new Date(new Date(completosEm).getTime() + PRAZO_ANALISE_HORAS * 3_600_000).toISOString();
+  const horas = horasRestantes(prazo);
+  if (horas === null) return null;
+  const vencido = horas <= 0;
+  const critico = horas > 0 && horas <= 3;
+  const texto = vencido
+    ? "prazo da análise vencido"
+    : horas < 1
+      ? `${Math.round(horas * 60)}min de análise financeira`
+      : `${Math.round(horas)}h de análise financeira`;
+  return (
+    <div
+      className={`mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-sm inline-block ${
+        vencido ? "bg-rust/10 text-rust" : critico ? "bg-ochre/10 text-ochre" : "bg-sage/10 text-sage"
+      }`}
+    >
+      {texto}
+    </div>
+  );
+}
 
 function formatBytes(n?: number | null): string {
   if (!n) return "";
@@ -180,7 +212,14 @@ export default function PropostaDocumentos({
           );
         })}
         {faltando.length === 0 && (
-          <p className="text-xs text-sage font-medium">Todos os documentos obrigatórios já foram anexados.</p>
+          <div className="grid gap-1">
+            <p className="text-xs text-sage font-medium">
+              Todos os documentos obrigatórios já foram anexados — proposta em análise financeira, aguardando
+              aprovação do administrador. Você não precisa perguntar: assim que houver uma decisão, o status
+              da proposta muda sozinho.
+            </p>
+            <PrazoAnaliseBadge completosEm={proposta.documentos_completos_em} />
+          </div>
         )}
         </div>
       </div>

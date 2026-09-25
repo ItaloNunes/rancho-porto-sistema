@@ -161,6 +161,11 @@ export interface Proposta {
    * papel) quando a proposta foi criada direto pelo corretor no painel, sem
    * passar pelo link de qualificação do cliente final — usado pelo PDF. */
   dados_qualificacao?: Partial<QualificacaoDados> | null;
+  /** Preenchido pelo backend assim que todos os documentos obrigatórios desta
+   * proposta estiverem anexados (mesma ideia do reservas.analise_prazo_em,
+   * só que contado a partir daqui) — some de volta pra null se um documento
+   * obrigatório for removido depois. Ver PropostaDocumentos.tsx. */
+  documentos_completos_em?: string | null;
   created_at: string;
 }
 
@@ -202,11 +207,14 @@ export interface Reserva {
   status: ReservaStatus;
   cliente_id?: string | null;
   corretor_id?: string | null;
-  /** Preenchido quando a reserva entra em "em_analise_financeira" (now + 48h) —
-   * só um alerta/contador no painel, ninguém libera o lote sozinho por causa disso. */
+  /** Preenchido quando a reserva entra em "em_analise_financeira" (now + 72h) —
+   * mesmo prazo do expira_em abaixo, só que contado a partir do envio do
+   * formulário. É o número mostrado pro corretor em PainelReservas.tsx e
+   * PainelQualificacoes.tsx enquanto o financeiro ainda não decidiu. */
   analise_prazo_em?: string | null;
-  /** Prazo duro de 24h — passou disso sem confirmar a compra, o backend expira a
-   * reserva sozinho e libera o lote (ver _expirar_vencidas no backend). */
+  /** Prazo duro de 72h (ver migration 0018) — passou disso sem confirmar a
+   * compra, o backend expira a reserva sozinho e libera o lote (ver
+   * _expirar_vencidas no backend). */
   expira_em?: string | null;
   /** Preenchido quando essa reserva já gerou uma proposta (criada do zero
    * já linkada, ou via botão "Gerar proposta" em PainelReservas.tsx) — a

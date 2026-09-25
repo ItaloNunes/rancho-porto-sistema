@@ -450,7 +450,10 @@ def enviar_para_analise(token: str):
         {"status": "em_analise", "enviado_em": agora.isoformat()}
     ).eq("id", q["id"]).execute()
     sb.table("reservas").update(
-        {"status": "em_analise_financeira", "analise_prazo_em": (agora + timedelta(hours=48)).isoformat()}
+        # 72h pra bater com o mesmo prazo usado pra reserva em geral (ver
+        # migration 0018_reserva_expira_72h.sql) — corretor e financeiro
+        # enxergam o mesmo número em qualquer tela do painel.
+        {"status": "em_analise_financeira", "analise_prazo_em": (agora + timedelta(hours=72)).isoformat()}
     ).eq("id", q["reserva_id"]).execute()
 
     return abrir_formulario(token)

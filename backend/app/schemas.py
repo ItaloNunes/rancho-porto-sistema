@@ -586,6 +586,13 @@ class Proposta(BaseModel):
     documento_url: Optional[str] = None
     observacoes: Optional[str] = None
     dados_qualificacao: Optional[dict] = None
+    # Preenchido pelo backend (nunca pelo cliente) assim que todos os
+    # documentos obrigatórios desta proposta estiverem anexados — mesma ideia
+    # do reservas.analise_prazo_em, só que contado a partir daqui em vez do
+    # envio do formulário de qualificação (ver migration 0021 e
+    # routers/crm.py::_atualizar_documentos_completos_em). Some de volta pra
+    # None se um documento obrigatório for removido depois.
+    documentos_completos_em: Optional[datetime] = None
     created_at: datetime
 
 

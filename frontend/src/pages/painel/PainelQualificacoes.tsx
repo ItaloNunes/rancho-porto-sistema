@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { abrirAbaComCarregamento, api, formatDateTime, formatMoney, mostrarErroNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatDateTime, formatMoney, horasRestantes, mostrarErroNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { DOCUMENTO_LABEL, DOCUMENTOS_CONJUGE, DOCUMENTOS_OBRIGATORIOS, temAcessoAdmin } from "../../types";
 import type { DocumentoTipo, EstadoCivil, QualificacaoComRelacoes, QualificacaoStatus } from "../../types";
@@ -18,6 +18,41 @@ const STATUS_BADGE: Record<QualificacaoStatus, string> = {
   aprovada: "bg-sage/10 text-sage",
   reprovada: "bg-rust/10 text-rust",
 };
+
+// Mesmo prazo de 72h que o backend grava em reservas.analise_prazo_em ao
+// enviar o formulário (ver PATCH .../{token}/enviar em qualificacao.py) —
+// dá pra calcular direto a partir de enviado_em sem precisar buscar a
+// reserva aqui, já que os dois são sempre gravados juntos com essa mesma
+// diferença fixa.
+const PRAZO_ANALISE_HORAS = 72;
+
+function prazoAnaliseFinanceira(enviadoEm?: string | null): string | null {
+  if (!enviadoEm) return null;
+  return new Date(new Date(enviadoEm).getTime() + PRAZO_ANALISE_HORAS * 3_600_000).toISOString();
+}
+
+/** Deixa explícito, pro corretor, quanto falta da análise financeira — pra não
+ * precisar perguntar ao administrador se já saiu o resultado. */
+function PrazoAnaliseBadge({ enviadoEm }: { enviadoEm?: string | null }) {
+  const horas = horasRestantes(prazoAnaliseFinanceira(enviadoEm));
+  if (horas === null) return null;
+  const vencido = horas <= 0;
+  const critico = horas > 0 && horas <= 3;
+  const texto = vencido
+    ? "prazo da análise vencido"
+    : horas < 1
+      ? `${Math.round(horas * 60)}min de análise financeira`
+      : `${Math.round(horas)}h de análise financeira`;
+  return (
+    <div
+      className={`mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-sm inline-block ${
+        vencido ? "bg-rust/10 text-rust" : critico ? "bg-ochre/10 text-ochre" : "bg-sage/10 text-sage"
+      }`}
+    >
+      {texto}
+    </div>
+  );
+}
 
 const ESTADO_CIVIL_LABEL: Record<EstadoCivil, string> = {
   solteiro: "Solteiro(a)",
@@ -77,6 +112,7 @@ export default function PainelQualificacoes() {
                   <td className="px-4 py-3 text-ink-soft">{formatDateTime(q.enviado_em)}</td>
                   <td className="px-4 py-3">
                     <span className={`badge ${STATUS_BADGE[q.status]}`}>{STATUS_LABEL[q.status]}</span>
+                    {q.status === "em_analise" && <PrazoAnaliseBadge enviadoEm={q.enviado_em} />}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button className="btn-row btn-row-primary" onClick={() => setAberta(q)}>
@@ -314,9 +350,15 @@ function DetalheQualificacao({
             </section>
           )}
           {q.status === "em_analise" && !isAdmin && (
-            <p className="text-xs text-ink-soft border-t border-border pt-4">
-              Só um administrador pode aprovar ou reprovar a análise financeira.
-            </p>
+            <div className="border-t border-border pt-4 grid gap-2">
+              <p className="text-sm text-ink">
+                <strong>Em análise financeira</strong> — o formulário já foi enviado e está aguardando a
+                aprovação do administrador. Você não precisa perguntar: assim que houver uma decisão, o
+                status aqui muda sozinho para "Aprovada" ou "Reprovada".
+              </p>
+              <PrazoAnaliseBadge enviadoEm={q.enviado_em} />
+              <p className="text-xs text-ink-soft">Só um administrador pode aprovar ou reprovar a análise financeira.</p>
+            </div>
           )}
         </>
       )}
