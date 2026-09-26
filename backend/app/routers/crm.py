@@ -1046,35 +1046,45 @@ def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) ->
     (criada antes dessa mudança) que ainda não tinha reserva. Confere antes
     se já não existe uma reserva com esse proposta_id, então é seguro chamar
     dos dois lugares sem duplicar nada.
+
+    Bug real encontrado em 26/09 (proposta da Zaira Suzana, lote 08-quadra
+    10): a reserva original tinha expirado sozinha (72h sem confirmar — ver
+    _expirar_vencidas em routers/reservas.py) e o lote tinha voltado a
+    'disponivel'. Quando a proposta foi aprovada depois disso, essa função
+    via que a reserva JÁ existia (mesmo cancelada/expirada) e devolvia sem
+    travar o lote de novo — o corretor viu o lote como disponível e criou
+    uma reserva duplicada por cima de uma proposta que já estava aprovada.
+    Por isso o travamento do lote agora roda incondicionalmente, mesmo
+    quando a reserva já existe — só o INSERT da reserva (que geraria
+    duplicata) que continua pulado nesse caso.
     """
     ja_existe = sb.table("reservas").select("id").eq("proposta_id", proposta_id).limit(1).execute().data
-    if ja_existe:
-        return
+    if not ja_existe:
+        cliente = (
+            sb.table("clientes").select("nome, telefone, cpf").eq("id", proposta["cliente_id"]).limit(1).execute().data
+        )
+        cliente = cliente[0] if cliente else {}
 
-    cliente = (
-        sb.table("clientes").select("nome, telefone, cpf").eq("id", proposta["cliente_id"]).limit(1).execute().data
-    )
-    cliente = cliente[0] if cliente else {}
-
-    sb.table("reservas").insert(
-        {
-            "lote_id": proposta["lote_id"],
-            "cliente_id": proposta["cliente_id"],
-            "corretor_id": proposta.get("corretor_id"),
-            "proposta_id": proposta_id,
-            "nome": cliente.get("nome"),
-            "contato": cliente.get("telefone"),
-            "cpf": cliente.get("cpf"),
-            "status": "pendente",
-            "observacao": "Reserva gerada automaticamente pela criação/aprovação da proposta.",
-        }
-    ).execute()
+        sb.table("reservas").insert(
+            {
+                "lote_id": proposta["lote_id"],
+                "cliente_id": proposta["cliente_id"],
+                "corretor_id": proposta.get("corretor_id"),
+                "proposta_id": proposta_id,
+                "nome": cliente.get("nome"),
+                "contato": cliente.get("telefone"),
+                "cpf": cliente.get("cpf"),
+                "status": "pendente",
+                "observacao": "Reserva gerada automaticamente pela criação/aprovação da proposta.",
+            }
+        ).execute()
     # Atualização condicional (atômica no Postgres): só sobe pra 'reservado'
     # se o lote AINDA estiver 'disponivel' neste instante — não confia num
     # status lido antes da escrita (podia ter mudado entre a leitura e aqui,
     # ex.: duas propostas pro mesmo lote aprovadas quase juntas). Se não
     # estiver mais disponível, não faz nada — mesma regra de sempre: nunca
-    # destrava um lote já 'vendido' ou já travado por outra reserva.
+    # destrava um lote já 'vendido' ou já travado por outra reserva. Roda
+    # sempre (não só quando a reserva é nova — ver comentário acima).
     sb.table("lotes").update({"status": "reservado"}).eq("id", proposta["lote_id"]).eq(
         "status", "disponivel"
     ).execute()

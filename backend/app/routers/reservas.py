@@ -221,6 +221,16 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
     updated = sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]
     if payload.status == "cancelada":
         sb.table("lotes").update({"status": "disponivel"}).eq("id", reserva["lote_id"]).execute()
+    elif payload.status == "confirmada":
+        # Re-trava o lote mesmo se ele já tiver voltado a 'disponivel'
+        # sozinho antes disso (ex.: a reserva expirou pelas 72h — ver
+        # _expirar_vencidas — e foi confirmada na mão depois). Sem isso,
+        # confirmar uma reserva "revivida" não garante que o lote está
+        # realmente travado (bug real visto em 26/09 — ver comentário
+        # equivalente em crm.py::_gerar_reserva_da_proposta_aprovada).
+        sb.table("lotes").update({"status": "reservado"}).eq("id", reserva["lote_id"]).eq(
+            "status", "disponivel"
+        ).execute()
     acao = "confirmou_reserva" if payload.status == "confirmada" else (
         "cancelou_reserva" if payload.status == "cancelada" else "mudou_status_reserva"
     )
