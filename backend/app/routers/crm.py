@@ -854,10 +854,17 @@ def _montar_pdf_proposta(sb, proposta_id: str, corretor: dict) -> tuple[bytes, s
     proposta = proposta[0]
     if not _pode_mexer_na_proposta(corretor, proposta):
         raise HTTPException(403, "Esta proposta é de outro corretor.")
-    if proposta["status"] not in ("aprovada", "enviada", "aceita"):
+    # A trava abaixo é só pro corretor comum: ele não deve mandar pro cliente
+    # (nem baixar) um contrato de uma proposta que o financeiro ainda nem
+    # decidiu. Pra quem já é o financeiro (admin/developer, ver eh_admin) a
+    # trava não faz sentido: é essa mesma pessoa que aprova, então ela pode
+    # gerar o documento (inclusive o relatório completo) pra conferir/revisar
+    # ANTES de decidir, e aprovar a compra do lote em seguida — não precisa
+    # esperar uma aprovação anterior de ninguém pra isso. Pedido em 28/09.
+    if proposta["status"] not in ("aprovada", "enviada", "aceita") and not eh_admin(corretor):
         raise HTTPException(
             403,
-            "Esta proposta ainda não foi aprovada por um administrador — o PDF só pode ser gerado depois da aprovação.",
+            "Esta proposta ainda não foi aprovada — o PDF só pode ser gerado depois da aprovação.",
         )
     lote = proposta.get("lote")
     cliente = proposta.get("cliente")
@@ -926,8 +933,8 @@ def gerar_relatorio_completo(proposta_id: str, corretor: dict = Depends(get_curr
     nessa ordem — pra ter tudo junto pra enviar/arquivar de uma vez, em vez de
     baixar a proposta e cada anexo separado. Documento que já é PDF entra com
     todas as páginas; imagem (JPG/PNG/WEBP/HEIC) vira uma página só com a
-    foto. Mesma trava de status do "gerar PDF" (só depois de aprovada) — sem
-    isso o relatório completo destravaria o PDF antes da hora."""
+    foto. Mesma trava de status do "gerar PDF" (ver _montar_pdf_proposta) —
+    inclusive a mesma exceção pra quem já é financeiro/admin/developer."""
     sb = get_supabase()
     pdf_proposta, identificador_lote = _montar_pdf_proposta(sb, proposta_id, corretor)
 
