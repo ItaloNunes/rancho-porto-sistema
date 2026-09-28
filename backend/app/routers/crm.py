@@ -151,6 +151,10 @@ def criar_corretor(payload: CorretorCreate, admin: dict = Depends(require_admin)
         "telefone": payload.telefone,
         "papel": payload.papel,
         "ativo": True,
+        "creci": payload.creci,
+        "banco": payload.banco,
+        "agencia": payload.agencia,
+        "conta": payload.conta,
     }
     try:
         inserido = sb.table("corretores").insert(row).execute().data[0]

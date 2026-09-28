@@ -277,6 +277,14 @@ function CorretorForm({
   const [nome, setNome] = useState(corretor?.nome ?? "");
   const [usuario, setUsuario] = useState(corretor?.usuario ?? "");
   const [telefone, setTelefone] = useState(corretor?.telefone ?? "");
+  // CRECI e dados bancários -- só usados pra preencher sozinhos a cláusula
+  // de comissão do contrato do Porto Franco (ver documentos_gerados.py no
+  // backend); por isso ficam num bloco separado e nenhum é obrigatório --
+  // nem todo corretor mexe com esse empreendimento. Pedido em 28/09.
+  const [creci, setCreci] = useState(corretor?.creci ?? "");
+  const [banco, setBanco] = useState(corretor?.banco ?? "");
+  const [agencia, setAgencia] = useState(corretor?.agencia ?? "");
+  const [conta, setConta] = useState(corretor?.conta ?? "");
   const [papel, setPapel] = useState<Papel>(corretor?.papel ?? "corretor");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -309,14 +317,25 @@ function CorretorForm({
     setErro(null);
     setSalvando(true);
     try {
+      const dadosContrato = {
+        creci: creci.trim() || null,
+        banco: banco.trim() || null,
+        agencia: agencia.trim() || null,
+        conta: conta.trim() || null,
+      };
       if (corretor) {
-        const atualizado = await api.atualizarCorretor(corretor.id, { nome, telefone: telefone || null, papel });
+        const atualizado = await api.atualizarCorretor(corretor.id, {
+          nome,
+          telefone: telefone || null,
+          papel,
+          ...dadosContrato,
+        });
         // Backend só devolve `senha` quando ela acabou de ser (re)sincronizada
         // com o telefone (ex.: telefone mudou e a senha ainda era a padrão) —
         // se o corretor já tinha customizado a própria senha, nada muda aqui.
         onSalvo(atualizado.senha ? { usuario: corretor.usuario ?? "", senha: atualizado.senha, motivo: "resetado" } : undefined);
       } else {
-        const criado = await api.criarCorretor({ nome, telefone, usuario: usuario || null, papel });
+        const criado = await api.criarCorretor({ nome, telefone, usuario: usuario || null, papel, ...dadosContrato });
         onSalvo({ usuario: criado.usuario ?? "", senha: criado.senha, motivo: "criado" });
       }
     } catch (e) {
@@ -387,6 +406,18 @@ function CorretorForm({
         <option value="corretor">Corretor</option>
         <option value="admin">Admin</option>
       </select>
+
+      <div className="border-t border-border pt-3 grid gap-2">
+        <p className="text-xs text-ink-soft">
+          Dados pro contrato do Porto Franco (opcional -- só quem faz vendas lá precisa preencher):
+        </p>
+        <input className="input" placeholder="CRECI" value={creci} onChange={(e) => setCreci(e.target.value)} />
+        <div className="grid grid-cols-3 gap-2">
+          <input className="input" placeholder="Banco" value={banco} onChange={(e) => setBanco(e.target.value)} />
+          <input className="input" placeholder="Agência" value={agencia} onChange={(e) => setAgencia(e.target.value)} />
+          <input className="input" placeholder="Conta" value={conta} onChange={(e) => setConta(e.target.value)} />
+        </div>
+      </div>
       {corretor && !confirmarAdmin && (
         <button
           type="button"

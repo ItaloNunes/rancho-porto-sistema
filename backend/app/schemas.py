@@ -507,6 +507,14 @@ class CorretorCreate(BaseModel):
     telefone: str
     usuario: Optional[str] = None
     papel: Papel = "corretor"
+    # CRECI e dados bancários -- preenchem sozinhos a cláusula de comissão do
+    # contrato do Porto Franco (ver documentos_gerados.py). Opcionais aqui
+    # porque o cadastro nasce só com login; costumam ser preenchidos depois,
+    # na edição. Pedido em 28/09.
+    creci: Optional[str] = None
+    banco: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
 
 
 class CorretorUpdate(BaseModel):
@@ -519,6 +527,10 @@ class CorretorUpdate(BaseModel):
     # via manual do admin pra destravar quem esqueceu a senha. Ver
     # atualizar_corretor em routers/crm.py.
     resetar_senha: Optional[bool] = None
+    creci: Optional[str] = None
+    banco: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
 
 
 class Corretor(BaseModel):
@@ -537,6 +549,10 @@ class Corretor(BaseModel):
     # senha acabou de ser (re)sincronizada com o telefone — mesma ideia do
     # `senha` de CorretorCriado: única vez que aparece em texto puro.
     senha: Optional[str] = None
+    creci: Optional[str] = None
+    banco: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
 
 
 class CorretorCriado(Corretor):

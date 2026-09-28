@@ -91,6 +91,13 @@ export interface Corretor {
    * (re)sincronizada com o telefone — mesma ideia do `senha` de
    * CorretorCriado, abaixo. */
   senha?: string | null;
+  /** CRECI e dados bancários -- usados pra preencher sozinhos a cláusula de
+   * comissão do contrato do Porto Franco (ver documentos_gerados.py no
+   * backend). Opcionais -- nem todo corretor mexe com esse empreendimento. */
+  creci?: string | null;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
 }
 
 /** Resposta de POST /crm/corretores — só nessa hora a senha aparece em

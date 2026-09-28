@@ -424,8 +424,16 @@ export const api = {
 
   // Painel — corretores (logins); CRUD restrito a admin no backend
   listarCorretores: () => request<Corretor[]>("/crm/corretores", undefined, true),
-  criarCorretor: (payload: { nome: string; telefone: string; usuario?: string | null; papel: Papel }) =>
-    request<CorretorCriado>("/crm/corretores", { method: "POST", body: JSON.stringify(payload) }, true),
+  criarCorretor: (payload: {
+    nome: string;
+    telefone: string;
+    usuario?: string | null;
+    papel: Papel;
+    creci?: string | null;
+    banco?: string | null;
+    agencia?: string | null;
+    conta?: string | null;
+  }) => request<CorretorCriado>("/crm/corretores", { method: "POST", body: JSON.stringify(payload) }, true),
   atualizarCorretor: (
     id: string,
     payload: Partial<{
@@ -436,6 +444,10 @@ export const api = {
       /** Força a senha de volta pro telefone atual mesmo se o corretor já
        * tiver customizado a própria (ver Corretor.senha_customizada). */
       resetar_senha: boolean;
+      creci: string | null;
+      banco: string | null;
+      agencia: string | null;
+      conta: string | null;
     }>,
   ) => request<Corretor>(`/crm/corretores/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, true),
   // Cadastra de uma vez todos os corretores da planilha inicial (ver
