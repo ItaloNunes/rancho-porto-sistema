@@ -318,12 +318,19 @@ function CorretorForm({
     setErro(null);
     setSalvando(true);
     try {
+      // Manda a string mesmo vazia (nunca `null`) -- na edição, o backend
+      // trata `null` como "não mexer nesse campo" (é assim que o PATCH
+      // genérico preserva os campos que o admin não tocou, ver
+      // atualizar_corretor em routers/crm.py). Se mandasse `null` aqui pra
+      // um campo que o admin acabou de apagar do formulário, o valor antigo
+      // ficaria preso pra sempre, sem erro nenhum avisando (bug encontrado
+      // em revisão, 28/09).
       const dadosContrato = {
-        cpf_cnpj: cpfCnpj.trim() || null,
-        creci: creci.trim() || null,
-        banco: banco.trim() || null,
-        agencia: agencia.trim() || null,
-        conta: conta.trim() || null,
+        cpf_cnpj: cpfCnpj.trim(),
+        creci: creci.trim(),
+        banco: banco.trim(),
+        agencia: agencia.trim(),
+        conta: conta.trim(),
       };
       if (corretor) {
         const atualizado = await api.atualizarCorretor(corretor.id, {

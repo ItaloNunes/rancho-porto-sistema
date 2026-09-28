@@ -355,8 +355,13 @@ def preencher_contrato_porto_franco(
         )
         vencimento, primeiro_mes = fp.get("vencimento"), fp.get("primeiro_mes")
         if vencimento or primeiro_mes:
+            # "vencimento" é só o dia (campo "Dia de vencimento" do
+            # formulário) e "primeiro_mes" é texto livre pro mês/ano (campo
+            # "1ª parcela em") -- concatenar com "/" (ex.: "5/outubro/2026")
+            # lia estranho; mesma frase clara já usada no Rancho Texas
+            # (revisão de 28/09).
             texto_parcelas += (
-                f", vencendo a primeira em {vencimento or '-'}/{primeiro_mes or '-'} "
+                f", vencendo a primeira em {primeiro_mes or '-'}, dia {vencimento or '-'}, "
                 "e as demais no mesmo dia dos meses subsequentes"
             )
         _substituir_texto(pp[5], "Parcelas mensais", f"Parcelas mensais: {texto_parcelas}.")
@@ -524,6 +529,16 @@ def preencher_contrato_rancho_texas(
     )
 
     # --- VII. FORMA DE PAGAMENTO ---------------------------------------------
+    # As três linhas abaixo (Sinal, Parcelas, Chave) e a restauração das
+    # arras no §-fixo NÃO são rótulos em branco no modelo -- o Rancho Texas
+    # já vem com uma frase de exemplo pronta (valor "R$ XX (XXX)", data
+    # "08/09/2026" etc.). Diferente do Porto Franco (rótulo realmente vazio
+    # no modelo), aqui a substituição tem que ser SEMPRE feita, mesmo sem
+    # dado disponível -- senão o exemplo fictício do modelo vaza pro
+    # contrato de verdade sem ninguém notar (bug encontrado em revisão,
+    # 28/09: um lote sem "entrada"/"entrega" configurados e uma proposta
+    # sem qualificação completa geravam contrato com a data 08/09/2026 e o
+    # valor de exemplo ainda dentro do texto).
     pp = t.rows[11].cells[0].paragraphs
     entrada = _para_float(fp.get("sinal")) or lote.get("entrada")
     if entrada:
@@ -538,11 +553,22 @@ def preencher_contrato_rancho_texas(
             "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)",
             entrada_fmt,
         )
+    else:
+        _substituir_texto(
+            pp[3],
+            "Sinal/Arras confirmatórias: R$ XX (XXX) sendo pago em boleto bancário para o dia 08/09/2026.",
+            "Sinal/Arras confirmatórias: -.",
+        )
+        _substituir_texto(
+            pp[11],
+            "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)",
+            "-",
+        )
 
     qtd_parcelas = fp.get("dividido_em_parcelas") or lote.get("qtd_parcelas")
     valor_parcela = _para_float(fp.get("valor_parcela")) or lote.get("parcela_mensal")
     if qtd_parcelas and valor_parcela:
-        vencimento = fp.get("vencimento") or "cinco"
+        vencimento = fp.get("vencimento") or "-"
         primeiro_mes = fp.get("primeiro_mes") or "-"
         _substituir_texto(
             pp[5],
@@ -552,6 +578,13 @@ def preencher_contrato_rancho_texas(
             f"de R$ {formatar_valor(valor_parcela)} ({valor_por_extenso(valor_parcela)}), vencendo a primeira "
             f"em {primeiro_mes}, dia {vencimento}, e as demais todo dia {vencimento} dos meses subsequentes.",
         )
+    else:
+        _substituir_texto(
+            pp[5],
+            "Parcelas: 100 parcelas mensais e sucessivas no valor de R$ XX (X X), vencendo a primeira em "
+            "XX/XX/XXXX e as demais todo dia cinco dos meses subsequentes.",
+            "Parcelas: -.",
+        )
 
     entrega = lote.get("entrega")
     if entrega:
@@ -559,6 +592,12 @@ def preencher_contrato_rancho_texas(
             pp[7],
             "Chave: R$ XXX  (XXX) a ser pago até 30/09/2029.",
             f"Chave: R$ {formatar_valor(entrega)} ({valor_por_extenso(entrega)}), a ser paga na entrega das chaves.",
+        )
+    else:
+        _substituir_texto(
+            pp[7],
+            "Chave: R$ XXX  (XXX) a ser pago até 30/09/2029.",
+            "Chave: -.",
         )
 
     # --- XII. LOCAL E DATA DE CELEBRAÇÃO --------------------------------------
