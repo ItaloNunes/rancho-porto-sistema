@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
+from ..documentos_gerados import preencher_recibo
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..schemas import (
     AtividadeItem,
@@ -714,6 +715,16 @@ async def anexar_documento_proposta(
     proposta = await run_in_threadpool(_carregar_proposta_ou_404, sb, proposta_id)
     if not _pode_mexer_na_proposta(corretor, proposta):
         raise HTTPException(403, "Esta proposta é de outro corretor.")
+    # Comprovante de PIX/TED só faz sentido depois que a proposta já foi
+    # aprovada — antes disso não existe pagamento nenhum pra comprovar.
+    # Corretor, admin ou financeiro (mesma regra de quem já mexe na
+    # proposta, ver _pode_mexer_na_proposta acima) podem anexar. Pedido em
+    # 28/09.
+    if tipo == "comprovante_pagamento" and proposta["status"] not in ("aprovada", "enviada", "aceita"):
+        raise HTTPException(
+            409,
+            "Só é possível anexar comprovante de pagamento depois que a proposta for aprovada.",
+        )
 
     conteudo, content_type = await validar_e_ler(arquivo)
 
@@ -923,6 +934,72 @@ def gerar_pdf_proposta(proposta_id: str, corretor: dict = Depends(get_current_co
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{nome_arquivo}"'},
+    )
+
+
+@router.get("/propostas/{proposta_id}/recibo")
+def gerar_recibo_proposta(
+    proposta_id: str,
+    valor: float,
+    data: Optional[str] = None,
+    corretor: dict = Depends(get_current_corretor),
+):
+    """Gera o recibo (modelo .docx da própria imobiliária, Porto Franco ou
+    Rancho Texas conforme o empreendimento do lote) do valor efetivamente
+    recebido do cliente -- normalmente parte ou todo da entrada, um recibo
+    por pagamento. Preenche só nome/CPF/valor/lote/data no modelo, mantendo a
+    redação jurídica exata que a imobiliária já usa.
+
+    Só financeiro (admin/developer) gera -- é quem de fato recebe o
+    pagamento e emite o recibo, sem depender da proposta já estar 'aprovada'
+    (mesma lógica de exceção do "gerar PDF", ver _montar_pdf_proposta).
+    Pedido em 28/09."""
+    if not eh_admin(corretor):
+        raise HTTPException(403, "Só o financeiro pode gerar recibo.")
+    if valor <= 0:
+        raise HTTPException(422, "Informe um valor maior que zero.")
+
+    data_recibo = None
+    if data:
+        try:
+            data_recibo = datetime.strptime(data, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(422, "Data inválida -- use o formato AAAA-MM-DD.")
+
+    sb = get_supabase()
+    proposta = (
+        sb.table("propostas")
+        .select("*, lote:lotes(*, condominio:condominios(nome)), cliente:clientes(*)")
+        .eq("id", proposta_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not proposta:
+        raise HTTPException(404, "Proposta não encontrada.")
+    proposta = proposta[0]
+    lote = proposta.get("lote")
+    cliente = proposta.get("cliente")
+    if not lote or not cliente:
+        raise HTTPException(409, "Proposta com lote ou cliente ausente -- não é possível gerar o recibo.")
+    if not cliente.get("cpf"):
+        raise HTTPException(409, "Cliente sem CPF cadastrado -- não é possível gerar o recibo sem isso.")
+
+    condominio_nome = (lote.get("condominio") or {}).get("nome", "")
+    docx_bytes, _slug = preencher_recibo(
+        condominio_nome=condominio_nome,
+        cliente_nome=cliente["nome"],
+        cliente_cpf=cliente["cpf"],
+        valor=valor,
+        lote_quadra=lote.get("quadra"),
+        lote_numero=str(lote.get("lote_numero") or lote.get("identificador") or "-"),
+        data=data_recibo,
+    )
+    nome_arquivo = f"recibo-{lote.get('identificador', proposta_id)}.docx".replace(" ", "-")
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
     )
 
 

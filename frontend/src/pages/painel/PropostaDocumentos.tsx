@@ -12,8 +12,15 @@ const TIPOS: DocumentoTipo[] = [
   "conjuge_rg",
   "conjuge_cpf",
   "comprovante_renda",
+  "comprovante_pagamento",
   "outro",
 ];
+
+// Comprovante de pagamento só faz sentido (e só é aceito pelo backend, ver
+// routers/crm.py::anexar_documento_proposta) depois que a proposta já foi
+// aprovada — escondido antes disso pra não oferecer uma opção que vai só
+// dar erro. Pedido em 28/09.
+const STATUS_PODE_COMPROVANTE = ["aprovada", "enviada", "aceita"];
 
 // Mesma lista aceita pelo backend (ver app/documentos.py) — o accept do
 // input é só uma dica pro seletor de arquivo do sistema operacional; quem
@@ -239,11 +246,13 @@ export default function PropostaDocumentos({
           onChange={(e) => setTipo(e.target.value as DocumentoTipo)}
           disabled={enviando}
         >
-          {TIPOS.map((t) => (
-            <option key={t} value={t}>
-              {DOCUMENTO_LABEL[t]}
-            </option>
-          ))}
+          {TIPOS.filter((t) => t !== "comprovante_pagamento" || STATUS_PODE_COMPROVANTE.includes(proposta.status)).map(
+            (t) => (
+              <option key={t} value={t}>
+                {DOCUMENTO_LABEL[t]}
+              </option>
+            ),
+          )}
         </select>
         <label className="btn btn-primary !py-2 !px-4 !text-sm cursor-pointer">
           {enviando ? "Enviando..." : "+ Anexar arquivo"}

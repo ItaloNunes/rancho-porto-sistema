@@ -2,7 +2,7 @@ import re
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 LoteStatus = Literal["disponivel", "reservado", "vendido"]
 ReservaStatus = Literal[
@@ -354,21 +354,74 @@ class PessoaDados(BaseModel):
     profissao: Optional[str] = None
 
 
+_VALOR_INVALIDO_MSG = "Informe um valor numérico válido (ex.: 5000 ou 5000,00), sem letras ou símbolos."
+
+
+def _parse_valor_monetario(v: Optional[str]) -> Optional[str]:
+    """Aceita "5000", "5000.00", "5000,00" ou "R$ 5.000,00" — o que o campo já
+    aceitava antes, mais o que os novos inputs numéricos do formulário mandam
+    — e barra qualquer coisa que não seja um valor numérico de verdade. É
+    exatamente esse tipo de erro de digitação (texto solto, letra junto do
+    número, valor negativo) que motivou essa validação (pedido em 28/09).
+    Continua guardando como string (não muda o tipo do campo, pra não quebrar
+    a leitura de propostas antigas já salvas) — só garante que o que for
+    salvo DAQUI PRA FRENTE é sempre um número válido."""
+    if v is None:
+        return v
+    texto = v.strip()
+    if not texto:
+        return None
+    limpo = texto.replace("R$", "").replace(" ", "")
+    if "," in limpo and "." in limpo:
+        limpo = limpo.replace(".", "").replace(",", ".")
+    elif "," in limpo:
+        limpo = limpo.replace(",", ".")
+    try:
+        numero = float(limpo)
+    except ValueError:
+        raise ValueError(_VALOR_INVALIDO_MSG) from None
+    if numero < 0:
+        raise ValueError("O valor não pode ser negativo.")
+    return texto
+
+
 class FormaPagamentoDados(BaseModel):
     a_vista: Optional[bool] = None
     renda: Optional[str] = None
-    valor_proposto: Optional[float] = None
+    # gt=0: valor proposto zerado ou negativo é sempre erro de digitação, não
+    # um caso de negócio real (pedido de validação em 28/09).
+    valor_proposto: Optional[float] = Field(default=None, gt=0)
     sinal: Optional[str] = None
     sinal_cheque_numero: Optional[str] = None
     sinal_banco: Optional[str] = None
     sinal_agencia: Optional[str] = None
-    dividido_em_parcelas: Optional[int] = None
+    # ge=1: "0 parcelas" ou negativo não existe — se dividiu, é pelo menos 1.
+    dividido_em_parcelas: Optional[int] = Field(default=None, ge=1)
     valor_parcela: Optional[str] = None
     vencimento: Optional[str] = None
     primeiro_mes: Optional[str] = None
     intercaladas_valor: Optional[str] = None
     intercaladas_vencimento_dia: Optional[str] = None
     observacoes: Optional[str] = None
+
+    @field_validator("sinal", "valor_parcela", "intercaladas_valor")
+    @classmethod
+    def _valida_valor_monetario(cls, v: Optional[str]) -> Optional[str]:
+        return _parse_valor_monetario(v)
+
+    @model_validator(mode="after")
+    def _valida_parcelamento(self) -> "FormaPagamentoDados":
+        # Só faz sentido cobrar consistência de parcelas quando o pagamento
+        # já foi declarado como parcelado — "à vista" (ou ainda não
+        # respondido) não tem parcela nenhuma pra validar.
+        if self.a_vista is False:
+            tem_qtd = self.dividido_em_parcelas is not None
+            tem_valor = bool(self.valor_parcela)
+            if tem_qtd != tem_valor:
+                raise ValueError(
+                    "Pagamento parcelado precisa do número de parcelas e do valor de cada parcela, os dois juntos."
+                )
+        return self
 
 
 class QualificacaoDados(BaseModel):
@@ -673,7 +726,13 @@ class VisaoGeralCondominio(BaseModel):
 QualificacaoStatus = Literal["aguardando_preenchimento", "em_analise", "aprovada", "reprovada"]
 DocumentoTipo = Literal[
     "rg", "cpf", "comprovante_residencia", "certidao_nascimento_casamento",
-    "conjuge_rg", "conjuge_cpf", "comprovante_renda", "outro",
+    "conjuge_rg", "conjuge_cpf", "comprovante_renda",
+    # Comprovante de PIX/TED de um pagamento (entrada ou parcela) — só pode
+    # ser anexado depois que a proposta já está aprovada (ver checagem em
+    # routers/crm.py::anexar_documento_proposta) e nunca conta como
+    # obrigatório pra completar a qualificação. Pedido em 28/09.
+    "comprovante_pagamento",
+    "outro",
 ]
 
 DOCUMENTOS_OBRIGATORIOS: tuple[DocumentoTipo, ...] = (

@@ -299,6 +299,10 @@ export type DocumentoTipo =
   | "conjuge_rg"
   | "conjuge_cpf"
   | "comprovante_renda"
+  // Comprovante de PIX/TED de um pagamento (entrada ou parcela) — só pode
+  // ser anexado depois que a proposta já está aprovada (ver checagem em
+  // backend/app/routers/crm.py::anexar_documento_proposta). Pedido em 28/09.
+  | "comprovante_pagamento"
   | "outro";
 
 export const DOCUMENTOS_OBRIGATORIOS: DocumentoTipo[] = [
@@ -318,6 +322,7 @@ export const DOCUMENTO_LABEL: Record<DocumentoTipo, string> = {
   conjuge_rg: "RG do cônjuge",
   conjuge_cpf: "CPF do cônjuge",
   comprovante_renda: "Comprovante de renda",
+  comprovante_pagamento: "Comprovante de pagamento (PIX/TED)",
   outro: "Outro documento",
 };
 

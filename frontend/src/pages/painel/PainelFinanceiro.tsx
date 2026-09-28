@@ -21,6 +21,7 @@ export default function PainelFinanceiro() {
   const [erro, setErro] = useState<string | null>(null);
   const [aprovandoId, setAprovandoId] = useState<string | null>(null);
   const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
+  const [reciboDe, setReciboDe] = useState<PropostaDetalhe | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -49,6 +50,17 @@ export default function PainelFinanceiro() {
     } finally {
       setAprovandoId(null);
     }
+  }
+
+  async function gerarRecibo(p: PropostaDetalhe, valor: number, data: string) {
+    const blob = await api.gerarReciboProposta(p.id, valor, data);
+    const nomeArquivo = `recibo-${p.lote?.identificador ?? p.id}.docx`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivo;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   return (
@@ -103,6 +115,9 @@ export default function PainelFinanceiro() {
                     >
                       {aprovandoId === p.id ? "aprovando..." : "aprovar"}
                     </button>
+                    <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setReciboDe(p)}>
+                      gerar recibo
+                    </button>
                     <button
                       className="btn-row btn-row-neutral opacity-60 cursor-not-allowed"
                       disabled
@@ -132,6 +147,91 @@ export default function PainelFinanceiro() {
             </Modal>
           );
         })()}
+
+      {reciboDe && (
+        <Modal onClose={() => setReciboDe(null)} labelledBy="financeiro-recibo-title">
+          <FormularioRecibo proposta={reciboDe} onGerar={gerarRecibo} onFechar={() => setReciboDe(null)} />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/** Pergunta o valor efetivamente recebido (e a data) e gera o recibo desse
+ * pagamento — um recibo por pagamento (entrada ou parcela), não por
+ * proposta, por isso não tem valor salvo em lugar nenhum pra pré-preencher
+ * aqui. Pedido em 28/09. */
+function FormularioRecibo({
+  proposta,
+  onGerar,
+  onFechar,
+}: {
+  proposta: PropostaDetalhe;
+  onGerar: (p: PropostaDetalhe, valor: number, data: string) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const [valor, setValor] = useState("");
+  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    const numero = Number(valor.replace(",", "."));
+    if (!numero || numero <= 0) {
+      setErro("Informe um valor maior que zero.");
+      return;
+    }
+    setErro(null);
+    setGerando(true);
+    try {
+      await onGerar(proposta, numero, data);
+      onFechar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={enviar} className="p-6 sm:p-8 grid gap-4">
+      <div>
+        <h2 id="financeiro-recibo-title" className="text-lg font-bold text-ink">
+          Gerar recibo
+        </h2>
+        <p className="text-xs text-ink-soft mt-1">
+          {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O recibo sai já
+          preenchido no modelo da imobiliária (Porto Franco ou Rancho Texas, conforme o empreendimento).
+        </p>
+      </div>
+      <label className="grid gap-1 text-sm">
+        <span className="text-ink-soft">Valor recebido (R$)</span>
+        <input
+          className="input"
+          type="number"
+          step="0.01"
+          min="0.01"
+          inputMode="decimal"
+          autoFocus
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          required
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        <span className="text-ink-soft">Data do recibo</span>
+        <input className="input" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
+      </label>
+      {erro && <p className="text-rust text-sm">{erro}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn btn-outline" onClick={onFechar} disabled={gerando}>
+          Cancelar
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={gerando}>
+          {gerando ? "Gerando..." : "Gerar recibo"}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -20,6 +20,10 @@ pillow-heif==0.21.0
 # Importação de planilha de lotes (painel, só admin) — só .xlsx precisa de
 # lib externa, .csv usa o módulo csv da stdlib (ver app/importacao.py).
 openpyxl==3.1.5
+# Recibo/contrato gerados preenchendo os modelos .docx da imobiliária
+# (ver app/documentos_gerados.py) -- mantém a redação jurídica exata,
+# só troca os campos em branco pelos dados reais.
+python-docx==1.2.0
 # Importação de planilha de lotes: além de .xlsx/.csv, aceita a tabela
 # oficial em PDF da construtora (status vem só como cor de fundo da linha,
 # não como texto — ver app/importacao.py::ler_planilha_pdf).

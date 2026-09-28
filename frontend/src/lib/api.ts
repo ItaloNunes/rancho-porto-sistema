@@ -483,6 +483,12 @@ export const api = {
   // backend/app/routers/crm.py::gerar_relatorio_completo. Mesma ausência de
   // "pdf" na URL, pelo mesmo motivo (bloqueador de anúncio/rastreador).
   gerarRelatorioCompletoProposta: (id: string) => requestBlob(`/crm/propostas/${id}/documento-completo`),
+  // Recibo (modelo .docx da imobiliária, ver backend/app/documentos_gerados.py)
+  // do valor efetivamente recebido do cliente — um recibo por pagamento, não
+  // por proposta, por isso "valor" e "data" são passados na hora de gerar
+  // (não vêm salvos em lugar nenhum). Só financeiro (admin/developer).
+  gerarReciboProposta: (id: string, valor: number, data: string) =>
+    requestBlob(`/crm/propostas/${id}/recibo?valor=${valor}&data=${data}`),
   // Anexos da proposta (RG, CPF, comprovante de renda etc.) — diferente do
   // fluxo de qualificação por link, aqui o corretor pode anexar/remover a
   // qualquer momento, mesmo com a proposta já criada há tempos. A lista já
