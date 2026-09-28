@@ -94,6 +94,7 @@ export interface Corretor {
   /** CRECI e dados bancários -- usados pra preencher sozinhos a cláusula de
    * comissão do contrato do Porto Franco (ver documentos_gerados.py no
    * backend). Opcionais -- nem todo corretor mexe com esse empreendimento. */
+  cpf_cnpj?: string | null;
   creci?: string | null;
   banco?: string | null;
   agencia?: string | null;

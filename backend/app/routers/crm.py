@@ -151,6 +151,7 @@ def criar_corretor(payload: CorretorCreate, admin: dict = Depends(require_admin)
         "telefone": payload.telefone,
         "papel": payload.papel,
         "ativo": True,
+        "cpf_cnpj": payload.cpf_cnpj,
         "creci": payload.creci,
         "banco": payload.banco,
         "agencia": payload.agencia,

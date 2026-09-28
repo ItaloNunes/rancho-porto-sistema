@@ -281,6 +281,7 @@ function CorretorForm({
   // de comissão do contrato do Porto Franco (ver documentos_gerados.py no
   // backend); por isso ficam num bloco separado e nenhum é obrigatório --
   // nem todo corretor mexe com esse empreendimento. Pedido em 28/09.
+  const [cpfCnpj, setCpfCnpj] = useState(corretor?.cpf_cnpj ?? "");
   const [creci, setCreci] = useState(corretor?.creci ?? "");
   const [banco, setBanco] = useState(corretor?.banco ?? "");
   const [agencia, setAgencia] = useState(corretor?.agencia ?? "");
@@ -318,6 +319,7 @@ function CorretorForm({
     setSalvando(true);
     try {
       const dadosContrato = {
+        cpf_cnpj: cpfCnpj.trim() || null,
         creci: creci.trim() || null,
         banco: banco.trim() || null,
         agencia: agencia.trim() || null,
@@ -411,6 +413,12 @@ function CorretorForm({
         <p className="text-xs text-ink-soft">
           Dados pro contrato do Porto Franco (opcional -- só quem faz vendas lá precisa preencher):
         </p>
+        <input
+          className="input"
+          placeholder="CPF ou CNPJ"
+          value={cpfCnpj}
+          onChange={(e) => setCpfCnpj(e.target.value)}
+        />
         <input className="input" placeholder="CRECI" value={creci} onChange={(e) => setCreci(e.target.value)} />
         <div className="grid grid-cols-3 gap-2">
           <input className="input" placeholder="Banco" value={banco} onChange={(e) => setBanco(e.target.value)} />

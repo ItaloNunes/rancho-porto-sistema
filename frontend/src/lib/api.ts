@@ -429,6 +429,7 @@ export const api = {
     telefone: string;
     usuario?: string | null;
     papel: Papel;
+    cpf_cnpj?: string | null;
     creci?: string | null;
     banco?: string | null;
     agencia?: string | null;
@@ -444,6 +445,7 @@ export const api = {
       /** Força a senha de volta pro telefone atual mesmo se o corretor já
        * tiver customizado a própria (ver Corretor.senha_customizada). */
       resetar_senha: boolean;
+      cpf_cnpj: string | null;
       creci: string | null;
       banco: string | null;
       agencia: string | null;
