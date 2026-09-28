@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
-from ..documentos_gerados import preencher_recibo
+from ..documentos_gerados import preencher_contrato_porto_franco, preencher_recibo
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..schemas import (
     AtividadeItem,
@@ -1001,6 +1001,83 @@ def gerar_recibo_proposta(
         data=data_recibo,
     )
     nome_arquivo = f"recibo-{lote.get('identificador', proposta_id)}.docx".replace(" ", "-")
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
+
+
+@router.get("/propostas/{proposta_id}/contrato")
+def gerar_contrato_proposta(
+    proposta_id: str,
+    comissao: float,
+    data: Optional[str] = None,
+    corretor: dict = Depends(get_current_corretor),
+):
+    """Gera o contrato completo (modelo .docx real da imobiliária, alienação
+    fiduciária) preenchido com os dados da proposta -- mantendo a redação
+    jurídica exata do modelo, só trocando os campos do QUADRO RESUMO e a
+    cláusula de comissão. Por enquanto só o Porto Franco está implementado
+    (é o único dos dois modelos com cláusula de comissão qualificando o
+    corretor -- o Rancho Texas não tem essa cláusula, mas também tem campos
+    de confrontação do lote que não existem em lugar nenhum do sistema hoje;
+    fica pra depois). Pedido em 28/09.
+
+    Só financeiro (admin/developer) gera, e só depois que a proposta já foi
+    decidida (aprovada/enviada/aceita) -- diferente do recibo e do PDF
+    informal, que não esperam decisão nenhuma: aqui é o contrato de verdade,
+    não faz sentido emitir antes de aprovar a venda."""
+    if not eh_admin(corretor):
+        raise HTTPException(403, "Só o financeiro pode gerar o contrato.")
+    if comissao < 0:
+        raise HTTPException(422, "O valor da comissão não pode ser negativo.")
+
+    data_contrato = None
+    if data:
+        try:
+            data_contrato = datetime.strptime(data, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(422, "Data inválida -- use o formato AAAA-MM-DD.")
+
+    sb = get_supabase()
+    proposta = (
+        sb.table("propostas")
+        .select("*, lote:lotes(*, condominio:condominios(nome)), cliente:clientes(*), corretor:corretores(*)")
+        .eq("id", proposta_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not proposta:
+        raise HTTPException(404, "Proposta não encontrada.")
+    proposta = proposta[0]
+    if proposta["status"] not in ("aprovada", "enviada", "aceita"):
+        raise HTTPException(409, "Só é possível gerar o contrato depois que a proposta for aprovada.")
+    lote = proposta.get("lote")
+    cliente = proposta.get("cliente")
+    if not lote or not cliente:
+        raise HTTPException(409, "Proposta com lote ou cliente ausente -- não é possível gerar o contrato.")
+    if not cliente.get("cpf"):
+        raise HTTPException(409, "Cliente sem CPF cadastrado -- não é possível gerar o contrato sem isso.")
+
+    condominio_nome = (lote.get("condominio") or {}).get("nome", "")
+    if "rancho" in condominio_nome.lower():
+        raise HTTPException(
+            501,
+            "Geração automática do contrato do Rancho Texas ainda não está pronta -- "
+            "por enquanto só o Porto Franco. Peça pro time técnico completar essa parte.",
+        )
+
+    docx_bytes = preencher_contrato_porto_franco(
+        proposta=proposta,
+        lote=lote,
+        cliente=cliente,
+        corretor=proposta.get("corretor"),
+        valor_comissao=comissao,
+        data_contrato=data_contrato,
+    )
+    nome_arquivo = f"contrato-{lote.get('identificador', proposta_id)}.docx".replace(" ", "-")
     return Response(
         content=docx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

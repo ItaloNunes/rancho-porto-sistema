@@ -1,8 +1,8 @@
-"""Geração do recibo (e, futuramente, do contrato) preenchendo os modelos
-.docx enviados pela imobiliária — nunca reescrevendo o texto jurídico à mão,
-pra não arriscar errar uma cláusula ou uma condição legal. Só troca os
-valores de exemplo do modelo (nome, CPF, valor, lote, data) pelos dados
-reais da proposta. Pedido em 28/09.
+"""Geração do recibo e do contrato completo preenchendo os modelos .docx
+enviados pela imobiliária — nunca reescrevendo o texto jurídico à mão, pra
+não arriscar errar uma cláusula ou uma condição legal. Só troca os valores
+de exemplo do modelo (nome, CPF, valor, lote, data...) pelos dados reais da
+proposta. Pedido em 28/09.
 """
 
 import io
@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Optional
 
 import docx
+
+# Reaproveita o mapa de rótulos e o parser de data "livre" (aceita
+# 'AAAA-MM-DD' do input do navegador ou texto solto) já usados no PDF da
+# proposta completa (gerar_proposta_pdf) -- mesma fonte de dados
+# (dados_qualificacao), sem duplicar a lógica.
+from .pdf import ESTADO_CIVIL_LABEL, _fmt_data_livre
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates" / "contratos"
 
@@ -176,3 +182,238 @@ def preencher_recibo(
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue(), slug
+
+
+def _para_float(texto: Optional[str]) -> Optional[float]:
+    """Mesma tolerância de formato do validador de FormaPagamentoDados
+    (schemas.py::_parse_valor_monetario) -- "5000", "5000.00", "5000,00" ou
+    "R$ 5.000,00" -- só que devolvendo o float de verdade (o validador
+    devolve o texto original, só validado; aqui precisamos calcular e
+    formatar o valor pro contrato)."""
+    if not texto:
+        return None
+    limpo = str(texto).strip().replace("R$", "").replace(" ", "")
+    if "," in limpo and "." in limpo:
+        limpo = limpo.replace(".", "").replace(",", ".")
+    elif "," in limpo:
+        limpo = limpo.replace(",", ".")
+    try:
+        return float(limpo)
+    except ValueError:
+        return None
+
+
+def _identidade(proponente: dict) -> str:
+    rg, orgao = proponente.get("rg"), proponente.get("orgao_expedidor")
+    if rg and orgao:
+        return f"{rg} {orgao}"
+    return rg or "-"
+
+
+def _endereco_completo(endereco: dict) -> str:
+    """'Rua X, nº 123 - complemento' -- o `_endereco_linha1` do pdf.py não
+    inclui o número (o modelo em papel tem outro campo pra isso; aqui, no
+    contrato, é tudo uma linha só: "ENDEREÇO RESIDENCIAL")."""
+    rua = endereco.get("rua")
+    numero = endereco.get("numero")
+    complemento = endereco.get("complemento")
+    partes = [rua]
+    if numero:
+        partes.append(f"nº {numero}")
+    linha = ", ".join(p for p in partes if p)
+    if complemento:
+        linha = f"{linha} - {complemento}" if linha else complemento
+    return linha or "-"
+
+
+def _substituir_texto(paragrafo, velho: str, novo: str) -> None:
+    """Troca um trecho de texto dentro de um parágrafo, mesmo que o Word
+    tenha fragmentado esse trecho em vários <w:r> -- muito comum em
+    documento com correção ortográfica ligada, onde cada letra acentuada às
+    vezes vira um run só dela (ver contrato do Porto Franco: "COMISSÃO" virou
+    'COMISS' + 'Ã' + 'O...'). O jeito usado no recibo (mexer em runs[i].text
+    direto, por índice) só funciona pra parágrafo curto e sem essa
+    fragmentação -- não dava pra confiar nisso pra um contrato de 5-6
+    páginas. Acha `velho` inteiro no texto concatenado do parágrafo, escreve
+    `novo` no primeiro run que sobrepõe o trecho e esvazia o resto dos runs
+    sobrepostos, preservando o texto de fora do trecho em cada ponta.
+    Lança ValueError se não achar -- silêncio aqui seria pior: um campo do
+    contrato ficando sem preencher sem ninguém notar."""
+    runs = paragrafo.runs
+    texto_completo = "".join(r.text for r in runs)
+    inicio = texto_completo.find(velho)
+    if inicio == -1:
+        raise ValueError(f"Texto não encontrado no modelo do contrato: {velho!r}")
+    fim = inicio + len(velho)
+
+    pos = 0
+    novo_aplicado = False
+    for r in runs:
+        r_inicio, r_fim = pos, pos + len(r.text)
+        if r_fim <= inicio or r_inicio >= fim:
+            pos = r_fim
+            continue
+        antes = r.text[: max(0, inicio - r_inicio)]
+        depois = r.text[max(0, fim - r_inicio):] if r_fim > fim else ""
+        r.text = (antes + novo + depois) if not novo_aplicado else (antes + depois)
+        novo_aplicado = True
+        pos = r_fim
+
+
+def preencher_contrato_porto_franco(
+    *,
+    proposta: dict,
+    lote: dict,
+    cliente: dict,
+    corretor: Optional[dict],
+    valor_comissao: float,
+    data_contrato: Optional[date] = None,
+) -> bytes:
+    """Preenche o modelo real do contrato do Porto Franco (alienação
+    fiduciária) com os dados da proposta, do lote e da qualificação do
+    comprador -- mantendo a redação jurídica exata do modelo, só trocando os
+    campos em branco do QUADRO RESUMO e a cláusula de comissão. Os dados de
+    qualificação (nome completo, RG, nacionalidade, profissão, estado civil,
+    endereço) vêm de `proposta['dados_qualificacao']` -- o mesmo formulário
+    já usado no PDF da "Proposta de Compra/Venda" (ver pdf.py). Campo sem
+    dado disponível em lugar nenhum do sistema (ex.: "LOCAL" de nascimento,
+    que não existe na qualificação) fica em branco de propósito, pronto pra
+    alguém completar à mão antes da assinatura. Pedido em 28/09."""
+    data_contrato = data_contrato or date.today()
+    dq = proposta.get("dados_qualificacao") or {}
+    proponente = dq.get("proponente") or {}
+    endereco = dq.get("endereco_residencial") or {}
+    fp = dq.get("forma_pagamento") or {}
+    estado_civil = dq.get("estado_civil")
+
+    doc = docx.Document(str(_TEMPLATES_DIR / "contrato_porto_franco.docx"))
+    t = doc.tables[0]
+
+    # --- III. COMPRADOR (QUADRO RESUMO) ----------------------------------
+    p = t.rows[4].cells[0].paragraphs
+    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    cpf = proponente.get("cpf_cnpj") or cliente.get("cpf") or "-"
+    _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
+    _substituir_texto(p[3], "NACIONALIDADE: ", f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}")
+    _substituir_texto(p[4], "PROFISSÃO: ", f"PROFISSÃO: {proponente.get('profissao') or '-'}")
+    _substituir_texto(
+        p[5], "DATA DE NASCIMENTO: ", f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}"
+    )
+    # "LOCAL" = naturalidade (cidade de nascimento) -- não existe em nenhum
+    # lugar do sistema hoje (QualificacaoDados não coleta isso); fica em
+    # branco de propósito.
+    _substituir_texto(p[7], "CPF: ", f"CPF: {cpf}")
+    _substituir_texto(p[8], "IDENTIDADE: ", f"IDENTIDADE: {_identidade(proponente)}")
+    _substituir_texto(p[9], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
+    _substituir_texto(
+        p[10], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}"
+    )
+    _substituir_texto(p[11], "BAIRRO: ", f"BAIRRO: {endereco.get('bairro') or '-'}")
+    _substituir_texto(p[12], " MUNICÍPIO: ", f" MUNICÍPIO: {endereco.get('cidade') or '-'}")
+    _substituir_texto(p[13], " UF: ", f" UF: {endereco.get('estado') or '-'}")
+    _substituir_texto(p[14], "CEP: ", f"CEP: {endereco.get('cep') or '-'}")
+
+    # --- V. OBJETIVO (lote, quadra, área) --------------------------------
+    p_objetivo = t.rows[7].cells[0].paragraphs[1]
+    area_fmt = formatar_valor(lote.get("tamanho_m2") or 0)
+    _substituir_texto(
+        p_objetivo,
+        "LOTE N°  QUADRA N° , com área total de 200,00 m²",
+        f"LOTE N° {lote.get('lote_numero', '-')} QUADRA N° {lote.get('quadra', '-')}, "
+        f"com área total de {area_fmt} m²",
+    )
+
+    # --- VI. PREÇO --------------------------------------------------------
+    valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    p_preco = t.rows[9].cells[0].paragraphs[1]
+    _substituir_texto(
+        p_preco,
+        "R$ 69.990,00 (Sessenta e nove mil novecentos e noventa reais)",
+        f"R$ {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)})",
+    )
+
+    # --- VII. FORMA DE PAGAMENTO -------------------------------------------
+    pp = t.rows[11].cells[0].paragraphs
+
+    # Prioriza a forma de pagamento negociada nesta proposta específica
+    # (dados_qualificacao.forma_pagamento); só cai pro plano padrão do lote
+    # se a qualificação não tiver esse detalhamento.
+    entrada = _para_float(fp.get("sinal")) or lote.get("entrada")
+    if entrada:
+        _substituir_texto(
+            pp[3],
+            "Entrada / Arras confirmatórias: ",
+            f"Entrada / Arras confirmatórias: R$ {formatar_valor(entrada)} ({valor_por_extenso(entrada)})",
+        )
+
+    qtd_parcelas = fp.get("dividido_em_parcelas") or lote.get("qtd_parcelas")
+    valor_parcela = _para_float(fp.get("valor_parcela")) or lote.get("parcela_mensal")
+    if qtd_parcelas and valor_parcela:
+        texto_parcelas = (
+            f"{qtd_parcelas} ({_numero_extenso(qtd_parcelas)}) parcelas mensais e sucessivas de "
+            f"R$ {formatar_valor(valor_parcela)} ({valor_por_extenso(valor_parcela)}) cada"
+        )
+        vencimento, primeiro_mes = fp.get("vencimento"), fp.get("primeiro_mes")
+        if vencimento or primeiro_mes:
+            texto_parcelas += (
+                f", vencendo a primeira em {vencimento or '-'}/{primeiro_mes or '-'} "
+                "e as demais no mesmo dia dos meses subsequentes"
+            )
+        _substituir_texto(pp[5], "Parcelas mensais", f"Parcelas mensais: {texto_parcelas}.")
+
+    entrega = lote.get("entrega")
+    if entrega:
+        _substituir_texto(
+            pp[7],
+            "Chave: ",
+            f"Chave: R$ {formatar_valor(entrega)} ({valor_por_extenso(entrega)}), a ser paga na entrega das chaves.",
+        )
+
+    # DA COMISSÃO DE CORRETAGEM -- corretor responsável pela venda,
+    # qualificado com os dados do próprio cadastro dele (ver
+    # PainelCorretores.tsx: CRECI, CPF/CNPJ e dados bancários, adicionados
+    # justamente pra preencher essa cláusula sozinhos).
+    corretor = corretor or {}
+    qualificacao_corretor = corretor.get("nome") or "-"
+    if corretor.get("cpf_cnpj"):
+        qualificacao_corretor += f", CPF/CNPJ {corretor['cpf_cnpj']}"
+    if corretor.get("creci"):
+        qualificacao_corretor += f", CRECI {corretor['creci']}"
+    if corretor.get("banco") and corretor.get("agencia") and corretor.get("conta"):
+        qualificacao_corretor += (
+            f", dados bancários: {corretor['banco']}, Ag. {corretor['agencia']}, C/C {corretor['conta']}"
+        )
+    _substituir_texto(
+        pp[17],
+        "fixada em R$  (), a ser paga diretamente ao CORRETOR/IMOBILIÁRIA "
+        "[QUALIFICAR: nome/razão social, CPF/CNPJ, CRECI e dados bancários], "
+        "mediante transferência bancária ou PIX para conta por este indicada",
+        f"fixada em R$ {formatar_valor(valor_comissao)} ({valor_por_extenso(valor_comissao)}), "
+        f"a ser paga diretamente ao CORRETOR/IMOBILIÁRIA {qualificacao_corretor}, "
+        "mediante transferência bancária ou PIX para conta por este indicada",
+    )
+
+    # --- XII. LOCAL E DATA DE CELEBRAÇÃO -----------------------------------
+    p_data = t.rows[19].cells[0].paragraphs[1]
+    _substituir_texto(
+        p_data,
+        "neste dia 11 de Abril de 2026.",
+        f"neste dia {data_contrato.day} de {_MESES[data_contrato.month - 1].capitalize()} de {data_contrato.year}.",
+    )
+
+    # --- Título (número do contrato) ---------------------------------------
+    _substituir_texto(
+        doc.paragraphs[0],
+        "CONTRATO Nº  0/2026",
+        f"CONTRATO Nº {proposta.get('numero', 0):04d}/{data_contrato.year}",
+    )
+
+    # --- Assinatura: CPF do comprador ---------------------------------------
+    # Único "CPF: " isolado fora da tabela do QUADRO RESUMO -- confirmado
+    # direto no índice de parágrafos do modelo (ver conversa de 28/09); se o
+    # modelo for reeditado no Word essa posição pode mudar.
+    _substituir_texto(doc.paragraphs[314], "CPF: ", f"CPF: {cpf}")
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()

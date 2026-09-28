@@ -503,6 +503,8 @@ export const api = {
   // (não vêm salvos em lugar nenhum). Só financeiro (admin/developer).
   gerarReciboProposta: (id: string, valor: number, data: string) =>
     requestBlob(`/crm/propostas/${id}/recibo?valor=${valor}&data=${data}`),
+  gerarContratoProposta: (id: string, comissao: number, data: string) =>
+    requestBlob(`/crm/propostas/${id}/contrato?comissao=${comissao}&data=${data}`),
   // Anexos da proposta (RG, CPF, comprovante de renda etc.) — diferente do
   // fluxo de qualificação por link, aqui o corretor pode anexar/remover a
   // qualquer momento, mesmo com a proposta já criada há tempos. A lista já

@@ -22,6 +22,7 @@ export default function PainelFinanceiro() {
   const [aprovandoId, setAprovandoId] = useState<string | null>(null);
   const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
   const [reciboDe, setReciboDe] = useState<PropostaDetalhe | null>(null);
+  const [contratoDe, setContratoDe] = useState<PropostaDetalhe | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -55,6 +56,17 @@ export default function PainelFinanceiro() {
   async function gerarRecibo(p: PropostaDetalhe, valor: number, data: string) {
     const blob = await api.gerarReciboProposta(p.id, valor, data);
     const nomeArquivo = `recibo-${p.lote?.identificador ?? p.id}.docx`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivo;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  async function gerarContrato(p: PropostaDetalhe, comissao: number, data: string) {
+    const blob = await api.gerarContratoProposta(p.id, comissao, data);
+    const nomeArquivo = `contrato-${p.lote?.identificador ?? p.id}.docx`;
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -118,11 +130,7 @@ export default function PainelFinanceiro() {
                     <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setReciboDe(p)}>
                       gerar recibo
                     </button>
-                    <button
-                      className="btn-row btn-row-neutral opacity-60 cursor-not-allowed"
-                      disabled
-                      title="Em breve — assim que o modelo de contrato for enviado, esse botão gera o contrato já preenchido com os dados da proposta."
-                    >
+                    <button className="btn-row btn-row-neutral" onClick={() => setContratoDe(p)}>
                       gerar contrato
                     </button>
                   </td>
@@ -151,6 +159,12 @@ export default function PainelFinanceiro() {
       {reciboDe && (
         <Modal onClose={() => setReciboDe(null)} labelledBy="financeiro-recibo-title">
           <FormularioRecibo proposta={reciboDe} onGerar={gerarRecibo} onFechar={() => setReciboDe(null)} />
+        </Modal>
+      )}
+
+      {contratoDe && (
+        <Modal onClose={() => setContratoDe(null)} labelledBy="financeiro-contrato-title">
+          <FormularioContrato proposta={contratoDe} onGerar={gerarContrato} onFechar={() => setContratoDe(null)} />
         </Modal>
       )}
     </div>
@@ -230,6 +244,90 @@ function FormularioRecibo({
         </button>
         <button type="submit" className="btn btn-primary" disabled={gerando}>
           {gerando ? "Gerando..." : "Gerar recibo"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Gera o contrato completo (modelo real, alienação fiduciária) preenchido
+ * com os dados já cadastrados da proposta -- comprador, lote, forma de
+ * pagamento. Só pede aqui o que não existe em lugar nenhum do sistema: o
+ * valor da comissão de corretagem (varia por venda) e a data de celebração
+ * do contrato. Por enquanto só funciona pro Porto Franco -- o backend
+ * recusa com uma mensagem clara se a proposta for do Rancho Texas. Pedido
+ * em 28/09. */
+function FormularioContrato({
+  proposta,
+  onGerar,
+  onFechar,
+}: {
+  proposta: PropostaDetalhe;
+  onGerar: (p: PropostaDetalhe, comissao: number, data: string) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const [comissao, setComissao] = useState("");
+  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    const numero = Number(comissao.replace(",", "."));
+    if (comissao.trim() === "" || Number.isNaN(numero) || numero < 0) {
+      setErro("Informe o valor da comissão (pode ser 0, se não houver).");
+      return;
+    }
+    setErro(null);
+    setGerando(true);
+    try {
+      await onGerar(proposta, numero, data);
+      onFechar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={enviar} className="p-6 sm:p-8 grid gap-4">
+      <div>
+        <h2 id="financeiro-contrato-title" className="text-lg font-bold text-ink">
+          Gerar contrato
+        </h2>
+        <p className="text-xs text-ink-soft mt-1">
+          {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O contrato sai
+          preenchido com os dados já cadastrados (comprador, lote, forma de pagamento) no modelo real da
+          imobiliária, mantendo o texto jurídico exato. Confira os campos que não existem no sistema (ex.: local de
+          nascimento do comprador) antes de assinar.
+        </p>
+      </div>
+      <label className="grid gap-1 text-sm">
+        <span className="text-ink-soft">Comissão de corretagem (R$)</span>
+        <input
+          className="input"
+          type="number"
+          step="0.01"
+          min="0"
+          inputMode="decimal"
+          autoFocus
+          value={comissao}
+          onChange={(e) => setComissao(e.target.value)}
+          required
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        <span className="text-ink-soft">Data de celebração do contrato</span>
+        <input className="input" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
+      </label>
+      {erro && <p className="text-rust text-sm">{erro}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn btn-outline" onClick={onFechar} disabled={gerando}>
+          Cancelar
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={gerando}>
+          {gerando ? "Gerando..." : "Gerar contrato"}
         </button>
       </div>
     </form>
