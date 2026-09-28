@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, LotePendenciaError } from "../../lib/api";
+import { api, formatMoney, LotePendenciaError } from "../../lib/api";
 import type { LoteComCondominio, LoteStatus } from "../../types";
 import Modal from "../../components/Modal";
 
@@ -121,6 +121,24 @@ export default function PainelLotes() {
     novoStatus: LoteStatus;
     mensagem: string;
   } | null>(null);
+  // "Desfazer última alteração de preço" (ver migration 0025) — só aparece
+  // pra lote com `preco_pode_reverter` true. Confirmação simples (única),
+  // igual à troca de status normal: reverter preço não mexe em nenhuma
+  // reserva/proposta, só no valor de tabela do lote.
+  const [reverterPreco, setReverterPreco] = useState<LoteComCondominio | null>(null);
+  const [revertendoId, setRevertendoId] = useState<string | null>(null);
+
+  async function confirmarReverterPreco(l: LoteComCondominio) {
+    setRevertendoId(l.id);
+    try {
+      await api.reverterPrecoLote(l.id);
+      recarregar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRevertendoId(null);
+    }
+  }
 
   function recarregar() {
     setErro(null);
@@ -203,12 +221,13 @@ export default function PainelLotes() {
         <p className="text-ink-soft text-sm">Carregando...</p>
       ) : (
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 font-medium">Empreendimento</th>
                 <th className="px-4 py-3 font-medium">Lote</th>
                 <th className="px-4 py-3 font-medium">Tamanho</th>
+                <th className="px-4 py-3 font-medium">Preço</th>
                 <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
@@ -226,6 +245,26 @@ export default function PainelLotes() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-ink-soft">{l.tamanho_m2.toLocaleString("pt-BR")} m²</td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {l.valor_total ? formatMoney(l.valor_total) : "—"}
+                    {l.preco_pode_reverter && (
+                      <div>
+                        <button
+                          type="button"
+                          className="mt-1 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                          disabled={revertendoId !== null}
+                          title={
+                            l.preco_alterado_em
+                              ? `Preço alterado em ${formatarDataHora(l.preco_alterado_em)}`
+                              : undefined
+                          }
+                          onClick={() => setReverterPreco(l)}
+                        >
+                          ↩ desfazer última alteração
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {salvandoId === l.id ? (
                       <span className="inline-flex items-center gap-2 text-xs text-ink-soft">
@@ -422,6 +461,42 @@ export default function PainelLotes() {
                 }}
               >
                 Confirmar mesmo assim
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {reverterPreco && (
+        <Modal onClose={() => setReverterPreco(null)} labelledBy="reverter-preco-titulo">
+          <div className="p-6">
+            <h2 id="reverter-preco-titulo" className="text-lg font-bold text-ink mb-2">
+              Desfazer última alteração de preço
+            </h2>
+            <p className="text-sm text-ink mb-3">
+              <span className="font-semibold">{reverterPreco.identificador}</span>{" "}
+              <span className="text-ink-soft">— {reverterPreco.condominio_nome}</span>
+            </p>
+            <p className="text-sm text-ink-soft mb-1">
+              Preço atual: <span className="font-semibold text-ink">{formatMoney(reverterPreco.valor_total)}</span>
+            </p>
+            <p className="text-sm text-ink-soft mb-5">
+              Isso volta o preço deste lote pro valor que estava vigente antes da última alteração. Não mexe em
+              nenhuma reserva ou proposta já em andamento — essas já continuam com o preço que valia quando cada uma
+              começou.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-outline !text-xs !py-2" onClick={() => setReverterPreco(null)}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary !text-xs !py-2"
+                onClick={() => {
+                  confirmarReverterPreco(reverterPreco);
+                  setReverterPreco(null);
+                }}
+              >
+                Sim, desfazer
               </button>
             </div>
           </div>

@@ -63,6 +63,7 @@ from ..schemas import (
 )
 from ..security import criar_token, eh_admin, get_current_corretor, require_admin, require_developer
 from ..auditoria import registrar_log
+from ..precos import congelar_preco_lote
 from .reservas import _pode_mexer_na_reserva
 from ..usuarios import gerar_usuario_unico, hash_senha, senha_de_telefone, verificar_senha
 from ..usuarios import slug as slug_usuario
@@ -1265,19 +1266,32 @@ def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) ->
         )
         cliente = cliente[0] if cliente else {}
 
-        sb.table("reservas").insert(
-            {
-                "lote_id": proposta["lote_id"],
-                "cliente_id": proposta["cliente_id"],
-                "corretor_id": proposta.get("corretor_id"),
-                "proposta_id": proposta_id,
-                "nome": cliente.get("nome"),
-                "contato": cliente.get("telefone"),
-                "cpf": cliente.get("cpf"),
-                "status": "pendente",
-                "observacao": "Reserva gerada automaticamente pela criação/aprovação da proposta.",
-            }
-        ).execute()
+        # Congela o preço do lote (ver ..precos.congelar_preco_lote) nesta
+        # reserva gerada automaticamente, do mesmo jeito que criar_reserva
+        # faz pra uma reserva criada na mão — sem isso, uma proposta que vira
+        # reserva ficaria sem essa "data corte" de preço.
+        lote_preco = (
+            sb.table("lotes")
+            .select("valor_total, entrada, entrega, parcela_mensal, qtd_parcelas, prazo_entrega_meses")
+            .eq("id", proposta["lote_id"])
+            .limit(1)
+            .execute()
+            .data
+        )
+        dados_reserva = {
+            "lote_id": proposta["lote_id"],
+            "cliente_id": proposta["cliente_id"],
+            "corretor_id": proposta.get("corretor_id"),
+            "proposta_id": proposta_id,
+            "nome": cliente.get("nome"),
+            "contato": cliente.get("telefone"),
+            "cpf": cliente.get("cpf"),
+            "status": "pendente",
+            "observacao": "Reserva gerada automaticamente pela criação/aprovação da proposta.",
+        }
+        if lote_preco:
+            dados_reserva.update(congelar_preco_lote(lote_preco[0]))
+        sb.table("reservas").insert(dados_reserva).execute()
     # Atualização condicional (atômica no Postgres): só sobe pra 'reservado'
     # se o lote AINDA estiver 'disponivel' neste instante — não confia num
     # status lido antes da escrita (podia ter mudado entre a leitura e aqui,
@@ -1424,12 +1438,24 @@ def _montar_visao_geral() -> tuple[list[dict], dict[str, list[dict]]]:
         .execute()
         .data
     )
-    propostas = sb.table("propostas").select("lote_id, status, valor_proposto").execute().data
+    propostas = sb.table("propostas").select("lote_id, status, valor_proposto, created_at").order("created_at").execute().data
 
     lote_condominio = {l["id"]: l["condominio_id"] for l in lotes}
     lotes_por_condominio: dict[str, list[dict]] = {c["id"]: [] for c in condominios}
     for l in lotes:
         lotes_por_condominio.setdefault(l["condominio_id"], []).append(l)
+
+    # Preço de venda "de verdade" de cada lote vendido: o valor_proposto da
+    # proposta ACEITA daquele lote, não o valor_total (atual) do lote —
+    # sem isso, um reajuste de preço do empreendimento feito DEPOIS da venda
+    # mudaria retroativamente quanto o relatório financeiro diz que aquele
+    # lote foi vendido por (mesmo bug de fundo do caso da planilha da
+    # Sheyla, só que no Financeiro em vez do estoque). `.order("created_at")`
+    # acima + sobrescrever no dict garante que, na rara hipótese de mais de
+    # uma proposta aceita pro mesmo lote, prevalece a mais recente. Só cai no
+    # valor_total do lote quando ele foi marcado "vendido" sem nenhuma
+    # proposta aceita por trás (ex.: ajuste manual de status).
+    valor_aceito_por_lote = {p["lote_id"]: p["valor_proposto"] for p in propostas if p["status"] == "aceita"}
 
     resumo = []
     for c in condominios:
@@ -1446,7 +1472,11 @@ def _montar_visao_geral() -> tuple[list[dict], dict[str, list[dict]]]:
                 "disponiveis": sum(1 for l in do_condo if l["status"] == "disponivel"),
                 "reservados": sum(1 for l in do_condo if l["status"] == "reservado"),
                 "vendidos": sum(1 for l in do_condo if l["status"] == "vendido"),
-                "valor_total_vendido": sum(l.get("valor_total") or 0 for l in do_condo if l["status"] == "vendido"),
+                "valor_total_vendido": sum(
+                    valor_aceito_por_lote.get(l["id"], l.get("valor_total") or 0)
+                    for l in do_condo
+                    if l["status"] == "vendido"
+                ),
                 "propostas_abertas": len(propostas_do_condo),
                 "valor_em_propostas_abertas": sum(p["valor_proposto"] for p in propostas_do_condo),
             }
@@ -1541,10 +1571,40 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
     )
     proposta_por_lote = {p["lote_id"]: p for p in propostas_abertas}
 
+    # Ver migração 0025_historico_precos_lotes.sql: toda vez que o preço de
+    # um lote muda, a linha vigente anterior ganha vigente_ate preenchido.
+    # Um lote só tem pra onde "desfazer" (ver POST .../preco/reverter em
+    # condominios.py) se já existe pelo menos uma linha fechada dessas —
+    # lote no preço original desde sempre não tem nenhuma. Tudo dentro de um
+    # try/except só pra esta listagem (uma das mais usadas do painel) nunca
+    # quebrar caso a migração 0025 ainda não tenha rodado no banco.
+    ids_com_preco_anterior: set[str] = set()
+    vigente_desde_por_lote: dict[str, str] = {}
+    try:
+        historico_fechado = (
+            sb.table("lotes_precos_historico")
+            .select("lote_id")
+            .not_.is_("vigente_ate", "null")
+            .execute()
+            .data
+        )
+        ids_com_preco_anterior = {h["lote_id"] for h in historico_fechado}
+        historico_vigente = (
+            sb.table("lotes_precos_historico")
+            .select("lote_id, vigente_desde")
+            .is_("vigente_ate", "null")
+            .execute()
+            .data
+        )
+        vigente_desde_por_lote = {h["lote_id"]: h["vigente_desde"] for h in historico_vigente}
+    except Exception:
+        logger.warning("lotes_precos_historico indisponível (migração 0025 já rodou no banco?) — seguindo sem histórico de preço.")
+
     resultado = []
     for l in lotes:
         condo = condos.get(l["condominio_id"], {})
         proposta = proposta_por_lote.get(l["id"])
+        pode_reverter = l["id"] in ids_com_preco_anterior
         resultado.append(
             {
                 **l,
@@ -1552,6 +1612,8 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
                 "condominio_slug": condo.get("slug", ""),
                 "proposta_pendente_status": proposta["status"] if proposta else None,
                 "proposta_pendente_desde": proposta["created_at"] if proposta else None,
+                "preco_pode_reverter": pode_reverter,
+                "preco_alterado_em": vigente_desde_por_lote.get(l["id"]) if pode_reverter else None,
             }
         )
     return resultado

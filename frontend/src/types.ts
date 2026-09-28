@@ -234,6 +234,15 @@ export interface Reserva {
    * já linkada, ou via botão "Gerar proposta" em PainelReservas.tsx) — a
    * partir daí não dá mais pra gerar outra proposta pra mesma reserva. */
   proposta_id?: string | null;
+  /** "Foto" do preço do lote no instante em que esta reserva nasceu (ver
+   * migration 0025) — não muda se o preço do lote for reajustado depois.
+   * null só em reserva criada antes desta coluna existir. */
+  valor_total_congelado?: number | null;
+  entrada_congelado?: number | null;
+  entrega_congelado?: number | null;
+  parcela_mensal_congelada?: number | null;
+  qtd_parcelas_congelada?: number | null;
+  prazo_entrega_meses_congelado?: number | null;
   created_at: string;
 }
 
@@ -252,6 +261,27 @@ export interface LoteComCondominio extends Lote {
   // não tem nenhuma proposta pendente no momento.
   proposta_pendente_status?: string | null;
   proposta_pendente_desde?: string | null;
+  // Ver migration 0025 / GET /crm/lotes. True só quando o lote já teve
+  // alguma mudança de preço registrada — só aí existe pra onde "desfazer
+  // última alteração" (ver PainelLotes.tsx).
+  preco_pode_reverter?: boolean;
+  preco_alterado_em?: string | null;
+}
+
+/** Uma linha do histórico de preço de um lote (ver migration 0025 e
+ * GET /condominios/lotes/{id}/precos/historico) — mais recente primeiro. */
+export interface LotePrecoHistorico {
+  id: string;
+  lote_id: string;
+  valor_total?: number | null;
+  entrada?: number | null;
+  entrega?: number | null;
+  parcela_mensal?: number | null;
+  qtd_parcelas?: number | null;
+  prazo_entrega_meses?: number | null;
+  vigente_desde: string;
+  vigente_ate?: string | null;
+  origem: "sistema" | "reversao";
 }
 
 /** Uma linha do feed de Atividade (só developer, ver GET /crm/atividade e

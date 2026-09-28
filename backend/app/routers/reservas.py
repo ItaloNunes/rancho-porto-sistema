@@ -11,6 +11,7 @@ from ..schemas import (
     ReservaUpdate,
 )
 from ..auditoria import registrar_log
+from ..precos import congelar_preco_lote
 from ..security import eh_admin, get_current_corretor
 
 router = APIRouter(prefix="/lotes", tags=["reservas"])
@@ -141,9 +142,21 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
     inseria a reserva e só atualizava o lote se ele *tivesse estado*
     disponível na leitura lá em cima — deixando uma janela em que dois
     corretores clicando "reservar" no mesmo lote quase ao mesmo tempo
-    conseguiam criar duas reservas ativas pro mesmo lote (double booking)."""
+    conseguiam criar duas reservas ativas pro mesmo lote (double booking).
+
+    Congela o preço do lote na própria reserva (valor_total_congelado etc,
+    ver ..precos.congelar_preco_lote) — é a "data corte" pedida pelo Italo:
+    se o preço do empreendimento for reajustado depois, essa negociação já
+    em andamento continua valendo o preço de quando ela começou."""
     sb = get_supabase()
-    lote = sb.table("lotes").select("id, status").eq("id", payload.lote_id).limit(1).execute().data
+    lote = (
+        sb.table("lotes")
+        .select("id, status, valor_total, entrada, entrega, parcela_mensal, qtd_parcelas, prazo_entrega_meses")
+        .eq("id", payload.lote_id)
+        .limit(1)
+        .execute()
+        .data
+    )
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
     if lote[0]["status"] != "disponivel":
@@ -163,6 +176,7 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
         raise HTTPException(409, "Este lote acabou de ser reservado por outra pessoa — atualize a página.")
 
     data = payload.model_dump()
+    data.update(congelar_preco_lote(lote[0]))
     if not eh_admin(corretor):
         data["corretor_id"] = corretor["id"]
     try:

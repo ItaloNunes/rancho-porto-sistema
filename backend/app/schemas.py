@@ -290,6 +290,18 @@ class Reserva(BaseModel):
     # sozinha (ver _expirar_vencidas em routers/reservas.py). Só None em
     # reserva já 'confirmada'/'cancelada' criada antes desta regra existir.
     expira_em: Optional[datetime] = None
+    # "Foto" do preço do lote no instante em que ESTA reserva nasceu (ver
+    # criar_reserva em routers/reservas.py e migração 0025) — nunca
+    # recalculado depois. Garante que um reajuste de preço no empreendimento,
+    # feito depois que a negociação já começou, não muda o valor que valia
+    # pra este cliente específico. None só em reserva criada antes desta
+    # coluna existir.
+    valor_total_congelado: Optional[float] = None
+    entrada_congelado: Optional[float] = None
+    entrega_congelado: Optional[float] = None
+    parcela_mensal_congelada: Optional[float] = None
+    qtd_parcelas_congelada: Optional[int] = None
+    prazo_entrega_meses_congelado: Optional[int] = None
     created_at: datetime
 
 
@@ -331,6 +343,33 @@ class LoteComCondominio(Lote):
     # abaixo no arquivo, depois da seção de lotes.
     proposta_pendente_status: Optional[str] = None
     proposta_pendente_desde: Optional[datetime] = None
+    # Ver lotes_precos_historico (migração 0025) / listar_todos_lotes em
+    # crm.py. True só quando este lote já teve pelo menos UMA mudança de
+    # preço registrada (então existe um valor anterior real pra oferecer
+    # "desfazer última alteração" em PainelLotes.tsx) — lote no preço
+    # original desde sempre não tem pra onde reverter.
+    preco_pode_reverter: bool = False
+    preco_alterado_em: Optional[datetime] = None
+
+
+class LotePrecoHistorico(BaseModel):
+    """Uma linha do histórico de preço de um lote (ver migração 0025 /
+    trigger fn_registrar_historico_preco_lote) — registrado automaticamente
+    toda vez que valor_total/entrada/entrega/parcela_mensal/qtd_parcelas/
+    prazo_entrega_meses muda, não importa o caminho (planilha de reajuste,
+    script manual direto no banco, ou uma futura edição pelo painel)."""
+
+    id: str
+    lote_id: str
+    valor_total: Optional[float] = None
+    entrada: Optional[float] = None
+    entrega: Optional[float] = None
+    parcela_mensal: Optional[float] = None
+    qtd_parcelas: Optional[int] = None
+    prazo_entrega_meses: Optional[int] = None
+    vigente_desde: datetime
+    vigente_ate: Optional[datetime] = None
+    origem: str
 
 
 # ---------------------------------------------------------------------------

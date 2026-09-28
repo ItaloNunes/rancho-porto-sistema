@@ -11,6 +11,7 @@ from ..schemas import (
     ImportacaoPreview,
     Lote,
     LotePoligonoUpdate,
+    LotePrecoHistorico,
     LoteStatusUpdate,
 )
 from ..auditoria import registrar_log
@@ -122,6 +123,83 @@ def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, admin: dict =
         )
         detalhes.update({"forcado_por_cima_de_pendencia": True, "pendencia_tipo": tipo, "pendencia_corretor": corretor})
     registrar_log(sb, admin, "mudou_status_lote_manualmente", "lote", lote_id, descricao, detalhes)
+    return updated[0]
+
+
+@router.get("/lotes/{lote_id}/precos/historico", response_model=list[LotePrecoHistorico])
+def historico_preco_lote(lote_id: str, _admin=Depends(require_admin)):
+    """Linha do tempo de preço do lote (ver migração 0025), mais recente
+    primeiro — o que alimenta o botão "desfazer última alteração" em
+    PainelLotes.tsx (o penúltimo item da lista é pra onde ele reverte)."""
+    sb = get_supabase()
+    existing = sb.table("lotes").select("id").eq("id", lote_id).limit(1).execute().data
+    if not existing:
+        raise HTTPException(404, "Lote não encontrado.")
+    return (
+        sb.table("lotes_precos_historico")
+        .select("*")
+        .eq("lote_id", lote_id)
+        .order("vigente_desde", desc=True)
+        .execute()
+        .data
+    )
+
+
+@router.post("/lotes/{lote_id}/preco/reverter", response_model=Lote)
+def reverter_preco_lote(lote_id: str, admin: dict = Depends(require_admin)):
+    """"Voltar ao preço original — se preciso for" (pedido do Italo, 28/09):
+    desfaz a ÚLTIMA mudança de preço deste lote, reaplicando o valor que
+    valia antes dela. Não apaga nada do histórico — a reversão em si vira
+    mais uma linha nova em lotes_precos_historico (ver trigger da migração
+    0025), só que marcada com origem='reversao', então dá pra ver depois
+    que aquele preço "novo" na verdade foi um desfazer.
+
+    Só existe "última mudança" pra desfazer se o lote já tiver pelo menos
+    duas linhas de histórico (a vigente + uma anterior fechada) — lote no
+    preço original desde sempre (uma linha só) não tem pra onde voltar."""
+    sb = get_supabase()
+    existing = sb.table("lotes").select("id, identificador, valor_total").eq("id", lote_id).limit(1).execute().data
+    if not existing:
+        raise HTTPException(404, "Lote não encontrado.")
+
+    ultimas_duas = (
+        sb.table("lotes_precos_historico")
+        .select("*")
+        .eq("lote_id", lote_id)
+        .order("vigente_desde", desc=True)
+        .limit(2)
+        .execute()
+        .data
+    )
+    if len(ultimas_duas) < 2:
+        raise HTTPException(422, "Este lote não tem uma alteração de preço anterior pra desfazer.")
+    preco_anterior = ultimas_duas[1]
+
+    valores = {
+        "valor_total": preco_anterior.get("valor_total"),
+        "entrada": preco_anterior.get("entrada"),
+        "entrega": preco_anterior.get("entrega"),
+        "parcela_mensal": preco_anterior.get("parcela_mensal"),
+        "qtd_parcelas": preco_anterior.get("qtd_parcelas"),
+        "prazo_entrega_meses": preco_anterior.get("prazo_entrega_meses"),
+    }
+    updated = sb.table("lotes").update(valores).eq("id", lote_id).execute().data
+    if not updated:
+        raise HTTPException(404, "Lote não encontrado.")
+
+    # A linha nova já foi criada pelo trigger com origem='sistema' (regra
+    # padrão) — corrige só esta pra 'reversao', pra distinguir de um reajuste
+    # de verdade no histórico.
+    sb.table("lotes_precos_historico").update({"origem": "reversao"}).eq("lote_id", lote_id).is_(
+        "vigente_ate", "null"
+    ).execute()
+
+    registrar_log(
+        sb, admin, "reverteu_preco_lote", "lote", lote_id,
+        f"Desfez a última alteração de preço do lote {existing[0]['identificador']} — voltou pro valor "
+        f"vigente desde {preco_anterior['vigente_desde']}.",
+        {"valor_total_antes_de_reverter": existing[0].get("valor_total"), "valor_total_revertido_para": valores["valor_total"]},
+    )
     return updated[0]
 
 

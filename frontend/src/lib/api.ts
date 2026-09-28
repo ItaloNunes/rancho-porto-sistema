@@ -15,6 +15,7 @@ import type {
   ImportacaoPreview,
   Lote,
   LoteComCondominio,
+  LotePrecoHistorico,
   LoteStatus,
   LoginResposta,
   Papel,
@@ -444,6 +445,13 @@ export const api = {
     }
     return res.json();
   },
+  // Ver migration 0025 — linha do tempo de preço do lote, mais recente primeiro.
+  historicoPrecoLote: (loteId: string) =>
+    request<LotePrecoHistorico[]>(`/condominios/lotes/${loteId}/precos/historico`, undefined, true),
+  // "Desfazer última alteração de preço" (ver PainelLotes.tsx) — 422 quando o
+  // lote não tem nenhuma alteração anterior pra reverter.
+  reverterPrecoLote: (loteId: string) =>
+    request<Lote>(`/condominios/lotes/${loteId}/preco/reverter`, { method: "POST" }, true),
   // Painel — ferramenta de marcação manual dos lotes na planta real (só admin)
   atualizarPoligonoLote: (loteId: string, poligono: number[][]) =>
     request<Lote>(`/condominios/lotes/${loteId}/poligono`, { method: "PATCH", body: JSON.stringify({ poligono }) }, true),
