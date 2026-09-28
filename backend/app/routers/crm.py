@@ -40,6 +40,7 @@ from ..schemas import (
     ClienteCreate,
     ClienteUpdate,
     Corretor,
+    CorretorAutoUpdate,
     CorretorCreate,
     CorretorCriado,
     CorretorImportadoItem,
@@ -107,8 +108,29 @@ def trocar_minha_senha(payload: TrocarSenhaRequest, corretor: dict = Depends(get
 @router.get("/me", response_model=Corretor)
 def meu_perfil(corretor: dict = Depends(get_current_corretor)):
     """O front usa isso pra saber quem está logado e qual o papel (admin ou
-    corretor), pra decidir o que mostrar no painel."""
+    corretor), pra decidir o que mostrar no painel -- inclusive
+    `perfil_completo` (computed_field em schemas.Corretor), que decide se a
+    tela obrigatória de "complete seu cadastro" aparece."""
     return corretor
+
+
+@router.patch("/me", response_model=Corretor)
+def atualizar_meu_perfil(payload: CorretorAutoUpdate, corretor: dict = Depends(get_current_corretor)):
+    """O próprio corretor logado completa nome/CPF-CNPJ/CRECI/dados
+    bancários -- é o PATCH que fecha a tela obrigatória de "complete seu
+    cadastro" (ver PainelLayout.tsx/GateCompletarCadastro e
+    schemas.Corretor.perfil_completo). Diferente de atualizar_corretor
+    (admin): não mexe em papel/ativo/senha, e por isso não usa
+    require_admin -- qualquer login válido pode chamar isso pros PRÓPRIOS
+    dados (o id vem do token, nunca do body). Pedido em 28/09."""
+    sb = get_supabase()
+    updates = payload.model_dump()
+    atualizado = sb.table("corretores").update(updates).eq("id", corretor["id"]).execute().data[0]
+    registrar_log(
+        sb, corretor, "completou_cadastro", "corretor", corretor["id"],
+        "Completou o próprio cadastro (nome/CPF-CNPJ/CRECI/dados bancários).",
+    )
+    return atualizado
 
 
 # ---------------------------------------------------------------------------

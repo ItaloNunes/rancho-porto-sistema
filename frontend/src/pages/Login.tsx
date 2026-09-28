@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 export default function Login() {
-  const { session, entrar } = useAuth();
+  const { session, entrar, motivoSaida } = useAuth();
   const location = useLocation();
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
@@ -47,6 +47,9 @@ export default function Login() {
         </Link>
         <h1 className="text-xl font-bold text-ink mb-1">Painel interno</h1>
         <p className="text-sm text-ink-soft mb-6">Entre com o usuário e a senha que o administrador criou pra você.</p>
+        {motivoSaida && (
+          <p className="text-sm text-rust bg-rust/10 border border-rust/30 rounded px-3 py-2 mb-4">{motivoSaida}</p>
+        )}
         <form onSubmit={onSubmit} className="grid gap-3">
           <input
             className="input"

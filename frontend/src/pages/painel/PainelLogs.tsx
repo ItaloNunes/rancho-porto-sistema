@@ -34,6 +34,7 @@ const ROTULO_ACAO: Record<string, string> = {
   criou_corretor: "Criou login de corretor",
   editou_corretor: "Editou corretor",
   desativou_corretor: "Desativou corretor",
+  completou_cadastro: "Completou o próprio cadastro",
   mudou_status_lote_manualmente: "Mudou status do lote (manual)",
   gerou_link_qualificacao: "Gerou link de qualificação",
   decidiu_qualificacao: "Decidiu qualificação",

@@ -388,6 +388,18 @@ export const api = {
       { method: "POST", body: JSON.stringify({ senha_atual: senhaAtual, senha_nova: senhaNova }) },
       true,
     ),
+  // Painel — o próprio corretor logado completa nome/CPF-CNPJ/CRECI/dados
+  // bancários (tela obrigatória de "complete seu cadastro", ver
+  // GateCompletarCadastro.tsx). Todos os campos são obrigatórios aqui —
+  // ver CorretorAutoUpdate no backend.
+  atualizarMeuPerfil: (dados: {
+    nome: string;
+    cpf_cnpj: string;
+    creci: string;
+    banco: string;
+    agencia: string;
+    conta: string;
+  }) => request<Corretor>("/crm/me", { method: "PATCH", body: JSON.stringify(dados) }, true),
 
   // Painel — lotes (gestão rápida de status, unificada pros dois condomínios)
   listarTodosLotes: () => request<LoteComCondominio[]>("/crm/lotes", undefined, true),

@@ -2,7 +2,7 @@ import re
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 LoteStatus = Literal["disponivel", "reservado", "vendido"]
 ReservaStatus = Literal[
@@ -535,6 +535,44 @@ class CorretorUpdate(BaseModel):
     conta: Optional[str] = None
 
 
+# Campos que fecham a tela obrigatória de "complete seu cadastro" (ver
+# PainelLayout.tsx/GateCompletarCadastro) -- pedido em 28/09: sem isso, a
+# cláusula de comissão do contrato do Porto Franco sai sem qualificar o
+# corretor (só o nome, sem CPF/CRECI/dados bancários). Um lugar só pra essa
+# lista, reaproveitada pelo validador de CorretorAutoUpdate (abaixo) e pelo
+# computed_field Corretor.perfil_completo -- não dá pra desalinhar as duas
+# checagens (uma decide se o PATCH é aceito, a outra decide se a tela de
+# bloqueio unlock no front) se ambas olharem pra mesma tupla.
+CAMPOS_CADASTRO_OBRIGATORIOS = ("nome", "cpf_cnpj", "creci", "banco", "agencia", "conta")
+
+
+class CorretorAutoUpdate(BaseModel):
+    """Body de PATCH /crm/me -- o próprio corretor logado completa o
+    cadastro (nome completo + os dados que o contrato do Porto Franco
+    exige). Diferente de CorretorUpdate (só admin): não aceita `papel`,
+    `ativo` nem `resetar_senha` -- ninguém promove a si mesmo ou reativa a
+    própria conta por aqui. Todos os campos são obrigatórios (não
+    Optional) porque esse endpoint só existe pra fechar a tela de "complete
+    seu cadastro" -- salvar pela metade não tiraria ninguém de lá mesmo,
+    então é melhor recusar de cara do que devolver 200 e a pessoa continuar
+    presa na mesma tela sem entender por quê. Pedido em 28/09."""
+
+    nome: str
+    cpf_cnpj: str
+    creci: str
+    banco: str
+    agencia: str
+    conta: str
+
+    @field_validator(*CAMPOS_CADASTRO_OBRIGATORIOS)
+    @classmethod
+    def _nao_vazio(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Preencha todos os campos antes de salvar.")
+        return v
+
+
 class Corretor(BaseModel):
     id: str
     nome: str
@@ -556,6 +594,19 @@ class Corretor(BaseModel):
     banco: Optional[str] = None
     agencia: Optional[str] = None
     conta: Optional[str] = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def perfil_completo(self) -> bool:
+        """Só corretor de verdade (papel="corretor") é obrigado a preencher
+        esses dados -- admin/developer usam o painel pra gerir o sistema,
+        não pra vender lote com o próprio nome na cláusula de comissão, e
+        travar essas contas nessa tela não faria sentido (ver
+        PainelLayout.tsx/GateCompletarCadastro, que lê este campo direto em
+        vez de reimplementar a checagem no front). Pedido em 28/09."""
+        if self.papel != "corretor":
+            return True
+        return all((getattr(self, campo) or "").strip() for campo in CAMPOS_CADASTRO_OBRIGATORIOS)
 
 
 class CorretorCriado(Corretor):

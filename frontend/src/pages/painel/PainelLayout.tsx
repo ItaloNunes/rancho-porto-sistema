@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import BotaoSuporte from "../../components/BotaoSuporte";
+import GateCompletarCadastro from "./GateCompletarCadastro";
 import { temAcessoAdmin } from "../../types";
 
 // Mudança de setembro/2026: não tem mais Cadastro de Cliente nem
@@ -84,6 +85,15 @@ export default function PainelLayout() {
       document.body.style.overflow = prevOverflow;
     };
   }, [menuAberto]);
+
+  // Tela obrigatoria de "complete seu cadastro" no lugar do painel inteiro
+  // -- checado depois de todos os hooks (regra dos hooks), antes de
+  // qualquer outra coisa do layout normal (nav, header com abas etc.).
+  // Só existe depois que `perfil` carregou (RequireAuth garante isso antes
+  // de montar este componente).
+  if (perfil && !perfil.perfil_completo) {
+    return <GateCompletarCadastro />;
+  }
 
   return (
     <div className="min-h-screen grid grid-rows-[auto_auto_1fr] min-w-0">

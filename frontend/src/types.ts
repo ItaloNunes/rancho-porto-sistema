@@ -99,6 +99,12 @@ export interface Corretor {
   banco?: string | null;
   agencia?: string | null;
   conta?: string | null;
+  /** Computado no backend (schemas.Corretor.perfil_completo) — false só
+   * quando `papel === "corretor"` e falta algum dos campos acima (ou o
+   * nome). Admin/developer sempre vêm com `true` (não precisam de CRECI
+   * pra usar o painel). Usado por PainelLayout.tsx pra decidir se mostra a
+   * tela obrigatória de "complete seu cadastro". */
+  perfil_completo: boolean;
 }
 
 /** Resposta de POST /crm/corretores — só nessa hora a senha aparece em
