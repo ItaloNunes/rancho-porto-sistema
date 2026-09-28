@@ -18,7 +18,17 @@ admin_router = APIRouter(prefix="/reservas", tags=["reservas"])
 
 # Status que ainda estão "vivos" — só esses entram na checagem de expiração.
 # Confirmada/cancelada já são estados finais, não vencem mais.
-_STATUS_ATIVOS = ["pendente", "em_atendimento", "aguardando_qualificacao", "em_analise_financeira"]
+#
+# 'em_analise_financeira' SAIU dessa lista em 28/09: enquanto a reserva está
+# nessa fase, a decisão já está nas mãos do financeiro/admin, não do
+# corretor — não é justo o cliente perder o lote só porque alguém demorou
+# pra decidir (mesmo raciocínio da exclusão por proposta abaixo).
+_STATUS_ATIVOS = ["pendente", "em_atendimento", "aguardando_qualificacao"]
+
+# Status de proposta em que a decisão já saiu da mão do corretor e está com
+# o financeiro/admin — reserva vinculada a uma proposta nesse status não
+# expira mais sozinha, não importa quanto tempo passe (ver _expirar_vencidas).
+_PROPOSTA_STATUS_TRAVA_LOTE = ["aguardando_aprovacao"]
 
 
 def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
@@ -35,24 +45,52 @@ def _expirar_vencidas(sb) -> int:
     qualificação e tentar gerar a proposta a partir dela. Chamada em toda
     listagem (checagem "preguiçosa" — não depende de ninguém ter o painel
     aberto); POST /reservas/expirar-vencidas existe à parte pra um cron
-    externo reforçar isso mesmo sem ninguém abrir o painel."""
+    externo reforçar isso mesmo sem ninguém abrir o painel.
+
+    Exceção adicionada em 28/09 (caso real: proposta do João Batista ficou
+    'aguardando_aprovacao' e a reserva dela expirou sozinha, liberando o
+    lote com a proposta ainda pendente de decisão): reserva vinculada a uma
+    proposta 'aguardando_aprovacao' NUNCA expira sozinha — o prazo de 72h é
+    pra cobrar o CORRETOR (terminar qualificação, montar a proposta), não
+    pra punir o cliente por demora do financeiro/admin em decidir.
+    """
     agora = datetime.now(timezone.utc).isoformat()
     vencidas = (
         sb.table("reservas")
-        .select("id, lote_id")
+        .select("id, lote_id, proposta_id")
         .in_("status", _STATUS_ATIVOS)
         .lt("expira_em", agora)
         .execute()
         .data
     )
+    if not vencidas:
+        return 0
+
+    proposta_ids = [r["proposta_id"] for r in vencidas if r.get("proposta_id")]
+    travadas_por_proposta = set()
+    if proposta_ids:
+        propostas_pendentes = (
+            sb.table("propostas")
+            .select("id")
+            .in_("id", proposta_ids)
+            .in_("status", _PROPOSTA_STATUS_TRAVA_LOTE)
+            .execute()
+            .data
+        )
+        travadas_por_proposta = {p["id"] for p in propostas_pendentes}
+
+    expiradas = 0
     for r in vencidas:
+        if r.get("proposta_id") in travadas_por_proposta:
+            continue  # decisão pendente com financeiro/admin — não expira
         sb.table("reservas").update({"status": "cancelada"}).eq("id", r["id"]).execute()
         sb.table("lotes").update({"status": "disponivel"}).eq("id", r["lote_id"]).execute()
         registrar_log(
             sb, None, "reserva_expirou", "reserva", r["id"],
             "Reserva expirou sozinha (venceu o prazo sem confirmação) e o lote voltou a ficar disponível.",
         )
-    return len(vencidas)
+        expiradas += 1
+    return expiradas
 
 
 @router.post("/{lote_id}/reservar", response_model=Reserva)
