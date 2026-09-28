@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../lib/api";
+import { api, LotePendenciaError } from "../../lib/api";
 import type { LoteComCondominio, LoteStatus } from "../../types";
 import Modal from "../../components/Modal";
 
@@ -111,6 +111,16 @@ export default function PainelLotes() {
     digitado: string;
     ciente: boolean;
   } | null>(null);
+  // Lote com reserva/proposta ATIVA no sistema (backend recusou com 409 —
+  // ver LotePendenciaError em lib/api.ts): segunda confirmação explícita,
+  // separada do modal genérico acima, porque aqui a gente sabe quem e desde
+  // quando — informação que o modal genérico não tem. Só chega em
+  // `forcar: true` depois que o admin confirma aqui, nunca antes.
+  const [bloqueio, setBloqueio] = useState<{
+    lote: LoteComCondominio;
+    novoStatus: LoteStatus;
+    mensagem: string;
+  } | null>(null);
 
   function recarregar() {
     setErro(null);
@@ -119,13 +129,19 @@ export default function PainelLotes() {
 
   useEffect(recarregar, []);
 
-  async function mudarStatus(l: LoteComCondominio, status: LoteStatus) {
+  async function mudarStatus(l: LoteComCondominio, status: LoteStatus, forcar = false) {
     setSalvandoId(l.id);
     try {
-      await api.atualizarStatusLote(l.id, status);
+      await api.atualizarStatusLote(l.id, status, forcar);
       recarregar();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      if (e instanceof LotePendenciaError && !forcar) {
+        // Backend recusou por pendência (reserva/proposta ativa) — mostra a
+        // segunda confirmação em vez do alert genérico, com quem/desde quando.
+        setBloqueio({ lote: l, novoStatus: status, mensagem: e.message });
+      } else {
+        alert(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setSalvandoId(null);
     }
@@ -361,7 +377,12 @@ export default function PainelLotes() {
                     className="btn btn-primary !text-xs !py-2 !bg-rust disabled:opacity-40 disabled:cursor-not-allowed"
                     disabled={!desbloqueio.ciente}
                     onClick={() => {
-                      mudarStatus(desbloqueio.lote, desbloqueio.novoStatus);
+                      // Já passou pelas 3 etapas (aviso lido, identificador
+                      // digitado, ciente marcado) — isso já É a confirmação
+                      // deliberada que `forcar` exige, então manda direto
+                      // pra não pedir uma QUARTA confirmação se o lote
+                      // também tiver uma reserva/proposta ativa.
+                      mudarStatus(desbloqueio.lote, desbloqueio.novoStatus, true);
                       setDesbloqueio(null);
                     }}
                   >
@@ -370,6 +391,39 @@ export default function PainelLotes() {
                 </div>
               </>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {bloqueio && (
+        <Modal onClose={() => setBloqueio(null)} labelledBy="bloqueio-pendencia-titulo">
+          <div className="p-6">
+            <h2 id="bloqueio-pendencia-titulo" className="text-lg font-bold text-rust mb-2">
+              Este lote está em negociação
+            </h2>
+            <p className="text-sm text-ink mb-3">
+              <span className="font-semibold">{bloqueio.lote.identificador}</span>{" "}
+              <span className="text-ink-soft">— {bloqueio.lote.condominio_nome}</span>
+            </p>
+            <p className="text-sm text-ink-soft mb-5">{bloqueio.mensagem}</p>
+            <p className="text-sm text-ink-soft mb-5">
+              Mudar mesmo assim vai sobrescrever o status por cima dessa negociação em andamento — a reserva/proposta
+              continua existindo, só o lote deixa de refletir ela.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-outline !text-xs !py-2" onClick={() => setBloqueio(null)}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-outline !text-xs !py-2 !border-rust !text-rust"
+                onClick={() => {
+                  mudarStatus(bloqueio.lote, bloqueio.novoStatus, true);
+                  setBloqueio(null);
+                }}
+              >
+                Confirmar mesmo assim
+              </button>
+            </div>
           </div>
         </Modal>
       )}

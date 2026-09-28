@@ -33,9 +33,11 @@ export default function PainelImportarPlanilha() {
   const [confirmando, setConfirmando] = useState(false);
   const [preview, setPreview] = useState<ImportacaoPreview | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  // Cobre os dois avisos que pedem uma segunda confirmação antes de aplicar:
-  // desfazer uma venda concluída, ou sobrescrever um lote com reserva/proposta
-  // ativa no sistema (ver `desfazVenda`/`temPendenciaAtiva` abaixo).
+  // Confirmação extra só pra desfazer uma venda concluída (ver `desfazVenda`
+  // abaixo) — lote com reserva/proposta ativa nem chega a poder ser
+  // selecionado (o backend recusa incondicionalmente, ver checkbox
+  // desabilitado na tabela abaixo), então não precisa de uma segunda
+  // confirmação: não há nada pra confirmar.
   const [cienteAlerta, setCienteAlerta] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
@@ -55,14 +57,6 @@ export default function PainelImportarPlanilha() {
     () => (preview?.linhas ?? []).some((l) => l.status_atual === "vendido" && selecionados.has(l.lote_id)),
     [preview, selecionados],
   );
-  // Lote com reserva ou proposta ATIVA no sistema (ver preview_importacao_lotes
-  // no backend) que está marcado pra ter o status sobrescrito pela planilha —
-  // sem esse aviso, dava pra apagar o rastro de uma negociação em andamento
-  // sem perceber.
-  const temPendenciaAtiva = useMemo(
-    () => (preview?.linhas ?? []).some((l) => l.pendencia_tipo && selecionados.has(l.lote_id)),
-    [preview, selecionados],
-  );
 
   function limparResultadoDaAnalise() {
     setPreview(null);
@@ -80,7 +74,14 @@ export default function PainelImportarPlanilha() {
     try {
       const p = await api.importarLotesPreview(condominioId, arquivo);
       setPreview(p);
-      setSelecionados(new Set(p.linhas.map((l) => l.lote_id)));
+      // Lote com reserva/proposta ATIVA (pendencia_tipo) nunca é aplicado —
+      // o backend recusa incondicionalmente (ver confirmar_importacao_lotes)
+      // — então nem entra pré-marcado aqui, pra não sugerir que "marcar
+      // todos + confirmar" também resolve esses (foi exatamente esse dava
+      // essa falsa impressão que deixou passar o incidente de 28/09: a tela
+      // marcava tudo de cara, inclusive lotes travados, com só um aviso
+      // vermelho fácil de não notar em meio a uma planilha grande).
+      setSelecionados(new Set(p.linhas.filter((l) => !l.pendencia_tipo).map((l) => l.lote_id)));
       setCienteAlerta(false);
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
@@ -105,6 +106,11 @@ export default function PainelImportarPlanilha() {
           ` ${r.ignorados} item(ns) NÃO foram aplicados porque o status desses lotes mudou depois da análise` +
           ` (alguém reservou/vendeu pelo painel nesse meio tempo) — suba a planilha de novo pra revisar.`;
       }
+      if (r.bloqueados_por_pendencia > 0) {
+        msg +=
+          ` ${r.bloqueados_por_pendencia} item(ns) NÃO foram aplicados porque o lote tem uma reserva/proposta` +
+          ` ativa no sistema — o que já está em negociação por dentro do painel sempre prevalece sobre a planilha.`;
+      }
       setResultado(msg);
       setPreview(null);
       setSelecionados(new Set());
@@ -126,8 +132,13 @@ export default function PainelImportarPlanilha() {
     });
   }
 
+  // Lote com pendência nunca entra — não há "confirmar mesmo assim" pra ele
+  // (o backend recusa incondicionalmente), então marcá-lo não faz nada além
+  // de confundir.
   function alternarTodos(marcar: boolean) {
-    setSelecionados(marcar ? new Set((preview?.linhas ?? []).map((l) => l.lote_id)) : new Set());
+    setSelecionados(
+      marcar ? new Set((preview?.linhas ?? []).filter((l) => !l.pendencia_tipo).map((l) => l.lote_id)) : new Set(),
+    );
   }
 
   return (
@@ -266,6 +277,8 @@ export default function PainelImportarPlanilha() {
                             <input
                               type="checkbox"
                               checked={marcado}
+                              disabled={temPendencia}
+                              title={temPendencia ? "Protegido — não pode ser sobrescrito pela planilha." : undefined}
                               onChange={() => alternarSelecao(l.lote_id)}
                             />
                           </td>
@@ -275,8 +288,9 @@ export default function PainelImportarPlanilha() {
                             {desfazendoVenda && <span className="ml-1.5 text-[11px] text-rust">(desfaz venda)</span>}
                             {temPendencia && (
                               <div className="text-[11px] font-normal text-rust mt-0.5">
-                                ⚠️ {l.pendencia_tipo === "reserva" ? "Reserva" : "Proposta"} ativa com{" "}
-                                {l.pendencia_corretor} desde {formatDateTime(l.pendencia_desde)}
+                                🔒 {l.pendencia_tipo === "reserva" ? "Reserva" : "Proposta"} ativa com{" "}
+                                {l.pendencia_corretor} desde {formatDateTime(l.pendencia_desde)} — protegido, esta
+                                linha não será alterada.
                               </div>
                             )}
                           </td>
@@ -291,7 +305,7 @@ export default function PainelImportarPlanilha() {
               </div>
 
               <div className="px-5 py-4 border-t border-border">
-                {(desfazVenda || temPendenciaAtiva) && (
+                {desfazVenda && (
                   <label className="flex items-start gap-2 text-sm text-ink mb-4 cursor-pointer">
                     <input
                       type="checkbox"
@@ -300,19 +314,8 @@ export default function PainelImportarPlanilha() {
                       onChange={(e) => setCienteAlerta(e.target.checked)}
                     />
                     <span>
-                      {desfazVenda && (
-                        <>
-                          Pelo menos um lote marcado está saindo de <span className="font-semibold">Vendido</span> —
-                          isso desfaz o registro de uma venda concluída.{" "}
-                        </>
-                      )}
-                      {temPendenciaAtiva && (
-                        <>
-                          Pelo menos um lote marcado tem uma reserva/proposta ativa de um corretor no sistema — a
-                          importação vai sobrescrever o status por cima dessa negociação em andamento.{" "}
-                        </>
-                      )}
-                      Estou ciente e quero continuar mesmo assim.
+                      Pelo menos um lote marcado está saindo de <span className="font-semibold">Vendido</span> — isso
+                      desfaz o registro de uma venda concluída. Estou ciente e quero continuar mesmo assim.
                     </span>
                   </label>
                 )}
@@ -322,9 +325,7 @@ export default function PainelImportarPlanilha() {
                   </button>
                   <button
                     className="btn btn-primary"
-                    disabled={
-                      selecionados.size === 0 || confirmando || ((desfazVenda || temPendenciaAtiva) && !cienteAlerta)
-                    }
+                    disabled={selecionados.size === 0 || confirmando || (desfazVenda && !cienteAlerta)}
                     onClick={confirmar}
                   >
                     {confirmando

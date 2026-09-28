@@ -68,21 +68,60 @@ def atualizar_status_lote(lote_id: str, payload: LoteStatusUpdate, admin: dict =
     reserva/proposta — é só a etiqueta do lote. Usar isso pra "reservar" ou
     "vender" sem uma reserva/proposta por trás deixa o lote sem histórico
     (foi exatamente essa combinação que causou um caso real de lote preso
-    sem ninguém saber por quê — daí o log abaixo)."""
+    sem ninguém saber por quê — daí o log abaixo).
+
+    Trava por pendência (bug real de 28/09): a importação de planilha já
+    recusa incondicionalmente sobrescrever um lote com reserva/proposta
+    ATIVA (ver confirmar_importacao_lotes / _pendencias_ativas) — mas esse
+    endpoint aqui, usado pelo select de status rápido na tela de Lotes,
+    não tinha a mesma trava. Foi por essa porta que a planilha da Sheyla
+    (25/09) acabou destravando dois lotes reservados: ela subiu a planilha
+    pra atualizar o estoque geral e, pra bater com a tabela dela, também
+    foi ajustando lote por lote direto nesse select — sem passar pela tela
+    de importação, sem ver nenhum aviso, porque este select não mostrava
+    pendência nenhuma. Igual à planilha, o sistema (reserva/proposta ativa)
+    sempre vence por padrão; `forcar=True` é a única saída, e só chega aqui
+    depois de uma segunda confirmação explícita no painel (ver
+    PainelLotes.tsx)."""
     sb = get_supabase()
     existing = sb.table("lotes").select("id, identificador, status").eq("id", lote_id).limit(1).execute().data
     if not existing:
         raise HTTPException(404, "Lote não encontrado.")
     status_anterior = existing[0]["status"]
+
+    pendencia = _pendencias_ativas(sb, [lote_id]).get(lote_id)
+    if pendencia and not payload.forcar:
+        tipo, corretor, desde = pendencia
+        raise HTTPException(
+            409,
+            detail={
+                "pendencia": True,
+                "tipo": tipo,
+                "corretor": corretor,
+                "desde": desde,
+                "mensagem": (
+                    f"Este lote tem uma {tipo} ATIVA com {corretor} desde "
+                    f"{desde} — a mudança não foi aplicada."
+                ),
+            },
+        )
+
     updated = (
         sb.table("lotes").update({"status": payload.status}).eq("id", lote_id).execute().data
     )
-    registrar_log(
-        sb, admin, "mudou_status_lote_manualmente", "lote", lote_id,
+    descricao = (
         f"Mudou manualmente o status do lote {existing[0]['identificador']} de "
-        f"'{status_anterior}' pra '{payload.status}' (fora do fluxo normal de reserva/proposta).",
-        {"status_anterior": status_anterior, "status_novo": payload.status},
+        f"'{status_anterior}' pra '{payload.status}' (fora do fluxo normal de reserva/proposta)."
     )
+    detalhes = {"status_anterior": status_anterior, "status_novo": payload.status}
+    if pendencia:
+        tipo, corretor, desde = pendencia
+        descricao += (
+            f" Forçado por cima de uma {tipo} ATIVA com {corretor} desde {desde} "
+            "(admin confirmou explicitamente mesmo com o aviso)."
+        )
+        detalhes.update({"forcado_por_cima_de_pendencia": True, "pendencia_tipo": tipo, "pendencia_corretor": corretor})
+    registrar_log(sb, admin, "mudou_status_lote_manualmente", "lote", lote_id, descricao, detalhes)
     return updated[0]
 
 
@@ -108,6 +147,53 @@ def atualizar_poligono_lote(lote_id: str, payload: LotePoligonoUpdate, _admin=De
     return updated[0]
 
 
+def _pendencias_ativas(sb, lote_ids: list[str]) -> dict[str, tuple[str, str, str]]:
+    """Mapeia lote_id -> (tipo, corretor, desde) pra todo lote que já tem uma
+    reserva ou proposta ATIVA por dentro do painel — usada tanto pra avisar
+    na tela de preview quanto pra BLOQUEAR de verdade na hora de confirmar
+    (ver confirmar_importacao_lotes). Reserva/proposta "cancelada"/"recusada"
+    já são estado morto, não contam como pendência.
+
+    Fonte única pras duas pontas de propósito: um lote "travado" no sistema
+    (negociação em andamento por um corretor) nunca pode ser sobrescrito pela
+    planilha — nem preview nem confirmar podem discordar sobre isso (ver
+    incidente de 28/09: a planilha da Sheyla marcou dois lotes com
+    reserva/proposta ativa como "disponível" e o admin conseguiu confirmar
+    mesmo com o aviso na tela — o bug era confiar só no aviso do front; agora
+    o backend recusa a mudança sozinho, sem depender de ninguém ter lido o
+    aviso)."""
+    if not lote_ids:
+        return {}
+    pendencia_por_lote: dict[str, tuple[str, str, str]] = {}
+    reservas_ativas = (
+        sb.table("reservas")
+        .select("lote_id, created_at, corretor:corretores(nome)")
+        .in_("lote_id", lote_ids)
+        .neq("status", "cancelada")
+        .order("created_at")
+        .execute()
+        .data
+    )
+    for r in reservas_ativas:
+        corretor_nome = (r.get("corretor") or {}).get("nome") or "corretor não identificado"
+        pendencia_por_lote[r["lote_id"]] = ("reserva", corretor_nome, r["created_at"])
+    propostas_abertas = (
+        sb.table("propostas")
+        .select("lote_id, created_at, corretor:corretores(nome)")
+        .in_("lote_id", lote_ids)
+        .not_.in_("status", ["recusada", "cancelada"])
+        .order("created_at")
+        .execute()
+        .data
+    )
+    for p in propostas_abertas:
+        if p["lote_id"] in pendencia_por_lote:
+            continue  # já tem reserva ativa marcada pra esse lote — não sobrescreve
+        corretor_nome = (p.get("corretor") or {}).get("nome") or "corretor não identificado"
+        pendencia_por_lote[p["lote_id"]] = ("proposta", corretor_nome, p["created_at"])
+    return pendencia_por_lote
+
+
 @router.post("/lotes/importar/preview", response_model=ImportacaoPreview)
 async def preview_importacao_lotes(
     condominio_id: str = Form(...),
@@ -118,7 +204,13 @@ async def preview_importacao_lotes(
     colunas Quadra/Lote/Status) e devolve só o que MUDARIA no estoque, sem
     gravar nada ainda (ver confirmar_importacao_lotes abaixo). Cobre venda ou
     reserva feita fora do sistema: o admin atualiza a própria planilha e sobe
-    aqui pra refletir no painel, em vez de marcar lote por lote na mão."""
+    aqui pra refletir no painel, em vez de marcar lote por lote na mão.
+
+    Lote com reserva/proposta ATIVA no sistema (pendencia_tipo preenchido)
+    aparece aqui só de forma informativa — o admin vê que a planilha queria
+    mudar aquele status, mas confirmar_importacao_lotes recusa a troca
+    incondicionalmente pra esses lotes (ver _pendencias_ativas). O sistema
+    sempre vence a planilha nesse caso; não existe "confirmar mesmo assim"."""
     sb = get_supabase()
     condo = sb.table("condominios").select("id,nome").eq("id", condominio_id).limit(1).execute().data
     if not condo:
@@ -149,36 +241,9 @@ async def preview_importacao_lotes(
     # mudar já tem uma reserva ou proposta ATIVA por dentro do painel — sem
     # isso, a importação sobrescreveria silenciosamente o status por cima de
     # uma negociação em andamento (ex.: planilha diz "disponível" mas um
-    # corretor já reservou esse lote no sistema há 2 dias). Reserva/proposta
-    # "cancelada"/"recusada" já são estado morto, não contam como pendência.
+    # corretor já reservou esse lote no sistema há 2 dias).
     lote_ids = [l["id"] for l in lotes_db]
-    pendencia_por_lote: dict[str, tuple[str, str, str]] = {}  # lote_id -> (tipo, corretor, desde)
-    reservas_ativas = (
-        sb.table("reservas")
-        .select("lote_id, created_at, corretor:corretores(nome)")
-        .in_("lote_id", lote_ids)
-        .neq("status", "cancelada")
-        .order("created_at")
-        .execute()
-        .data
-    )
-    for r in reservas_ativas:
-        corretor_nome = (r.get("corretor") or {}).get("nome") or "corretor não identificado"
-        pendencia_por_lote[r["lote_id"]] = ("reserva", corretor_nome, r["created_at"])
-    propostas_abertas = (
-        sb.table("propostas")
-        .select("lote_id, created_at, corretor:corretores(nome)")
-        .in_("lote_id", lote_ids)
-        .not_.in_("status", ["recusada", "cancelada"])
-        .order("created_at")
-        .execute()
-        .data
-    )
-    for p in propostas_abertas:
-        if p["lote_id"] in pendencia_por_lote:
-            continue  # já tem reserva ativa marcada pra esse lote — não sobrescreve
-        corretor_nome = (p.get("corretor") or {}).get("nome") or "corretor não identificado"
-        pendencia_por_lote[p["lote_id"]] = ("proposta", corretor_nome, p["created_at"])
+    pendencia_por_lote = _pendencias_ativas(sb, lote_ids)
 
     alteracoes: list[ImportacaoLinha] = []
     nao_encontrados: list[str] = []
@@ -227,7 +292,7 @@ async def preview_importacao_lotes(
 
 
 @router.post("/lotes/importar/confirmar", response_model=ImportacaoConfirmarResultado)
-def confirmar_importacao_lotes(payload: ImportacaoConfirmarPayload, _admin=Depends(require_admin)):
+def confirmar_importacao_lotes(payload: ImportacaoConfirmarPayload, admin: dict = Depends(require_admin)):
     """Aplica só as trocas de status que o admin confirmou na tela de preview
     (ver endpoint acima) — recebe de volta a lista exata de lote_id/status que
     ficou marcada na tela, não reprocessa a planilha.
@@ -239,15 +304,40 @@ def confirmar_importacao_lotes(payload: ImportacaoConfirmarPayload, _admin=Depen
     "Confirmar", tempo de sobra pra um corretor reservar/vender esse mesmo
     lote pelo fluxo normal do painel. Sem essa checagem, a importação
     sobrescreveria esse status novo às cegas. Item que não bate mais entra em
-    `ignorados` — o front avisa o admin pra reanalisar a planilha."""
+    `ignorados` — o front avisa o admin pra reanalisar a planilha.
+
+    Trava incondicional (bug real de 28/09 — ver _pendencias_ativas): lote
+    com reserva ou proposta ATIVA no sistema nunca é sobrescrito por aqui,
+    mesmo que o item tenha vindo marcado no payload (ex.: front desatualizado,
+    ou alguém clicou "estou ciente" na tela). O sistema é sempre a fonte da
+    verdade pra um lote travado — a planilha nunca vence essa disputa. Esses
+    itens entram em `bloqueados_por_pendencia`, contados à parte de
+    `ignorados` (motivo diferente: aqui não é uma corrida perdida, é uma
+    trava deliberada)."""
     if not payload.itens:
         raise HTTPException(422, "Nenhuma alteração selecionada.")
     if len(payload.itens) > 1000:
         raise HTTPException(422, "Muitos itens de uma vez.")
     sb = get_supabase()
+
+    lote_ids = [item.lote_id for item in payload.itens]
+    pendencia_por_lote = _pendencias_ativas(sb, lote_ids)
+
     atualizados = []
     ignorados = 0
+    bloqueados_por_pendencia = 0
     for item in payload.itens:
+        pendencia = pendencia_por_lote.get(item.lote_id)
+        if pendencia:
+            bloqueados_por_pendencia += 1
+            registrar_log(
+                sb, admin, "bloqueou_importacao_planilha_por_pendencia", "lote", item.lote_id,
+                f"Recusou a mudança de status vinda da planilha (pra '{item.status}') porque o lote tem uma "
+                f"{pendencia[0]} ATIVA com {pendencia[1]} desde {pendencia[2]} — o sistema continua "
+                "valendo, a planilha não sobrescreve.",
+                {"status_planilha": item.status, "pendencia_tipo": pendencia[0], "pendencia_corretor": pendencia[1]},
+            )
+            continue
         r = (
             sb.table("lotes")
             .update({"status": item.status})
@@ -260,4 +350,6 @@ def confirmar_importacao_lotes(payload: ImportacaoConfirmarPayload, _admin=Depen
             atualizados.append(r[0])
         else:
             ignorados += 1
-    return ImportacaoConfirmarResultado(atualizados=atualizados, ignorados=ignorados)
+    return ImportacaoConfirmarResultado(
+        atualizados=atualizados, ignorados=ignorados, bloqueados_por_pendencia=bloqueados_por_pendencia
+    )

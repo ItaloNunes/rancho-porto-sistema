@@ -110,6 +110,12 @@ class CondominioDetalhe(CondominioResumo):
 
 class LoteStatusUpdate(BaseModel):
     status: LoteStatus
+    # Ver condominios.py::atualizar_status_lote — por padrão, a troca é
+    # recusada (409) se o lote tiver reserva/proposta ATIVA no sistema.
+    # `forcar=True` é o único jeito de passar por cima disso: exige uma
+    # segunda confirmação explícita do admin no painel (não é o padrão do
+    # select nem algo que aconteça sem essa etapa extra).
+    forcar: bool = False
 
 
 class ImportacaoLinha(BaseModel):
@@ -170,10 +176,20 @@ class ImportacaoConfirmarResultado(BaseModel):
     """`ignorados` conta os itens cujo status mudou entre a análise da
     planilha e a confirmação (ver ImportacaoConfirmarItem.status_atual) — o
     front avisa o admin pra revisar esses lotes de novo, em vez de assumir
-    que tudo que foi marcado na tela realmente foi aplicado."""
+    que tudo que foi marcado na tela realmente foi aplicado.
+
+    `bloqueados_por_pendencia` conta itens recusados porque o lote tem
+    reserva/proposta ATIVA no sistema (ver confirmar_importacao_lotes /
+    _pendencias_ativas) — o backend recusa esses incondicionalmente, mesmo
+    que o front tenha mandado o item marcado. Esse campo já era emitido pelo
+    endpoint antes de existir aqui no schema (por isso o valor sumia
+    silenciosamente da resposta — pydantic descarta chave que o
+    response_model não declara); agora fica visível pro front avisar o admin
+    em vez de dar a entender que só `ignorados` pode zerar uma seleção."""
 
     atualizados: list[Lote]
     ignorados: int
+    bloqueados_por_pendencia: int = 0
 
 
 class LotePoligonoUpdate(BaseModel):

@@ -46,6 +46,24 @@ function extrairErro(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Erro específico de PATCH /condominios/lotes/{id}/status quando o lote tem
+ * reserva/proposta ATIVA no sistema (409, `detail.pendencia === true` — ver
+ * condominios.py::atualizar_status_lote). Distinto de um Error genérico pra
+ * que o painel possa oferecer "confirmar mesmo assim" (reenviando com
+ * `forcar: true`) só nesse caso — nunca pra um erro de rede ou outro 4xx. */
+export class LotePendenciaError extends Error {
+  tipo: "reserva" | "proposta";
+  corretor: string;
+  desde: string;
+  constructor(mensagem: string, detalhe: { tipo: "reserva" | "proposta"; corretor: string; desde: string }) {
+    super(mensagem);
+    this.name = "LotePendenciaError";
+    this.tipo = detalhe.tipo;
+    this.corretor = detalhe.corretor;
+    this.desde = detalhe.desde;
+  }
+}
+
 // O backend (Render, plano free) "dorme" depois de ficar um tempo sem
 // requisição e demora até ~50s pra acordar na próxima — sem isso, a
 // primeira chamada do dia falha com "Failed to fetch" (erro de rede puro,
@@ -403,8 +421,29 @@ export const api = {
 
   // Painel — lotes (gestão rápida de status, unificada pros dois condomínios)
   listarTodosLotes: () => request<LoteComCondominio[]>("/crm/lotes", undefined, true),
-  atualizarStatusLote: (loteId: string, status: LoteStatus) =>
-    request(`/condominios/lotes/${loteId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
+  // `forcar` só deve ir `true` depois de uma segunda confirmação explícita
+  // do admin (ver PainelLotes.tsx) — sem isso, um lote com reserva/proposta
+  // ativa responde 409 e essa função lança LotePendenciaError em vez do
+  // Error genérico, pra o painel oferecer esse "confirmar mesmo assim" em
+  // vez de só mostrar um alert cru.
+  atualizarStatusLote: async (loteId: string, status: LoteStatus, forcar = false): Promise<Lote> => {
+    const token = getToken();
+    const res = await fetchComRetry(`${API_URL}/condominios/lotes/${loteId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ status, forcar }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const detail = (body as { detail?: unknown })?.detail;
+      if (res.status === 409 && detail && typeof detail === "object" && (detail as { pendencia?: boolean }).pendencia) {
+        const d = detail as { tipo: "reserva" | "proposta"; corretor: string; desde: string; mensagem: string };
+        throw new LotePendenciaError(d.mensagem, d);
+      }
+      throw new Error(extrairErro(body, `Erro ${res.status} ao mudar o status do lote`));
+    }
+    return res.json();
+  },
   // Painel — ferramenta de marcação manual dos lotes na planta real (só admin)
   atualizarPoligonoLote: (loteId: string, poligono: number[][]) =>
     request<Lote>(`/condominios/lotes/${loteId}/poligono`, { method: "PATCH", body: JSON.stringify({ poligono }) }, true),

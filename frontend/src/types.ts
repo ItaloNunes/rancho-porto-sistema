@@ -491,10 +491,14 @@ export interface ImportacaoLinha {
 /** Resposta de POST /condominios/lotes/importar/confirmar — `ignorados` é a
  * contagem de itens que não foram aplicados porque o lote mudou de status
  * entre a análise da planilha e a confirmação (ver
- * ImportacaoConfirmarItem.status_atual no backend). */
+ * ImportacaoConfirmarItem.status_atual no backend). `bloqueados_por_pendencia`
+ * é a contagem de itens recusados porque o lote tem reserva/proposta ATIVA
+ * no sistema — o backend nunca aplica essa troca, mesmo que o item tenha
+ * sido marcado na tela (ver PainelImportarPlanilha.tsx). */
 export interface ImportacaoConfirmarResultado {
   atualizados: Lote[];
   ignorados: number;
+  bloqueados_por_pendencia: number;
 }
 
 export interface ImportacaoPreview {
