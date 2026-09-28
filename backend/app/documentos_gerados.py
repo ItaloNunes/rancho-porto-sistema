@@ -417,3 +417,179 @@ def preencher_contrato_porto_franco(
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue()
+
+
+def preencher_contrato_rancho_texas(
+    *,
+    proposta: dict,
+    lote: dict,
+    cliente: dict,
+    data_contrato: Optional[date] = None,
+) -> bytes:
+    """Preenche o modelo real do contrato do Rancho Texas (alienação
+    fiduciária) com os dados da proposta, do lote e da qualificação do(s)
+    comprador(es) -- mesma lógica do Porto Franco (preencher_contrato_
+    porto_franco), com três diferenças de fato:
+
+    1. Não tem cláusula de comissão de corretagem qualificando o corretor
+       (o Rancho Texas trata isso só como desconto na devolução em caso de
+       desistência, sem "R$ X, pago ao CORRETOR Y" pra preencher) -- por
+       isso não pede corretor nem comissão.
+    2. Tem estrutura de DOIS compradores (A - COMPRADOR / B - COMPRADORA,
+       pensada pra casal) -- só preenche o bloco da COMPRADORA se
+       estado_civil vier "casado" e a qualificação tiver dados do cônjuge;
+       senão limpa os placeholders de exemplo do modelo ("XXXX") sem
+       inventar nome/CPF.
+    3. O item V (OBJETIVO) tem confrontação do lote (frente/fundo/laterais,
+       área privativa/comum/real) que não existe em lugar nenhum do sistema
+       -- fica com os valores de exemplo do modelo, pra alguém completar à
+       mão. Só o número do lote e a área total (que o sistema tem) são
+       preenchidos.
+
+    Datas específicas de vencimento da entrada/chave que o modelo trouxe
+    como exemplo (ex.: "para o dia 08/09/2026") são removidas em vez de
+    mantidas erradas -- não existe, hoje, um campo de "data de vencimento
+    da entrada" separado do vencimento das parcelas. Pedido em 28/09."""
+    data_contrato = data_contrato or date.today()
+    dq = proposta.get("dados_qualificacao") or {}
+    proponente = dq.get("proponente") or {}
+    conjuge = dq.get("conjuge") or {}
+    endereco = dq.get("endereco_residencial") or {}
+    fp = dq.get("forma_pagamento") or {}
+    estado_civil = dq.get("estado_civil")
+    tem_compradora = estado_civil == "casado" and bool(conjuge.get("nome"))
+
+    doc = docx.Document(str(_TEMPLATES_DIR / "contrato_rancho_texas.docx"))
+    t = doc.tables[0]
+
+    # --- III. COMPRADOR / COMPRADORA (QUADRO RESUMO) ----------------------
+    p = t.rows[4].cells[0].paragraphs
+    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    cpf = proponente.get("cpf_cnpj") or cliente.get("cpf") or "-"
+    _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
+    _substituir_texto(
+        p[3], p[3].text, f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}   PROFISSÃO: {proponente.get('profissao') or '-'}"
+    )
+    _substituir_texto(
+        p[4],
+        p[4].text,
+        f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}   LOCAL: -",
+    )
+    _substituir_texto(p[5], p[5].text, f"CPF: {cpf}   IDENTIDADE: {_identidade(proponente)}")
+    _substituir_texto(p[6], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
+
+    if tem_compradora:
+        nome_c = conjuge.get("nome") or "-"
+        cpf_c = conjuge.get("cpf_cnpj") or "-"
+        _substituir_texto(p[8], "NOME: ", f"NOME: {nome_c}")
+        _substituir_texto(
+            p[9],
+            p[9].text,
+            f"NACIONALIDADE: {conjuge.get('nacionalidade') or '-'}   PROFISSÃO: {conjuge.get('profissao') or '-'}",
+        )
+        _substituir_texto(
+            p[10], p[10].text, f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))} LOCAL: -"
+        )
+        _substituir_texto(p[11], p[11].text, f"CPF: {cpf_c} IDENTIDADE: {_identidade(conjuge)}")
+        _substituir_texto(p[12], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
+    # Sem cônjuge na qualificação: o bloco "B – COMPRADORA" fica como o
+    # modelo já traz (rótulos em branco, sem exemplo nenhum pra tirar) --
+    # nada a fazer aqui.
+
+    _substituir_texto(p[13], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}")
+    _substituir_texto(
+        p[14],
+        p[14].text,
+        f"BAIRRO: {endereco.get('bairro') or '-'}   MUNICÍPIO: {endereco.get('cidade') or '-'}   "
+        f"UF: {endereco.get('estado') or '-'}   CEP: {endereco.get('cep') or '-'}",
+    )
+
+    # --- V. OBJETIVO (só número do lote e área total -- confrontação do
+    # lote não existe em lugar nenhum do sistema, fica de exemplo) --------
+    p_objetivo = t.rows[7].cells[0].paragraphs[1]
+    area_fmt = formatar_valor(lote.get("tamanho_m2") or 0)
+    _substituir_texto(
+        p_objetivo,
+        "LOTE Nº XX , com área total de XX m²,",
+        f"LOTE Nº {lote.get('lote_numero', '-')}, com área total de {area_fmt} m²,",
+    )
+
+    # --- VI. PREÇO ----------------------------------------------------------
+    valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    p_preco = t.rows[9].cells[0].paragraphs[1]
+    _substituir_texto(
+        p_preco,
+        "R$: XXX  (XX) (“Preço”)",
+        f"R$: {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)}) (“Preço”)",
+    )
+
+    # --- VII. FORMA DE PAGAMENTO ---------------------------------------------
+    pp = t.rows[11].cells[0].paragraphs
+    entrada = _para_float(fp.get("sinal")) or lote.get("entrada")
+    if entrada:
+        entrada_fmt = f"R$ {formatar_valor(entrada)} ({valor_por_extenso(entrada)})"
+        _substituir_texto(
+            pp[3],
+            "Sinal/Arras confirmatórias: R$ XX (XXX) sendo pago em boleto bancário para o dia 08/09/2026.",
+            f"Sinal/Arras confirmatórias: {entrada_fmt}.",
+        )
+        _substituir_texto(
+            pp[11],
+            "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)",
+            entrada_fmt,
+        )
+
+    qtd_parcelas = fp.get("dividido_em_parcelas") or lote.get("qtd_parcelas")
+    valor_parcela = _para_float(fp.get("valor_parcela")) or lote.get("parcela_mensal")
+    if qtd_parcelas and valor_parcela:
+        vencimento = fp.get("vencimento") or "cinco"
+        primeiro_mes = fp.get("primeiro_mes") or "-"
+        _substituir_texto(
+            pp[5],
+            "Parcelas: 100 parcelas mensais e sucessivas no valor de R$ XX (X X), vencendo a primeira em "
+            "XX/XX/XXXX e as demais todo dia cinco dos meses subsequentes.",
+            f"Parcelas: {qtd_parcelas} ({_numero_extenso(qtd_parcelas)}) parcelas mensais e sucessivas no valor "
+            f"de R$ {formatar_valor(valor_parcela)} ({valor_por_extenso(valor_parcela)}), vencendo a primeira "
+            f"em {primeiro_mes}, dia {vencimento}, e as demais todo dia {vencimento} dos meses subsequentes.",
+        )
+
+    entrega = lote.get("entrega")
+    if entrega:
+        _substituir_texto(
+            pp[7],
+            "Chave: R$ XXX  (XXX) a ser pago até 30/09/2029.",
+            f"Chave: R$ {formatar_valor(entrega)} ({valor_por_extenso(entrega)}), a ser paga na entrega das chaves.",
+        )
+
+    # --- XII. LOCAL E DATA DE CELEBRAÇÃO --------------------------------------
+    p_data = t.rows[19].cells[0].paragraphs[1]
+    _substituir_texto(
+        p_data,
+        "neste dia XX de XXX de 2026.",
+        f"neste dia {data_contrato.day} de {_MESES[data_contrato.month - 1].capitalize()} de {data_contrato.year}.",
+    )
+
+    # --- Título (número do contrato) -------------------------------------------
+    _substituir_texto(
+        doc.paragraphs[0], "CONTRATO Nº /2026", f"CONTRATO Nº {proposta.get('numero', 0):04d}/{data_contrato.year}"
+    )
+
+    # --- Assinaturas: nome e CPF do(s) comprador(es) ----------------------------
+    # Índices conferidos direto no modelo (ver conversa de 28/09); se o
+    # modelo for reeditado no Word essas posições podem mudar.
+    _substituir_texto(doc.paragraphs[341], "XXXXX", nome)
+    _substituir_texto(doc.paragraphs[342], "CPF: XXX", f"CPF: {cpf}")
+    if tem_compradora:
+        _substituir_texto(doc.paragraphs[348], "XXXX", conjuge.get("nome") or "-")
+        _substituir_texto(doc.paragraphs[349], "CPF: XXXX", f"CPF: {conjuge.get('cpf_cnpj') or '-'}")
+    else:
+        # Sem cônjuge: limpa os placeholders de exemplo do modelo em vez de
+        # deixar "XXXX" (texto de exemplo, nunca deveria ir pra um contrato
+        # de verdade) -- fica como um campo em branco de fato, igual ao
+        # resto do bloco "B – COMPRADORA" no QUADRO RESUMO.
+        _substituir_texto(doc.paragraphs[348], "XXXX", "")
+        _substituir_texto(doc.paragraphs[349], "CPF: XXXX", "CPF: ")
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()

@@ -28,7 +28,11 @@ logger = logging.getLogger(__name__)
 from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
-from ..documentos_gerados import preencher_contrato_porto_franco, preencher_recibo
+from ..documentos_gerados import (
+    preencher_contrato_porto_franco,
+    preencher_contrato_rancho_texas,
+    preencher_recibo,
+)
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..schemas import (
     AtividadeItem,
@@ -1022,7 +1026,14 @@ def gerar_contrato_proposta(
     (é o único dos dois modelos com cláusula de comissão qualificando o
     corretor -- o Rancho Texas não tem essa cláusula, mas também tem campos
     de confrontação do lote que não existem em lugar nenhum do sistema hoje;
-    fica pra depois). Pedido em 28/09.
+    fica pra depois). Atualizado em 28/09: Rancho Texas também sai pronto
+    agora -- só que sem cláusula de comissão (esse modelo não qualifica
+    corretor nenhum) e com os campos de confrontação do lote (frente/fundo/
+    laterais, áreas privativa/comum/real) deixados com os valores de
+    exemplo do modelo, porque o sistema não guarda essa medição em lugar
+    nenhum hoje; alguém completa à mão antes da assinatura. `comissao`
+    continua obrigatório no endpoint pra não duplicar a rota -- pro Rancho
+    Texas ele simplesmente não é usado.
 
     Só financeiro (admin/developer) gera, e só depois que a proposta já foi
     decidida (aprovada/enviada/aceita) -- diferente do recibo e do PDF
@@ -1063,20 +1074,21 @@ def gerar_contrato_proposta(
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
     if "rancho" in condominio_nome.lower():
-        raise HTTPException(
-            501,
-            "Geração automática do contrato do Rancho Texas ainda não está pronta -- "
-            "por enquanto só o Porto Franco. Peça pro time técnico completar essa parte.",
+        docx_bytes = preencher_contrato_rancho_texas(
+            proposta=proposta,
+            lote=lote,
+            cliente=cliente,
+            data_contrato=data_contrato,
         )
-
-    docx_bytes = preencher_contrato_porto_franco(
-        proposta=proposta,
-        lote=lote,
-        cliente=cliente,
-        corretor=proposta.get("corretor"),
-        valor_comissao=comissao,
-        data_contrato=data_contrato,
-    )
+    else:
+        docx_bytes = preencher_contrato_porto_franco(
+            proposta=proposta,
+            lote=lote,
+            cliente=cliente,
+            corretor=proposta.get("corretor"),
+            valor_comissao=comissao,
+            data_contrato=data_contrato,
+        )
     nome_arquivo = f"contrato-{lote.get('identificador', proposta_id)}.docx".replace(" ", "-")
     return Response(
         content=docx_bytes,
