@@ -6,6 +6,7 @@ proposta. Pedido em 28/09.
 """
 
 import io
+import re
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -154,11 +155,13 @@ def preencher_recibo(
         # run 9, senão duplica "reais" quando o valor tem centavos.
         corpo[8].text = f"({extenso}"
         corpo[9].text = ") do"
+        corpo[10].text = " Sr(a). "
         corpo[11].text = cliente_nome
+        corpo[12].text = ", inscrito(a) no"
         # tab esquisito do modelo original antes de "CPF N°" -- vira espaço
         # normal, sem mudar o texto/sentido.
         corpo[13].text = " CPF N°"
-        corpo[15].text = f"{cliente_cpf}, referente"
+        corpo[15].text = f"{formatar_cpf_cnpj(cliente_cpf)}, referente"
         corpo[18].text = f"{lote_numero} "
         corpo[21].text = f"{lote_quadra or '-'}."
 
@@ -170,8 +173,9 @@ def preencher_recibo(
         corpo = paragrafos[5].runs
         corpo[15].text = f"{valor_fmt} "
         corpo[17].text = extenso  # mesmo motivo do Porto Franco: sem espaço, o ")" do run 18 já vem colado
+        corpo[19].text = " do(a) SR(A). "
         corpo[20].text = cliente_nome
-        corpo[21].text = f", inscrito no CPF N° {cliente_cpf}"
+        corpo[21].text = f", inscrito(a) no CPF N° {formatar_cpf_cnpj(cliente_cpf)}"
         corpo[24].text = lote_numero
 
         data_runs = paragrafos[11].runs
@@ -192,15 +196,47 @@ def _para_float(texto: Optional[str]) -> Optional[float]:
     formatar o valor pro contrato)."""
     if not texto:
         return None
-    limpo = str(texto).strip().replace("R$", "").replace(" ", "")
-    if "," in limpo and "." in limpo:
-        limpo = limpo.replace(".", "").replace(",", ".")
-    elif "," in limpo:
-        limpo = limpo.replace(",", ".")
     try:
-        return float(limpo)
+        return float(normalizar_valor_br(str(texto)))
     except ValueError:
         return None
+
+
+def normalizar_valor_br(texto: str) -> str:
+    """'R$ 8.999,00' / '8.999' / '8999.50' / '8999,50' -> '8999.00' / '8999' /
+    '8999.50' / '8999.50' (string pronta pro float()). Ponto sozinho seguido de
+    EXATAMENTE 3 dígitos é separador de milhar no padrão brasileiro ("8.999" =
+    oito mil novecentos e noventa e nove) -- antes isso virava 8,999 e o
+    contrato do Lucas (proposta 0002) saiu com "Entrada: R$ 9,00" em vez de
+    R$ 8.999,00 (achado em 02/10)."""
+    limpo = texto.strip().replace("R$", "").replace(" ", "")
+    if "," in limpo and "." in limpo:
+        return limpo.replace(".", "").replace(",", ".")
+    if "," in limpo:
+        return limpo.replace(",", ".")
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+", limpo):
+        return limpo.replace(".", "")
+    return limpo
+
+
+def formatar_cpf_cnpj(valor: Optional[str]) -> str:
+    """Só formata quando vier só dígitos com o tamanho certo (11 = CPF,
+    14 = CNPJ); qualquer outra coisa volta como veio, sem inventar."""
+    if not valor:
+        return "-"
+    digitos = re.sub(r"\D", "", str(valor))
+    if len(digitos) == 11:
+        return f"{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}"
+    if len(digitos) == 14:
+        return f"{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:]}"
+    return str(valor).strip()
+
+
+def formatar_cep(valor: Optional[str]) -> str:
+    if not valor:
+        return "-"
+    digitos = re.sub(r"\D", "", str(valor))
+    return f"{digitos[:5]}-{digitos[5:]}" if len(digitos) == 8 else str(valor).strip()
 
 
 def _identidade(proponente: dict) -> str:
@@ -292,7 +328,7 @@ def preencher_contrato_porto_franco(
     # --- III. COMPRADOR (QUADRO RESUMO) ----------------------------------
     p = t.rows[4].cells[0].paragraphs
     nome = proponente.get("nome") or cliente.get("nome") or "-"
-    cpf = proponente.get("cpf_cnpj") or cliente.get("cpf") or "-"
+    cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(p[3], "NACIONALIDADE: ", f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}")
     _substituir_texto(p[4], "PROFISSÃO: ", f"PROFISSÃO: {proponente.get('profissao') or '-'}")
@@ -311,7 +347,7 @@ def preencher_contrato_porto_franco(
     _substituir_texto(p[11], "BAIRRO: ", f"BAIRRO: {endereco.get('bairro') or '-'}")
     _substituir_texto(p[12], " MUNICÍPIO: ", f" MUNICÍPIO: {endereco.get('cidade') or '-'}")
     _substituir_texto(p[13], " UF: ", f" UF: {endereco.get('estado') or '-'}")
-    _substituir_texto(p[14], "CEP: ", f"CEP: {endereco.get('cep') or '-'}")
+    _substituir_texto(p[14], "CEP: ", f"CEP: {formatar_cep(endereco.get('cep'))}")
 
     # --- V. OBJETIVO (lote, quadra, área) --------------------------------
     p_objetivo = t.rows[7].cells[0].paragraphs[1]
@@ -381,7 +417,7 @@ def preencher_contrato_porto_franco(
     corretor = corretor or {}
     qualificacao_corretor = corretor.get("nome") or "-"
     if corretor.get("cpf_cnpj"):
-        qualificacao_corretor += f", CPF/CNPJ {corretor['cpf_cnpj']}"
+        qualificacao_corretor += f", CPF/CNPJ {formatar_cpf_cnpj(corretor['cpf_cnpj'])}"
     if corretor.get("creci"):
         qualificacao_corretor += f", CRECI {corretor['creci']}"
     if corretor.get("banco") and corretor.get("agencia") and corretor.get("conta"):
@@ -418,6 +454,17 @@ def preencher_contrato_porto_franco(
     # direto no índice de parágrafos do modelo (ver conversa de 28/09); se o
     # modelo for reeditado no Word essa posição pode mudar.
     _substituir_texto(doc.paragraphs[314], "CPF: ", f"CPF: {cpf}")
+    # Nome do comprador acima do CPF -- o modelo trazia só "CPF:" nesse
+    # bloco (os da VENDEDORA têm nome), e o contrato saía sem dizer quem
+    # assina (achado em 02/10). O parágrafo 313 é a linha vazia entre o traço
+    # e o CPF; copia a formatação (negrito/fonte) do run do CPF.
+    p_nome = doc.paragraphs[313]
+    p_nome.alignment = doc.paragraphs[314].alignment
+    run_nome = p_nome.add_run(nome)
+    modelo = doc.paragraphs[314].runs[0]
+    run_nome.bold = modelo.bold
+    run_nome.font.size = modelo.font.size
+    run_nome.font.name = modelo.font.name
 
     buffer = io.BytesIO()
     doc.save(buffer)
@@ -470,7 +517,7 @@ def preencher_contrato_rancho_texas(
     # --- III. COMPRADOR / COMPRADORA (QUADRO RESUMO) ----------------------
     p = t.rows[4].cells[0].paragraphs
     nome = proponente.get("nome") or cliente.get("nome") or "-"
-    cpf = proponente.get("cpf_cnpj") or cliente.get("cpf") or "-"
+    cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(
         p[3], p[3].text, f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}   PROFISSÃO: {proponente.get('profissao') or '-'}"
@@ -485,7 +532,7 @@ def preencher_contrato_rancho_texas(
 
     if tem_compradora:
         nome_c = conjuge.get("nome") or "-"
-        cpf_c = conjuge.get("cpf_cnpj") or "-"
+        cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj"))
         _substituir_texto(p[8], "NOME: ", f"NOME: {nome_c}")
         _substituir_texto(
             p[9],
@@ -506,7 +553,7 @@ def preencher_contrato_rancho_texas(
         p[14],
         p[14].text,
         f"BAIRRO: {endereco.get('bairro') or '-'}   MUNICÍPIO: {endereco.get('cidade') or '-'}   "
-        f"UF: {endereco.get('estado') or '-'}   CEP: {endereco.get('cep') or '-'}",
+        f"UF: {endereco.get('estado') or '-'}   CEP: {formatar_cep(endereco.get('cep'))}",
     )
 
     # --- V. OBJETIVO (só número do lote e área total -- confrontação do
@@ -620,7 +667,7 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(doc.paragraphs[342], "CPF: XXX", f"CPF: {cpf}")
     if tem_compradora:
         _substituir_texto(doc.paragraphs[348], "XXXX", conjuge.get("nome") or "-")
-        _substituir_texto(doc.paragraphs[349], "CPF: XXXX", f"CPF: {conjuge.get('cpf_cnpj') or '-'}")
+        _substituir_texto(doc.paragraphs[349], "CPF: XXXX", f"CPF: {formatar_cpf_cnpj(conjuge.get('cpf_cnpj'))}")
     else:
         # Sem cônjuge: limpa os placeholders de exemplo do modelo em vez de
         # deixar "XXXX" (texto de exemplo, nunca deveria ir pra um contrato

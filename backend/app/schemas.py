@@ -426,11 +426,9 @@ def _parse_valor_monetario(v: Optional[str]) -> Optional[str]:
     texto = v.strip()
     if not texto:
         return None
-    limpo = texto.replace("R$", "").replace(" ", "")
-    if "," in limpo and "." in limpo:
-        limpo = limpo.replace(".", "").replace(",", ".")
-    elif "," in limpo:
-        limpo = limpo.replace(",", ".")
+    from .documentos_gerados import normalizar_valor_br  # import local: evita ciclo schemas<->pdf
+
+    limpo = normalizar_valor_br(texto)
     try:
         numero = float(limpo)
     except ValueError:
