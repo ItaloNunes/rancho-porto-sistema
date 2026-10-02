@@ -33,7 +33,12 @@ from ..documentos_gerados import (
     preencher_contrato_rancho_texas,
     preencher_recibo,
 )
+from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
+from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar
+from ..plano_pagamento import normalizar as normalizar_plano
+from ..plano_pagamento import resumo as resumo_plano
+from ..plano_pagamento import validar as validar_plano
 from ..schemas import (
     AtividadeItem,
     Cliente,
@@ -539,9 +544,24 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
             raise HTTPException(409, "Esta reserva já tem uma proposta gerada.")
 
     lote_id = reserva["lote_id"] if reserva else payload.lote_id
-    lote = sb.table("lotes").select("id, status").eq("id", lote_id).limit(1).execute().data
+    lote = sb.table("lotes").select("id, status, valor_total").eq("id", lote_id).limit(1).execute().data
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
+
+    # Plano de pagamento (formulário de 02/10): só cria a proposta se a conta
+    # fechar -- entrada obrigatória, datas válidas, entrada + parcelas + chave
+    # = valor proposto e confirmação do corretor. Mesma regra que o
+    # navegador já aplicou (frontend/src/lib/pagamento.ts); repetida aqui pra
+    # nada inconsistente chegar no banco/contrato nem por chamada direta à API.
+    fp_validado = None
+    if payload.dados_qualificacao is None:
+        raise HTTPException(422, "A forma de pagamento é obrigatória: preencha a proposta pelo formulário completo.")
+    else:
+        fp_bruto = payload.dados_qualificacao.forma_pagamento.model_dump(mode="json")
+        problemas = validar_plano(fp_bruto, payload.valor_proposto, lote[0].get("valor_total"))
+        if problemas:
+            raise HTTPException(422, " ".join(problemas))
+        fp_validado = normalizar_plano(fp_bruto)
     cliente = sb.table("clientes").select("id").eq("id", payload.cliente_id).limit(1).execute().data
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado.")
@@ -579,6 +599,12 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
     # pro Supabase gravar na coluna jsonb.
     data = payload.model_dump(mode="json", exclude={"reserva_id"})
     data["lote_id"] = lote_id
+    if fp_validado is not None:
+        data["dados_qualificacao"]["forma_pagamento"] = fp_validado
+        # resumo sempre derivado do plano -- nunca um texto solto que pode
+        # contradizer os valores (caso real: "100x de R$ 719,92" no resumo e
+        # "5x de R$ 1.798,00" nos campos da mesma proposta)
+        data["condicoes_pagamento"] = resumo_plano(fp_validado)
     if reserva is not None:
         # Mantém o dono original da reserva na proposta gerada a partir
         # dela, mesmo que seja um admin clicando "Gerar proposta" em nome
@@ -637,6 +663,13 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existente
+    fp_existente = (existente.get("dados_qualificacao") or {}).get("forma_pagamento") or {}
+    if ler_plano(fp_existente).estruturado and ({"valor_proposto", "condicoes_pagamento"} & set(updates)):
+        raise HTTPException(
+            409,
+            "Valor e condições desta proposta fazem parte do plano de pagamento conferido no formulário -- "
+            "pra mudar, cancele e gere uma nova proposta (assim o plano inteiro é conferido de novo).",
+        )
     # Qualquer edição de verdade sobe a versão — é o "carimbo" que deixa
     # claro, só de olhar o número (ex.: "0007-v2"), que aquele PDF/print em
     # mãos de alguém pode não ser mais a versão vigente da proposta. Pedido
@@ -1027,10 +1060,13 @@ def gerar_recibo_proposta(
         lote_numero=str(lote.get("lote_numero") or lote.get("identificador") or "-"),
         data=data_recibo,
     )
-    nome_arquivo = f"recibo-{lote.get('identificador', proposta_id)}.docx".replace(" ", "-")
+    # Recibo sai em PDF (pedido de 02/10) -- conversão própria, mesmo
+    # conteúdo do modelo .docx (ver app/docx_pdf.py).
+    pdf_bytes = docx_para_pdf(docx_bytes)
+    nome_arquivo = f"recibo-{lote.get('identificador', proposta_id)}.pdf".replace(" ", "-")
     return Response(
-        content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        content=pdf_bytes,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
     )
 
@@ -1095,6 +1131,20 @@ def gerar_contrato_proposta(
     if not cliente.get("cpf"):
         raise HTTPException(409, "Cliente sem CPF cadastrado -- não é possível gerar o contrato sem isso.")
 
+    # Última trava (02/10): os números que vão ser impressos no QUADRO
+    # RESUMO (entrada + parcelas + chave) têm que fechar com o preço, no
+    # centavo -- senão o contrato nem é emitido. Vale pra proposta de
+    # qualquer origem (formulário novo, antiga, qualificação pelo link).
+    fp_contrato = (proposta.get("dados_qualificacao") or {}).get("forma_pagamento") or {}
+    preco = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    problemas = conferir_contrato(fp_contrato, preco, lote)
+    if problemas:
+        raise HTTPException(
+            422,
+            "O contrato não foi gerado porque a forma de pagamento da proposta não fecha: " + " ".join(problemas)
+            + " Cancele a proposta e gere de novo pelo formulário, com os valores corretos.",
+        )
+
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
     if "rancho" in condominio_nome.lower():
         docx_bytes = preencher_contrato_rancho_texas(
@@ -1112,10 +1162,12 @@ def gerar_contrato_proposta(
             valor_comissao=comissao,
             data_contrato=data_contrato,
         )
-    nome_arquivo = f"contrato-{lote.get('identificador', proposta_id)}.docx".replace(" ", "-")
+    # Todo contrato sai em PDF (pedido de 02/10) -- ver app/docx_pdf.py.
+    pdf_bytes = docx_para_pdf(docx_bytes)
+    nome_arquivo = f"contrato-{lote.get('identificador', proposta_id)}.pdf".replace(" ", "-")
     return Response(
-        content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        content=pdf_bytes,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
     )
 
@@ -1178,6 +1230,19 @@ def atualizar_status_proposta(
         raise HTTPException(403, "Esta proposta é de outro corretor.")
     if payload.status == "aprovada" and not eh_admin(corretor):
         raise HTTPException(403, "Só um administrador pode aprovar a proposta.")
+    if payload.status == "aprovada":
+        # Trava (02/10): forma de pagamento que não fecha não vira contrato.
+        completa = sb.table("propostas").select("valor_proposto, dados_qualificacao").eq("id", proposta_id).limit(1).execute().data
+        lote_aprov = sb.table("lotes").select("valor_total, entrada, qtd_parcelas, parcela_mensal, entrega").eq("id", existente["lote_id"]).limit(1).execute().data
+        if completa:
+            fp_aprov = (completa[0].get("dados_qualificacao") or {}).get("forma_pagamento") or {}
+            problemas = problemas_para_aprovar(fp_aprov, completa[0].get("valor_proposto"), lote_aprov[0] if lote_aprov else None)
+            if problemas:
+                raise HTTPException(
+                    422,
+                    "Não dá pra aprovar esta proposta: " + " ".join(problemas) + " Cancele e gere a proposta de "
+                    "novo pelo formulário, com a forma de pagamento correta.",
+                )
     atualizado = sb.table("propostas").update({"status": payload.status}).eq("id", proposta_id).execute().data[
         0
     ]

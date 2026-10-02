@@ -406,7 +406,21 @@ export interface FormaPagamentoDados {
   intercaladas_valor?: string | null;
   intercaladas_vencimento_dia?: string | null;
   observacoes?: string | null;
+  // --- Plano estruturado (formulário de 02/10 — ver lib/pagamento.ts) ---
+  avista_meio?: MeioPagamento | null;
+  avista_data?: string | null; // AAAA-MM-DD
+  sinal_forma?: "unica" | "parcelada" | null;
+  sinal_parcelas?: number | null;
+  sinal_valor_parcela?: string | null; // calculado pelo servidor
+  sinal_meio?: MeioPagamento | null;
+  sinal_vencimento?: string | null; // AAAA-MM-DD
+  chave_valor?: string | null;
+  chave_vencimento?: string | null; // AAAA-MM-DD
+  confirma_valor_fora_tabela?: boolean | null;
+  confirmado?: boolean | null;
 }
+
+export type MeioPagamento = "pix" | "transferencia" | "boleto" | "cheque" | "dinheiro";
 
 export type EnderecoCorrespondencia = "residencial" | "comercial";
 

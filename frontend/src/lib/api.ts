@@ -556,7 +556,8 @@ export const api = {
   // backend/app/routers/crm.py::gerar_relatorio_completo. Mesma ausência de
   // "pdf" na URL, pelo mesmo motivo (bloqueador de anúncio/rastreador).
   gerarRelatorioCompletoProposta: (id: string) => requestBlob(`/crm/propostas/${id}/documento-completo`),
-  // Recibo (modelo .docx da imobiliária, ver backend/app/documentos_gerados.py)
+  // Recibo e contrato saem em PDF (modelos .docx da imobiliária convertidos no
+  // servidor, ver backend/app/documentos_gerados.py e docx_pdf.py)
   // do valor efetivamente recebido do cliente — um recibo por pagamento, não
   // por proposta, por isso "valor" e "data" são passados na hora de gerar
   // (não vêm salvos em lugar nenhum). Só financeiro (admin/developer).

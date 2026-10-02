@@ -5,6 +5,7 @@ de exemplo do modelo (nome, CPF, valor, lote, data...) pelos dados reais da
 proposta. Pedido em 28/09.
 """
 
+import copy
 import io
 import re
 from datetime import date
@@ -18,6 +19,14 @@ import docx
 # proposta completa (gerar_proposta_pdf) -- mesma fonte de dados
 # (dados_qualificacao), sem duplicar a lógica.
 from .pdf import ESTADO_CIVIL_LABEL, _fmt_data_livre
+from .plano_pagamento import (  # noqa: F401 -- normalizar_valor_br reexportado
+    MEIOS_PAGAMENTO,
+    dividir_em_parcelas,
+    fmt_data,
+    ler_plano,
+    valores_contrato,
+    normalizar_valor_br,
+)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates" / "contratos"
 
@@ -80,6 +89,18 @@ def _numero_extenso(n: int) -> str:
     if resto:
         partes.append(_grupo_extenso(resto))
     return " ".join(p for p in partes if p)
+
+
+def _numero_extenso_feminino(n: int) -> str:
+    """Contagem de parcelas ("duas parcelas", "uma parcela", "duzentas
+    parcelas") -- mesmo extenso, só que concordando com o substantivo
+    feminino."""
+    texto = _numero_extenso(n)
+    for masc, fem in (("um", "uma"), ("dois", "duas"), ("duzentos", "duzentas"), ("trezentos", "trezentas"),
+                      ("quatrocentos", "quatrocentas"), ("quinhentos", "quinhentas"), ("seiscentos", "seiscentas"),
+                      ("setecentos", "setecentas"), ("oitocentos", "oitocentas"), ("novecentos", "novecentas")):
+        texto = re.sub(rf"\b{masc}\b(?! (mil|milhão|milhões|bilhão|bilhões)\b)", fem, texto)
+    return texto
 
 
 def _talvez_de(n: int) -> str:
@@ -202,23 +223,6 @@ def _para_float(texto: Optional[str]) -> Optional[float]:
         return None
 
 
-def normalizar_valor_br(texto: str) -> str:
-    """'R$ 8.999,00' / '8.999' / '8999.50' / '8999,50' -> '8999.00' / '8999' /
-    '8999.50' / '8999.50' (string pronta pro float()). Ponto sozinho seguido de
-    EXATAMENTE 3 dígitos é separador de milhar no padrão brasileiro ("8.999" =
-    oito mil novecentos e noventa e nove) -- antes isso virava 8,999 e o
-    contrato do Lucas (proposta 0002) saiu com "Entrada: R$ 9,00" em vez de
-    R$ 8.999,00 (achado em 02/10)."""
-    limpo = texto.strip().replace("R$", "").replace(" ", "")
-    if "," in limpo and "." in limpo:
-        return limpo.replace(".", "").replace(",", ".")
-    if "," in limpo:
-        return limpo.replace(",", ".")
-    if re.fullmatch(r"\d{1,3}(\.\d{3})+", limpo):
-        return limpo.replace(".", "")
-    return limpo
-
-
 def formatar_cpf_cnpj(valor: Optional[str]) -> str:
     """Só formata quando vier só dígitos com o tamanho certo (11 = CPF,
     14 = CNPJ); qualquer outra coisa volta como veio, sem inventar."""
@@ -260,6 +264,69 @@ def _endereco_completo(endereco: dict) -> str:
     if complemento:
         linha = f"{linha} - {complemento}" if linha else complemento
     return linha or "-"
+
+
+def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
+    """Textos da forma de pagamento pros dois contratos, montados a partir
+    do plano da proposta (app/plano_pagamento.py). Proposta antiga (sem o
+    plano estruturado do formulário de 02/10) continua caindo pros valores
+    de tabela do lote, como antes."""
+    plano = ler_plano(fp)
+    out: dict = {"a_vista": bool(plano.a_vista)}
+
+    def brl(v: float) -> str:
+        return f"R$ {formatar_valor(v)} ({valor_por_extenso(v)})"
+
+    if plano.a_vista:
+        meio = MEIOS_PAGAMENTO.get(plano.avista_meio or "")
+        out["entrada"] = brl(valor_total)
+        compl = ", correspondente ao pagamento à vista do preço"
+        if meio:
+            compl += f", via {meio}"
+        if plano.avista_data:
+            compl += f", em {fmt_data(plano.avista_data)}"
+        out["entrada_compl_pf"] = out["entrada_compl_rt"] = compl
+        out["parcelas"] = None
+        out["chave_valor"] = 0.0
+        out["chave_data"] = None
+        return out
+
+    v = valores_contrato(fp, lote)  # mesmos números que conferir_contrato confere
+    entrada = v.entrada
+    out["entrada"] = brl(entrada) if entrada else None
+    compl_pf = compl_rt = ""
+    if plano.estruturado and entrada:
+        meio = MEIOS_PAGAMENTO.get(plano.entrada_meio or "", "")
+        data_txt = fmt_data(plano.entrada_data)
+        if plano.entrada_forma == "parcelada" and plano.entrada_parcelas > 1:
+            n = plano.entrada_parcelas
+            valores = dividir_em_parcelas(entrada, n)
+            if len(set(valores)) == 1:
+                parcelas_txt = f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais de {brl(valores[0])} cada"
+            else:
+                k = valores.count(valores[0])
+                parcelas_txt = (f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais, {k} ({_numero_extenso_feminino(k)}) "
+                                f"de {brl(valores[0])} e {n - k} ({_numero_extenso_feminino(n - k)}) de {brl(valores[-1])}")
+            compl_pf = (f", paga em {parcelas_txt}, via {meio}, vencendo a primeira em {data_txt} e as demais no "
+                        "mesmo dia dos meses subsequentes")
+            compl_rt = (f" sendo pago em {parcelas_txt}, via {meio}, a primeira para o dia {data_txt} e as demais "
+                        "no mesmo dia dos meses subsequentes")
+        else:
+            compl_pf = f", paga via {meio} em {data_txt}"
+            compl_rt = f" sendo pago via {meio} para o dia {data_txt}"
+    out["entrada_compl_pf"], out["entrada_compl_rt"] = compl_pf, compl_rt
+
+    qtd = v.parcelas
+    vparc = v.parcela_valor
+    if qtd and vparc:
+        primeira = fmt_data(v.primeira_parcela) if v.primeira_parcela else (v.primeira_parcela_texto or None)
+        dia = plano.dia_vencimento
+        out["parcelas"] = {"qtd": int(qtd), "valor": vparc, "primeira": primeira, "dia": dia}
+    else:
+        out["parcelas"] = None
+    out["chave_valor"] = v.chave
+    out["chave_data"] = plano.chave_data
+    return out
 
 
 def _substituir_texto(paragrafo, velho: str, novo: str) -> None:
@@ -369,45 +436,41 @@ def preencher_contrato_porto_franco(
     )
 
     # --- VII. FORMA DE PAGAMENTO -------------------------------------------
+    # Textos vêm do plano da proposta (entrada com forma/meio/data, parcelas
+    # com a data da 1ª, chave) -- só preenchem os rótulos em branco do
+    # modelo, o texto jurídico em volta não muda.
     pp = t.rows[11].cells[0].paragraphs
-
-    # Prioriza a forma de pagamento negociada nesta proposta específica
-    # (dados_qualificacao.forma_pagamento); só cai pro plano padrão do lote
-    # se a qualificação não tiver esse detalhamento.
-    entrada = _para_float(fp.get("sinal")) or lote.get("entrada")
-    if entrada:
+    tp = _textos_pagamento(fp, lote, valor_total)
+    if tp["entrada"]:
         _substituir_texto(
             pp[3],
             "Entrada / Arras confirmatórias: ",
-            f"Entrada / Arras confirmatórias: R$ {formatar_valor(entrada)} ({valor_por_extenso(entrada)})",
+            f"Entrada / Arras confirmatórias: {tp['entrada']}{tp['entrada_compl_pf']}",
         )
-
-    qtd_parcelas = fp.get("dividido_em_parcelas") or lote.get("qtd_parcelas")
-    valor_parcela = _para_float(fp.get("valor_parcela")) or lote.get("parcela_mensal")
-    if qtd_parcelas and valor_parcela:
+    if tp["a_vista"]:
+        _substituir_texto(pp[5], "Parcelas mensais", "Parcelas mensais: não há (pagamento à vista).")
+    elif tp["parcelas"]:
+        pc = tp["parcelas"]
         texto_parcelas = (
-            f"{qtd_parcelas} ({_numero_extenso(qtd_parcelas)}) parcelas mensais e sucessivas de "
-            f"R$ {formatar_valor(valor_parcela)} ({valor_por_extenso(valor_parcela)}) cada"
+            f"{pc['qtd']} ({_numero_extenso_feminino(pc['qtd'])}) parcelas mensais e sucessivas de "
+            f"R$ {formatar_valor(pc['valor'])} ({valor_por_extenso(pc['valor'])}) cada"
         )
-        vencimento, primeiro_mes = fp.get("vencimento"), fp.get("primeiro_mes")
-        if vencimento or primeiro_mes:
-            # "vencimento" é só o dia (campo "Dia de vencimento" do
-            # formulário) e "primeiro_mes" é texto livre pro mês/ano (campo
-            # "1ª parcela em") -- concatenar com "/" (ex.: "5/outubro/2026")
-            # lia estranho; mesma frase clara já usada no Rancho Texas
-            # (revisão de 28/09).
+        if pc["primeira"] or pc["dia"]:
             texto_parcelas += (
-                f", vencendo a primeira em {primeiro_mes or '-'}, dia {vencimento or '-'}, "
+                f", vencendo a primeira em {pc['primeira'] or '-'}, dia {pc['dia'] or '-'}, "
                 "e as demais no mesmo dia dos meses subsequentes"
             )
         _substituir_texto(pp[5], "Parcelas mensais", f"Parcelas mensais: {texto_parcelas}.")
 
-    entrega = lote.get("entrega")
-    if entrega:
+    if tp["a_vista"] or tp["chave_valor"] == 0:
+        _substituir_texto(pp[7], "Chave: ", "Chave: não há" + (" (pagamento à vista)." if tp["a_vista"] else "."))
+    elif tp["chave_valor"]:
+        chave = tp["chave_valor"]
+        prazo = f", até {fmt_data(tp['chave_data'])}" if tp["chave_data"] else ""
         _substituir_texto(
             pp[7],
             "Chave: ",
-            f"Chave: R$ {formatar_valor(entrega)} ({valor_por_extenso(entrega)}), a ser paga na entrega das chaves.",
+            f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves{prazo}.",
         )
 
     # DA COMISSÃO DE CORRETAGEM -- corretor responsável pela venda,
@@ -461,10 +524,12 @@ def preencher_contrato_porto_franco(
     p_nome = doc.paragraphs[313]
     p_nome.alignment = doc.paragraphs[314].alignment
     run_nome = p_nome.add_run(nome)
-    modelo = doc.paragraphs[314].runs[0]
-    run_nome.bold = modelo.bold
-    run_nome.font.size = modelo.font.size
-    run_nome.font.name = modelo.font.name
+    # mesma formatação (fonte do tema, negrito, tamanho) do "CPF:" logo
+    # abaixo -- copia o rPr inteiro; copiar só font.name perdia a fonte de
+    # tema (Calibri) e o nome saía em Arial.
+    rpr_modelo = doc.paragraphs[314].runs[0]._r.rPr
+    if rpr_modelo is not None:
+        run_nome._r.insert(0, copy.deepcopy(rpr_modelo))
 
     buffer = io.BytesIO()
     doc.save(buffer)
@@ -566,6 +631,26 @@ def preencher_contrato_rancho_texas(
         f"LOTE Nº {lote.get('lote_numero', '-')}, com área total de {area_fmt} m²,",
     )
 
+    # Confrontações: o modelo traz as medidas de OUTRO lote como exemplo
+    # (720,55m², Alameda Georgia, lote 82...). Com o contrato saindo em PDF
+    # (02/10) ninguém mais edita o arquivo antes de assinar, então o exemplo
+    # sairia impresso como se fosse deste lote. Troca só os NÚMEROS/nomes de
+    # exemplo por linhas em branco pra preencher à mão -- a estrutura do
+    # texto do modelo fica igual.
+    confrontacoes = t.rows[7].cells[0].paragraphs
+    linha = "__________"
+    for idx, exemplo, em_branco in (
+        (2, "Área privativa: 720,55m², Área comum: 556,16m² e Área real: 1.276,71m²",
+         f"Área privativa: {linha}m², Área comum: {linha}m² e Área real: {linha}m²"),
+        (3, "17,57m de frente com a Alameda Georgia", f"{linha}m de frente com {linha}{linha}"),
+        (4, "16,25m de fundo com o lote 82 + 4,48m com o lote 81", f"{linha}m de fundo com {linha}{linha}"),
+        (5, "37,14m de comprimento pelo lado direito com o lote 70",
+         f"{linha}m de comprimento pelo lado direito com {linha}{linha}"),
+        (6, "38,04m de comprimento pelo lado esquerdo com o lote 72",
+         f"{linha}m de comprimento pelo lado esquerdo com {linha}{linha}"),
+    ):
+        _substituir_texto(confrontacoes[idx], exemplo, em_branco)
+
     # --- VI. PREÇO ----------------------------------------------------------
     valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
     p_preco = t.rows[9].cells[0].paragraphs[1]
@@ -587,65 +672,47 @@ def preencher_contrato_rancho_texas(
     # sem qualificação completa geravam contrato com a data 08/09/2026 e o
     # valor de exemplo ainda dentro do texto).
     pp = t.rows[11].cells[0].paragraphs
-    entrada = _para_float(fp.get("sinal")) or lote.get("entrada")
-    if entrada:
-        entrada_fmt = f"R$ {formatar_valor(entrada)} ({valor_por_extenso(entrada)})"
-        _substituir_texto(
-            pp[3],
-            "Sinal/Arras confirmatórias: R$ XX (XXX) sendo pago em boleto bancário para o dia 08/09/2026.",
-            f"Sinal/Arras confirmatórias: {entrada_fmt}.",
-        )
-        _substituir_texto(
-            pp[11],
-            "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)",
-            entrada_fmt,
-        )
+    tp = _textos_pagamento(fp, lote, valor_total)
+    sinal_modelo = "Sinal/Arras confirmatórias: R$ XX (XXX) sendo pago em boleto bancário para o dia 08/09/2026."
+    arras_modelo = "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)"
+    if tp["entrada"]:
+        _substituir_texto(pp[3], sinal_modelo, f"Sinal/Arras confirmatórias: {tp['entrada']}{tp['entrada_compl_rt']}.")
+        _substituir_texto(pp[11], arras_modelo, tp["entrada"])
     else:
-        _substituir_texto(
-            pp[3],
-            "Sinal/Arras confirmatórias: R$ XX (XXX) sendo pago em boleto bancário para o dia 08/09/2026.",
-            "Sinal/Arras confirmatórias: -.",
-        )
-        _substituir_texto(
-            pp[11],
-            "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)",
-            "-",
-        )
+        _substituir_texto(pp[3], sinal_modelo, "Sinal/Arras confirmatórias: -.")
+        _substituir_texto(pp[11], arras_modelo, "-")
 
-    qtd_parcelas = fp.get("dividido_em_parcelas") or lote.get("qtd_parcelas")
-    valor_parcela = _para_float(fp.get("valor_parcela")) or lote.get("parcela_mensal")
-    if qtd_parcelas and valor_parcela:
-        vencimento = fp.get("vencimento") or "-"
-        primeiro_mes = fp.get("primeiro_mes") or "-"
+    parcelas_modelo = (
+        "Parcelas: 100 parcelas mensais e sucessivas no valor de R$ XX (X X), vencendo a primeira em "
+        "XX/XX/XXXX e as demais todo dia cinco dos meses subsequentes."
+    )
+    if tp["a_vista"]:
+        _substituir_texto(pp[5], parcelas_modelo, "Parcelas: não há (pagamento à vista).")
+    elif tp["parcelas"]:
+        pc = tp["parcelas"]
+        dia = pc["dia"] or "-"
         _substituir_texto(
             pp[5],
-            "Parcelas: 100 parcelas mensais e sucessivas no valor de R$ XX (X X), vencendo a primeira em "
-            "XX/XX/XXXX e as demais todo dia cinco dos meses subsequentes.",
-            f"Parcelas: {qtd_parcelas} ({_numero_extenso(qtd_parcelas)}) parcelas mensais e sucessivas no valor "
-            f"de R$ {formatar_valor(valor_parcela)} ({valor_por_extenso(valor_parcela)}), vencendo a primeira "
-            f"em {primeiro_mes}, dia {vencimento}, e as demais todo dia {vencimento} dos meses subsequentes.",
+            parcelas_modelo,
+            f"Parcelas: {pc['qtd']} ({_numero_extenso_feminino(pc['qtd'])}) parcelas mensais e sucessivas no valor "
+            f"de R$ {formatar_valor(pc['valor'])} ({valor_por_extenso(pc['valor'])}), vencendo a primeira "
+            f"em {pc['primeira'] or '-'}, dia {dia}, e as demais todo dia {dia} dos meses subsequentes.",
         )
     else:
-        _substituir_texto(
-            pp[5],
-            "Parcelas: 100 parcelas mensais e sucessivas no valor de R$ XX (X X), vencendo a primeira em "
-            "XX/XX/XXXX e as demais todo dia cinco dos meses subsequentes.",
-            "Parcelas: -.",
-        )
+        _substituir_texto(pp[5], parcelas_modelo, "Parcelas: -.")
 
-    entrega = lote.get("entrega")
-    if entrega:
-        _substituir_texto(
-            pp[7],
-            "Chave: R$ XXX  (XXX) a ser pago até 30/09/2029.",
-            f"Chave: R$ {formatar_valor(entrega)} ({valor_por_extenso(entrega)}), a ser paga na entrega das chaves.",
-        )
+    chave_modelo = "Chave: R$ XXX  (XXX) a ser pago até 30/09/2029."
+    if tp["a_vista"] or tp["chave_valor"] == 0:
+        _substituir_texto(pp[7], chave_modelo, "Chave: não há" + (" (pagamento à vista)." if tp["a_vista"] else "."))
+    elif tp["chave_valor"]:
+        chave = tp["chave_valor"]
+        if tp["chave_data"]:
+            texto_chave = f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}) a ser pago até {fmt_data(tp['chave_data'])}."
+        else:
+            texto_chave = f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves."
+        _substituir_texto(pp[7], chave_modelo, texto_chave)
     else:
-        _substituir_texto(
-            pp[7],
-            "Chave: R$ XXX  (XXX) a ser pago até 30/09/2029.",
-            "Chave: -.",
-        )
+        _substituir_texto(pp[7], chave_modelo, "Chave: -.")
 
     # --- XII. LOCAL E DATA DE CELEBRAÇÃO --------------------------------------
     p_data = t.rows[19].cells[0].paragraphs[1]

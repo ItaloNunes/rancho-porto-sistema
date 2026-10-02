@@ -14,6 +14,8 @@ from typing import Optional
 
 from fpdf import FPDF
 
+from .plano_pagamento import MEIOS_PAGAMENTO, fmt_brl, fmt_data, ler_plano
+
 logger = logging.getLogger(__name__)
 
 LOGO_PATH = Path(__file__).parent / "assets" / "castel-logo.png"
@@ -488,16 +490,48 @@ def gerar_proposta_pdf(
 
     pdf.campo_titulo("Forma de pagamento")
     a_vista = fp.get("a_vista")
+    plano = ler_plano(fp)
     if dq:
         pdf.campo_grade(
             ("À vista", _checkbox_linha(["Sim", "Não"], "Sim" if a_vista else ("Não" if a_vista is False else None)), 1),
-            ("Renda informada", fp.get("renda") or "-", 1),
+            ("Renda informada", f"R$ {fmt_brl(plano.renda)}" if plano.renda else (fp.get("renda") or "-"), 1),
         )
     pdf.campo_grade(
         ("Valor de tabela do lote", _fmt_money(lote.get("valor_total")), 1),
         ("Valor proposto", _fmt_money(proposta.get("valor_proposto") or fp.get("valor_proposto")), 1),
     )
-    if a_vista is False:
+    if plano.estruturado and a_vista:
+        pdf.campo_grade(
+            ("Pagamento à vista via", MEIOS_PAGAMENTO.get(plano.avista_meio or "", "-"), 1),
+            ("Data do pagamento", fmt_data(plano.avista_data), 1),
+        )
+    elif plano.estruturado and a_vista is False:
+        if plano.entrada_forma == "parcelada" and plano.entrada_parcelas > 1:
+            forma_entrada = f"Parcelada: {plano.entrada_parcelas}x de R$ {fmt_brl(plano.entrada_valores[0])}"
+            data_rot = "1ª parcela da entrada em"
+        else:
+            forma_entrada = "Pagamento único"
+            data_rot = "Entrada paga em"
+        pdf.campo_grade(
+            ("Entrada (sinal/arras)", f"R$ {fmt_brl(plano.entrada)}", 1),
+            ("Forma da entrada", forma_entrada, 1),
+        )
+        pdf.campo_grade(
+            ("Entrada paga via", MEIOS_PAGAMENTO.get(plano.entrada_meio or "", "-"), 1),
+            (data_rot, fmt_data(plano.entrada_data), 1),
+            ("Banco/Agência", " / ".join(p for p in [fp.get("sinal_banco"), fp.get("sinal_agencia")] if p) or "-", 1),
+        )
+        pdf.campo_grade(
+            ("Parcelas mensais", f"{plano.parcelas}x de R$ {fmt_brl(plano.parcela_valor)}", 1),
+            ("1ª parcela em", fmt_data(plano.primeira_parcela), 1),
+            ("Dia de vencimento", plano.dia_vencimento or "-", 1),
+        )
+        pdf.campo_grade(
+            ("Chave (entrega)", f"R$ {fmt_brl(plano.chave)}" if plano.chave else "Não há", 1),
+            ("Total conferido (entrada + parcelas + chave)", f"R$ {fmt_brl(plano.total_calculado)}", 2),
+        )
+    elif a_vista is False:
+        # proposta antiga (antes do formulário de 02/10): campos como vieram
         if fp.get("sinal") or fp.get("sinal_banco"):
             pdf.campo_grade(
                 ("Sinal", fp.get("sinal") or "-", 1),
@@ -506,7 +540,7 @@ def gerar_proposta_pdf(
         pdf.campo_grade(
             ("Dividido em parcelas de", f"{fp['dividido_em_parcelas']}x de {fp.get('valor_parcela') or '-'}" if fp.get("dividido_em_parcelas") else "-", 1),
             ("Vencimento", fp.get("vencimento") or "-", 1),
-            ("1ª parcela em", fp.get("primeiro_mes") or "-", 1),
+            ("1ª parcela em", _fmt_data_livre(fp.get("primeiro_mes")), 1),
         )
         if fp.get("intercaladas_valor") or fp.get("intercaladas_vencimento_dia"):
             pdf.campo_grade(

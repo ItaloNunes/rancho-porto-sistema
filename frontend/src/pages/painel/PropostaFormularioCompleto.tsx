@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../../components/qualificacaoCampos";
+import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPagamento";
 import { api, prewarmBackend } from "../../lib/api";
+import { fmtBRL, fmtData, lerPlano, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, QualificacaoDados, ReservaComLote } from "../../types";
 
@@ -67,13 +69,13 @@ export default function PropostaFormularioCompleto({
       telefone_celular: reservaOrigem.contato ?? null,
     };
   });
-  const [condicoesPagamento, setCondicoesPagamento] = useState("");
   const [passo, setPasso] = useState(0);
   // "Cadastro rápido": o corretor quer garantir o lote com só nome + lote
   // agora, sem parar pra digitar documentos, estado civil, endereço e
   // telefone — esses campos ficam opcionais enquanto isso estiver marcado.
-  // Profissão, renda e valor proposto continuam obrigatórios (são os únicos
-  // dados que sobram além de nome + lote, ver validarPasso abaixo).
+  // Profissão e a forma de pagamento COMPLETA (valor, entrada, parcelas,
+  // conferência) continuam obrigatórias mesmo assim — é o que vai pro
+  // contrato (pedido de 02/10), ver validarPasso abaixo.
   const [modoRapido, setModoRapido] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -109,6 +111,30 @@ export default function PropostaFormularioCompleto({
   }, [lotes, condominioSlug, reservaOrigem]);
 
   const loteSelecionado = lotes.find((l) => l.id === loteId) ?? null;
+
+  /** Trocar de lote invalida o plano montado pro lote anterior (outro preço,
+   * outro plano de tabela): zera os valores e as confirmações — a etapa de
+   * pagamento traz o plano de tabela do lote novo e o corretor confere de
+   * novo. Meios e datas já escolhidos ficam. */
+  function trocarLote(id: string) {
+    if (id !== loteId) {
+      setDados((d) => ({
+        ...d,
+        forma_pagamento: {
+          ...d.forma_pagamento,
+          valor_proposto: null,
+          sinal: null,
+          sinal_valor_parcela: null,
+          dividido_em_parcelas: null,
+          valor_parcela: null,
+          chave_valor: null,
+          confirmado: false,
+          confirma_valor_fora_tabela: false,
+        },
+      }));
+    }
+    setLoteId(id);
+  }
   const casado = dados.estado_civil === "casado";
 
   function validarEndereco(e: QualificacaoDados["endereco_residencial"], rotulo: string): string | null {
@@ -163,20 +189,22 @@ export default function PropostaFormularioCompleto({
       if (!dados.telefone_celular?.trim()) return "Informe um telefone celular pra contato.";
     }
     if (p === 6) {
-      const fp = dados.forma_pagamento;
-      if (fp.a_vista === null || fp.a_vista === undefined) return "Selecione se o pagamento é à vista.";
-      if (!fp.renda?.trim()) return "Informe a renda informada.";
-      if (!fp.valor_proposto || fp.valor_proposto <= 0) return "Informe o valor proposto.";
-      if (fp.a_vista === false) {
-        if (!fp.dividido_em_parcelas || fp.dividido_em_parcelas <= 0) return "Informe em quantas parcelas será dividido.";
-        if (!fp.valor_parcela?.trim()) return "Informe o valor de cada parcela.";
-      }
+      // Plano de pagamento inteiro (mesmas regras do servidor, ver
+      // lib/pagamento.ts): entrada obrigatória com forma/meio/data, datas
+      // válidas e entrada + parcelas + chave = valor proposto.
+      const problemas = validarPlano(dados.forma_pagamento, loteSelecionado?.valor_total, false);
+      if (problemas.length) return problemas.join("\n");
+    }
+    if (p === 7) {
+      // Dupla confirmação (checkboxes da revisão).
+      const problemas = validarPlano(dados.forma_pagamento, loteSelecionado?.valor_total, true);
+      if (problemas.length) return problemas.join("\n");
     }
     return null;
   }
 
   function validarTudo(): { passo: number; msg: string } | null {
-    for (let p = 0; p <= 6; p++) {
+    for (let p = 0; p <= 7; p++) {
       const msg = validarPasso(p);
       if (msg) return { passo: p, msg };
     }
@@ -233,9 +261,10 @@ export default function PropostaFormularioCompleto({
         lote_id: loteId,
         cliente_id: clienteId,
         valor_proposto: dados.forma_pagamento.valor_proposto!,
-        condicoes_pagamento: condicoesPagamento.trim() || null,
+        // resumo sempre derivado do plano (o servidor regrava igual)
+        condicoes_pagamento: resumoPlano(dados.forma_pagamento),
         observacoes: dados.forma_pagamento.observacoes || null,
-        dados_qualificacao: dados,
+        dados_qualificacao: { ...dados, forma_pagamento: planoParaEnvio(dados.forma_pagamento) },
         reserva_id: reservaOrigem?.id,
       });
       onSalvo();
@@ -283,7 +312,7 @@ export default function PropostaFormularioCompleto({
                       value={condominioSlug}
                       onChange={(e) => {
                         setCondominioSlug(e.target.value);
-                        setLoteId("");
+                        trocarLote("");
                       }}
                     >
                       <option value="">Todos os empreendimentos</option>
@@ -296,7 +325,7 @@ export default function PropostaFormularioCompleto({
                   </Field>
                 )}
                 <Field label="Lote *">
-                  <LoteCombobox key={condominioSlug} lotes={lotesDoEmpreendimento} value={loteId} onChange={setLoteId} />
+                  <LoteCombobox key={condominioSlug} lotes={lotesDoEmpreendimento} value={loteId} onChange={trocarLote} />
                 </Field>
                 {loteSelecionado?.valor_total != null && (
                   <p className="text-xs text-ink-soft -mt-1">
@@ -319,8 +348,8 @@ export default function PropostaFormularioCompleto({
               />
               <span>
                 <span className="font-semibold">Cadastro rápido</span> — garantir o lote só com nome e lote agora, sem
-                documentos. Estado civil, endereço e telefone também ficam opcionais; só profissão, renda e valor
-                proposto continuam obrigatórios.
+                documentos. Estado civil, endereço e telefone também ficam opcionais; profissão e a forma de
+                pagamento completa (valor, entrada, parcelas) continuam obrigatórias.
               </span>
             </label>
             <Field label="Nome completo *">
@@ -580,136 +609,27 @@ export default function PropostaFormularioCompleto({
         )}
 
         {passo === 6 && (
-          <>
-            <Field label="Pagamento à vista? *">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className={`btn flex-1 !py-2 ${dados.forma_pagamento.a_vista === true ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, a_vista: true } })}
-                >
-                  Sim
-                </button>
-                <button
-                  type="button"
-                  className={`btn flex-1 !py-2 ${dados.forma_pagamento.a_vista === false ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, a_vista: false } })}
-                >
-                  Não
-                </button>
-              </div>
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Renda informada *">
-                <input
-                  className="input"
-                  value={dados.forma_pagamento.renda ?? ""}
-                  onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, renda: e.target.value } })}
-                />
-              </Field>
-              <Field label="Valor proposto (R$) *">
-                <input
-                  className="input"
-                  type="number"
-                  step="0.01"
-                  value={dados.forma_pagamento.valor_proposto ?? ""}
-                  onChange={(e) =>
-                    setDados({
-                      ...dados,
-                      forma_pagamento: {
-                        ...dados.forma_pagamento,
-                        valor_proposto: e.target.value ? Number(e.target.value) : null,
-                      },
-                    })
-                  }
-                />
-              </Field>
-            </div>
-            {dados.forma_pagamento.a_vista === false && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Sinal (R$)">
-                    <input
-                      className="input"
-                      value={dados.forma_pagamento.sinal ?? ""}
-                      onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, sinal: e.target.value } })}
-                    />
-                  </Field>
-                  <Field label="Banco/Agência do sinal">
-                    <input
-                      className="input"
-                      value={dados.forma_pagamento.sinal_banco ?? ""}
-                      onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, sinal_banco: e.target.value } })}
-                    />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Dividido em quantas parcelas *">
-                    <input
-                      className="input"
-                      type="number"
-                      value={dados.forma_pagamento.dividido_em_parcelas ?? ""}
-                      onChange={(e) =>
-                        setDados({
-                          ...dados,
-                          forma_pagamento: {
-                            ...dados.forma_pagamento,
-                            dividido_em_parcelas: e.target.value ? Number(e.target.value) : null,
-                          },
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="Valor de cada parcela *">
-                    <input
-                      className="input"
-                      value={dados.forma_pagamento.valor_parcela ?? ""}
-                      onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, valor_parcela: e.target.value } })}
-                    />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Dia de vencimento">
-                    <input
-                      className="input"
-                      value={dados.forma_pagamento.vencimento ?? ""}
-                      onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, vencimento: e.target.value } })}
-                    />
-                  </Field>
-                  <Field label="1ª parcela em">
-                    <input
-                      className="input"
-                      value={dados.forma_pagamento.primeiro_mes ?? ""}
-                      onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, primeiro_mes: e.target.value } })}
-                    />
-                  </Field>
-                </div>
-              </>
-            )}
-            <Field label="Condições de pagamento (resumo)">
-              <input
-                className="input"
-                placeholder="Ex.: 60x de R$ 2.250,00"
-                value={condicoesPagamento}
-                onChange={(e) => setCondicoesPagamento(e.target.value)}
-              />
-            </Field>
-            <Field label="Observações">
-              <textarea
-                className="input"
-                rows={3}
-                value={dados.forma_pagamento.observacoes ?? ""}
-                onChange={(e) => setDados({ ...dados, forma_pagamento: { ...dados.forma_pagamento, observacoes: e.target.value } })}
-              />
-            </Field>
-          </>
+          <FormaPagamentoEtapa
+            fp={dados.forma_pagamento}
+            lote={loteSelecionado}
+            onChange={(fp) => setDados((d) => ({ ...d, forma_pagamento: fp }))}
+          />
         )}
 
         {passo === 7 && (
-          <Revisao dados={dados} lote={loteSelecionado} condicoesPagamento={condicoesPagamento} modoRapido={modoRapido} />
+          <Revisao
+            dados={dados}
+            lote={loteSelecionado}
+            modoRapido={modoRapido}
+            onChangePagamento={(fp) => setDados((d) => ({ ...d, forma_pagamento: fp }))}
+          />
         )}
 
-        {erro && <p className="text-rust text-sm">{erro}</p>}
+        {erro && (
+          <p id="proposta-erro" className="text-rust text-sm whitespace-pre-line">
+            {erro}
+          </p>
+        )}
 
         <div className="flex gap-3 mt-1">
           {passo > 0 && (
@@ -722,7 +642,12 @@ export default function PropostaFormularioCompleto({
               Próximo
             </button>
           ) : (
-            <button className="btn btn-primary flex-1" onClick={criar} disabled={salvando}>
+            <button
+              className="btn btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={criar}
+              disabled={salvando || !dados.forma_pagamento.confirmado}
+              title={!dados.forma_pagamento.confirmado ? "Marque a confirmação dos valores acima" : undefined}
+            >
               {salvando ? "Criando..." : "Criar proposta"}
             </button>
           )}
@@ -739,14 +664,27 @@ function formatMoneySimples(v: number): string {
 function Revisao({
   dados,
   lote,
-  condicoesPagamento,
   modoRapido,
+  onChangePagamento,
 }: {
   dados: QualificacaoDados;
   lote: LoteComCondominio | null;
-  condicoesPagamento: string;
   modoRapido: boolean;
+  onChangePagamento: (fp: QualificacaoDados["forma_pagamento"]) => void;
 }) {
+  const fp = dados.forma_pagamento;
+  const p = lerPlano(fp);
+  const vp = p.valorProposto;
+  const tabela = lote?.valor_total ?? null;
+  const foraTabela = vp != null && tabela != null && Math.abs(vp - tabela) > 1;
+  const linhaValor = (rotulo: string, v: number | null | undefined, extra?: string) => (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 py-1.5 border-b border-border last:border-0">
+      <span className="text-ink-soft">{rotulo}</span>
+      <span className="text-right font-semibold text-ink tabular-nums">{v != null ? `R$ ${fmtBRL(v)}` : "—"}</span>
+      {v != null && v > 0 && <span className="col-span-2 text-[11px] text-ink-soft">{valorPorExtenso(v)}</span>}
+      {extra && <span className="col-span-2 text-[11px] text-ink">{extra}</span>}
+    </div>
+  );
   return (
     <div className="grid gap-3 text-sm">
       <p className="text-ink-soft">Confira antes de criar a proposta.</p>
@@ -774,18 +712,67 @@ function Revisao({
           <span className="text-ink-soft">Estado civil: </span>
           {ESTADO_CIVIL_OPCOES.find((o) => o.valor === dados.estado_civil)?.label || "—"}
         </p>
-        <p>
-          <span className="text-ink-soft">Valor proposto: </span>
-          {dados.forma_pagamento.valor_proposto != null ? formatMoneySimples(dados.forma_pagamento.valor_proposto) : "—"}
-        </p>
-        <p>
-          <span className="text-ink-soft">Condições de pagamento: </span>
-          {condicoesPagamento || "A combinar"}
-        </p>
+      </div>
+
+      <section className="rounded-lg border border-border p-3">
+        <h3 className="text-sm font-bold text-ink mb-1">Valores que vão para o contrato</h3>
+        {linhaValor("Valor de tabela do lote", tabela)}
+        {linhaValor("Valor proposto", vp)}
+        {fp.a_vista ? (
+          linhaValor("Pagamento à vista", vp, `Via ${textoMeio(fp.avista_meio)} em ${fmtData(fp.avista_data)}`)
+        ) : (
+          <>
+            {linhaValor(
+              "Entrada",
+              p.entrada,
+              p.entradaParcelas > 1
+                ? `Parcelada em ${p.entradaParcelas}x de R$ ${fmtBRL(p.entradaValores[0])} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_vencimento)}`
+                : `De uma vez, via ${textoMeio(fp.sinal_meio)}, em ${fmtData(fp.sinal_vencimento)}`,
+            )}
+            {linhaValor(
+              `Parcelas mensais: ${p.parcelas ?? 0} x`,
+              p.parcelaValor,
+              `1ª em ${fmtData(fp.primeiro_mes)}, depois todo dia ${fp.vencimento ?? "-"}`,
+            )}
+            {linhaValor("Chave", p.chave)}
+          </>
+        )}
+      </section>
+
+      <ConferenciaPlano fp={fp} valorTabela={tabela} />
+
+      <div className="grid gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+        {foraTabela && (
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              id="fp-confirma-fora-tabela"
+              type="checkbox"
+              className="mt-0.5"
+              checked={!!fp.confirma_valor_fora_tabela}
+              onChange={(e) => onChangePagamento({ ...fp, confirma_valor_fora_tabela: e.target.checked })}
+            />
+            <span>
+              Confirmo que o valor proposto é <strong>R$ {fmtBRL(vp)}</strong>, diferente do valor de tabela (R${" "}
+              {fmtBRL(tabela)}).
+            </span>
+          </label>
+        )}
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input
+            id="fp-confirmado"
+            type="checkbox"
+            className="mt-0.5"
+            checked={!!fp.confirmado}
+            onChange={(e) => onChangePagamento({ ...fp, confirmado: e.target.checked })}
+          />
+          <span>
+            Conferi com o cliente o valor proposto, a entrada (valor, forma, meio e data), as parcelas e a chave — os
+            valores acima estão corretos.
+          </span>
+        </label>
       </div>
       <p className="text-ink-soft text-xs">
-        A proposta nasce como rascunho — um administrador precisa aprová-la antes que o PDF final possa ser gerado e
-        enviado ao cliente.
+        A proposta nasce como rascunho — um administrador precisa aprová-la antes que o contrato possa ser gerado.
       </p>
     </div>
   );

@@ -4,6 +4,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from .plano_pagamento import normalizar_valor_br
+
 LoteStatus = Literal["disponivel", "reservado", "vendido"]
 ReservaStatus = Literal[
     "pendente", "em_atendimento", "aguardando_qualificacao", "em_analise_financeira", "confirmada", "cancelada"
@@ -426,8 +428,6 @@ def _parse_valor_monetario(v: Optional[str]) -> Optional[str]:
     texto = v.strip()
     if not texto:
         return None
-    from .documentos_gerados import normalizar_valor_br  # import local: evita ciclo schemas<->pdf
-
     limpo = normalizar_valor_br(texto)
     try:
         numero = float(limpo)
@@ -436,6 +436,9 @@ def _parse_valor_monetario(v: Optional[str]) -> Optional[str]:
     if numero < 0:
         raise ValueError("O valor não pode ser negativo.")
     return texto
+
+
+MeioPagamento = Literal["pix", "transferencia", "boleto", "cheque", "dinheiro"]
 
 
 class FormaPagamentoDados(BaseModel):
@@ -456,8 +459,24 @@ class FormaPagamentoDados(BaseModel):
     intercaladas_valor: Optional[str] = None
     intercaladas_vencimento_dia: Optional[str] = None
     observacoes: Optional[str] = None
+    # --- Plano estruturado (formulário novo, 02/10 -- ver app/plano_pagamento.py)
+    # À vista: como e quando paga.
+    avista_meio: Optional[MeioPagamento] = None
+    avista_data: Optional[str] = None  # AAAA-MM-DD
+    # Entrada (sinal/arras) -- obrigatória no parcelado.
+    sinal_forma: Optional[Literal["unica", "parcelada"]] = None
+    sinal_parcelas: Optional[int] = Field(default=None, ge=1, le=24)
+    sinal_valor_parcela: Optional[str] = None  # calculado pelo servidor
+    sinal_meio: Optional[MeioPagamento] = None
+    sinal_vencimento: Optional[str] = None  # AAAA-MM-DD (pagamento único ou 1ª parcela da entrada)
+    # Chave (parcela paga na entrega) -- vem do plano de tabela do lote.
+    chave_valor: Optional[str] = None
+    chave_vencimento: Optional[str] = None  # AAAA-MM-DD, opcional
+    # Dupla confirmação do corretor (checkboxes da etapa de revisão).
+    confirma_valor_fora_tabela: Optional[bool] = None
+    confirmado: Optional[bool] = None
 
-    @field_validator("sinal", "valor_parcela", "intercaladas_valor")
+    @field_validator("sinal", "valor_parcela", "intercaladas_valor", "chave_valor")
     @classmethod
     def _valida_valor_monetario(cls, v: Optional[str]) -> Optional[str]:
         return _parse_valor_monetario(v)

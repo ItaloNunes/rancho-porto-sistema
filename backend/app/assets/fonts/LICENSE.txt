@@ -1,0 +1,19 @@
+Fontes usadas na conversão de contrato/recibo para PDF (app/docx_pdf.py).
+Substitutas com as mesmas métricas de Calibri, Arial e Times New Roman.
+
+Carlito (substituta métrica da Calibri) e Liberation Sans/Serif (substitutas
+métricas da Arial e da Times New Roman) são distribuídas sob a SIL Open Font
+License 1.1 (https://openfontlicense.org). Avisos de copyright originais:
+
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Copyright: 2010-2013 by tyPoland Lukasz Dziedzic with Reserved Font Name "Carlito".
+License: OFL-1.1
+ Copyright (c) 2010-2013 by tyPoland Lukasz Dziedzic with Reserved Font Name "Carlito".
+ This Font Software is licensed under the SIL Open Font License,
+ SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Copyright:
+ Digitized data copyright (c) 2010 Google Corporation with Reserved Font Arimo, Tinos and Cousine.
+ Copyright (c) 2012 Red Hat, Inc. with Reserved Font Name Liberation.
+License: SIL-OFL-1.1
+ This Font Software is licensed under the SIL Open Font License,

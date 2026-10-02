@@ -88,7 +88,7 @@ export default function PainelFinanceiro() {
 
   async function gerarRecibo(p: PropostaDetalhe, valor: number, data: string) {
     const blob = await api.gerarReciboProposta(p.id, valor, data);
-    const nomeArquivo = `recibo-${p.lote?.identificador ?? p.id}.docx`;
+    const nomeArquivo = `recibo-${p.lote?.identificador ?? p.id}.pdf`;
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -99,7 +99,7 @@ export default function PainelFinanceiro() {
 
   async function gerarContrato(p: PropostaDetalhe, comissao: number, data: string) {
     const blob = await api.gerarContratoProposta(p.id, comissao, data);
-    const nomeArquivo = `contrato-${p.lote?.identificador ?? p.id}.docx`;
+    const nomeArquivo = `contrato-${p.lote?.identificador ?? p.id}.pdf`;
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -317,7 +317,7 @@ function FormularioRecibo({
           Gerar recibo
         </h2>
         <p className="text-xs text-ink-soft mt-1">
-          {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O recibo sai já
+          {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O recibo sai em PDF, já
           preenchido no modelo da imobiliária (Porto Franco ou Rancho Texas, conforme o empreendimento).
         </p>
       </div>
@@ -400,7 +400,7 @@ function FormularioContrato({
         </h2>
         <p className="text-xs text-ink-soft mt-1">
           {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O contrato sai
-          preenchido com os dados já cadastrados (comprador, lote, forma de pagamento) no modelo real da
+          em PDF, preenchido com os dados já cadastrados (comprador, lote, forma de pagamento) no modelo real da
           imobiliária, mantendo o texto jurídico exato. Confira os campos que não existem no sistema (ex.: local de
           nascimento do comprador) antes de assinar.
         </p>
