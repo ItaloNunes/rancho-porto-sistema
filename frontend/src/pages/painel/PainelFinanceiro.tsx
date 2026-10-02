@@ -9,13 +9,40 @@ import type { PropostaDetalhe, PropostaStatus } from "../../types";
 // vão a lugar nenhum. Só "rascunho" e "aguardando_aprovacao" ainda dependem
 // de uma decisão daqui.
 const STATUS_DECIDIDOS: PropostaStatus[] = ["aprovada", "enviada", "aceita", "recusada", "cancelada"];
+// Já aprovadas (seguiram em frente): continuam aparecendo aqui, numa seção
+// própria, porque é daqui que o financeiro gera recibo e contrato — e o
+// contrato só sai DEPOIS da aprovação. Antes (até 02/10) elas sumiam da tela
+// ao aprovar e não sobrava nenhum lugar no sistema pra gerar o contrato.
+const STATUS_APROVADAS: PropostaStatus[] = ["aprovada", "enviada", "aceita"];
+// Encerradas sem venda — só pra consulta (histórico), sem ação.
+const STATUS_ENCERRADAS: PropostaStatus[] = ["recusada", "cancelada"];
+
+const STATUS_LABEL: Record<PropostaStatus, string> = {
+  rascunho: "Rascunho",
+  aguardando_aprovacao: "Aguardando aprovação",
+  aprovada: "Aprovada",
+  enviada: "Enviada",
+  aceita: "Aceita",
+  recusada: "Recusada",
+  cancelada: "Cancelada",
+};
+
+function StatusBadge({ status }: { status: PropostaStatus }) {
+  const cor = STATUS_APROVADAS.includes(status) ? "bg-sage/10 text-sage" : "bg-rust/10 text-rust";
+  return (
+    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-sm inline-block ${cor}`}>
+      {STATUS_LABEL[status]}
+    </span>
+  );
+}
 
 /** Aba exclusiva do financeiro (admin/developer — ver RequireAuth adminOnly
  * em main.tsx e temAcessoAdmin em PainelLayout.tsx): só as propostas que já
  * têm todos os documentos obrigatórios anexados (documentos_completos_em
  * preenchido, ver PropostaDocumentos.tsx/migration 0021) e que ainda não
- * foram decididas entram aqui — é a fila real de "pronto pra analisar",
- * sem misturar com rascunho incompleto ou proposta já resolvida. */
+ * foram decididas entram na fila do topo — é a fila real de "pronto pra
+ * analisar". Abaixo dela ficam as aprovadas (recibo/contrato) e o histórico
+ * das recusadas/canceladas, pra nada sumir da tela do financeiro. */
 export default function PainelFinanceiro() {
   const [propostas, setPropostas] = useState<PropostaDetalhe[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -39,6 +66,12 @@ export default function PainelFinanceiro() {
     .sort(
       (a, b) => new Date(a.documentos_completos_em as string).getTime() - new Date(b.documentos_completos_em as string).getTime(),
     );
+
+  // Mais recente primeiro — o que acabou de ser aprovado fica no topo.
+  const porMaisRecente = (a: PropostaDetalhe, b: PropostaDetalhe) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  const aprovadas = (propostas ?? []).filter((p) => STATUS_APROVADAS.includes(p.status)).sort(porMaisRecente);
+  const encerradas = (propostas ?? []).filter((p) => STATUS_ENCERRADAS.includes(p.status)).sort(porMaisRecente);
 
   async function aprovar(p: PropostaDetalhe) {
     if (!confirm(`Aprovar a proposta ${formatarNumeroProposta(p.numero, p.versao)}?`)) return;
@@ -80,8 +113,8 @@ export default function PainelFinanceiro() {
       <div>
         <h1 className="text-xl font-bold text-ink">Financeiro</h1>
         <p className="text-xs text-ink-soft mt-1">
-          Propostas com todos os documentos obrigatórios já anexados, aguardando decisão. Assim que aprovada (ou
-          recusada na aba Propostas), sai desta fila.
+          No topo, as propostas com todos os documentos obrigatórios anexados aguardando aprovação. Depois de
+          aprovada, a proposta desce pra “Aprovadas”, onde ficam o recibo e o contrato.
         </p>
       </div>
 
@@ -89,37 +122,20 @@ export default function PainelFinanceiro() {
 
       {!propostas ? (
         <p className="text-ink-soft text-sm">Carregando...</p>
-      ) : filaAnalise.length === 0 ? (
-        <p className="text-ink-soft text-sm">Nenhuma proposta completa aguardando análise no momento.</p>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[860px]">
-            <thead>
-              <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
-                <th className="px-4 py-3 font-medium">Nº</th>
-                <th className="px-4 py-3 font-medium">Lote</th>
-                <th className="px-4 py-3 font-medium">Cliente</th>
-                <th className="px-4 py-3 font-medium">Valor proposto</th>
-                <th className="px-4 py-3 font-medium">Documentos</th>
-                <th className="px-4 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {filaAnalise.map((p) => (
-                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
-                  <td className="px-4 py-3 text-ink-soft whitespace-nowrap font-mono text-xs">
-                    {formatarNumeroProposta(p.numero, p.versao)}
-                  </td>
-                  <td className="px-4 py-3 text-ink">{p.lote ? p.lote.identificador : "—"}</td>
-                  <td className="px-4 py-3 text-ink">{p.cliente?.nome ?? "—"}</td>
-                  <td className="px-4 py-3 text-ink-soft">{formatMoney(p.valor_proposto)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <button className="btn-row btn-row-neutral" onClick={() => setVerDocumentosDe(p.id)}>
-                      ver documentos
-                    </button>
-                    <PrazoAnaliseBadge completosEm={p.documentos_completos_em} />
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+        <>
+          <section className="grid gap-2">
+            <h2 className="text-sm font-bold text-ink">
+              Aguardando aprovação <span className="text-ink-soft font-normal">({filaAnalise.length})</span>
+            </h2>
+            {filaAnalise.length === 0 ? (
+              <p className="text-ink-soft text-sm">Nenhuma proposta completa aguardando análise no momento.</p>
+            ) : (
+              <TabelaFinanceiro
+                propostas={filaAnalise}
+                colunaSituacao={(p) => <PrazoAnaliseBadge completosEm={p.documentos_completos_em} />}
+                acoes={(p) => (
+                  <>
                     <button
                       className="btn-row btn-row-primary mr-1.5"
                       disabled={aprovandoId === p.id}
@@ -127,18 +143,56 @@ export default function PainelFinanceiro() {
                     >
                       {aprovandoId === p.id ? "aprovando..." : "aprovar"}
                     </button>
+                    <button className="btn-row btn-row-neutral" onClick={() => setReciboDe(p)}>
+                      gerar recibo
+                    </button>
+                  </>
+                )}
+                onVerDocumentos={setVerDocumentosDe}
+              />
+            )}
+          </section>
+
+          <section className="grid gap-2">
+            <h2 className="text-sm font-bold text-ink">
+              Aprovadas <span className="text-ink-soft font-normal">({aprovadas.length})</span>
+            </h2>
+            {aprovadas.length === 0 ? (
+              <p className="text-ink-soft text-sm">Nenhuma proposta aprovada ainda.</p>
+            ) : (
+              <TabelaFinanceiro
+                propostas={aprovadas}
+                colunaSituacao={(p) => <StatusBadge status={p.status} />}
+                acoes={(p) => (
+                  <>
                     <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setReciboDe(p)}>
                       gerar recibo
                     </button>
-                    <button className="btn-row btn-row-neutral" onClick={() => setContratoDe(p)}>
+                    <button className="btn-row btn-row-primary" onClick={() => setContratoDe(p)}>
                       gerar contrato
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </>
+                )}
+                onVerDocumentos={setVerDocumentosDe}
+              />
+            )}
+          </section>
+
+          {encerradas.length > 0 && (
+            <section className="grid gap-2">
+              <h2 className="text-sm font-bold text-ink">
+                Histórico — recusadas e canceladas{" "}
+                <span className="text-ink-soft font-normal">({encerradas.length})</span>
+              </h2>
+              <TabelaFinanceiro
+                propostas={encerradas}
+                colunaSituacao={(p) => <StatusBadge status={p.status} />}
+                acoes={() => null}
+                onVerDocumentos={setVerDocumentosDe}
+              />
+            </section>
+          )}
+        </>
       )}
 
       {verDocumentosDe &&
@@ -167,6 +221,54 @@ export default function PainelFinanceiro() {
           <FormularioContrato proposta={contratoDe} onGerar={gerarContrato} onFechar={() => setContratoDe(null)} />
         </Modal>
       )}
+    </div>
+  );
+}
+
+function TabelaFinanceiro({
+  propostas,
+  colunaSituacao,
+  acoes,
+  onVerDocumentos,
+}: {
+  propostas: PropostaDetalhe[];
+  colunaSituacao: (p: PropostaDetalhe) => React.ReactNode;
+  acoes: (p: PropostaDetalhe) => React.ReactNode;
+  onVerDocumentos: (id: string) => void;
+}) {
+  return (
+    <div className="card overflow-x-auto">
+      <table className="w-full text-sm min-w-[860px]">
+        <thead>
+          <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
+            <th className="px-4 py-3 font-medium">Nº</th>
+            <th className="px-4 py-3 font-medium">Lote</th>
+            <th className="px-4 py-3 font-medium">Cliente</th>
+            <th className="px-4 py-3 font-medium">Valor proposto</th>
+            <th className="px-4 py-3 font-medium">Documentos</th>
+            <th className="px-4 py-3 font-medium" />
+          </tr>
+        </thead>
+        <tbody>
+          {propostas.map((p) => (
+            <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
+              <td className="px-4 py-3 text-ink-soft whitespace-nowrap font-mono text-xs">
+                {formatarNumeroProposta(p.numero, p.versao)}
+              </td>
+              <td className="px-4 py-3 text-ink">{p.lote ? p.lote.identificador : "—"}</td>
+              <td className="px-4 py-3 text-ink">{p.cliente?.nome ?? "—"}</td>
+              <td className="px-4 py-3 text-ink-soft">{formatMoney(p.valor_proposto)}</td>
+              <td className="px-4 py-3 whitespace-nowrap">
+                <button className="btn-row btn-row-neutral mr-1.5" onClick={() => onVerDocumentos(p.id)}>
+                  ver documentos
+                </button>
+                {colunaSituacao(p)}
+              </td>
+              <td className="px-4 py-3 text-right whitespace-nowrap">{acoes(p)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
