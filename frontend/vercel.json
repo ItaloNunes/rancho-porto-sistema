@@ -1,7 +1,47 @@
 {
   "rewrites": [
-    { "source": "/condominios/rancho-texas", "destination": "/og/rancho-texas.html" },
-    { "source": "/condominios/porto-franco", "destination": "/og/porto-franco.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/condominios/rancho-texas",
+      "destination": "/og/rancho-texas.html"
+    },
+    {
+      "source": "/condominios/porto-franco",
+      "destination": "/og/porto-franco.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://rancho-porto-sistema.onrender.com https://*.clarity.ms; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'self' blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=()"
+        }
+      ]
+    }
   ]
 }

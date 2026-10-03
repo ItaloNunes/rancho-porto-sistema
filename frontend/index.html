@@ -46,6 +46,9 @@
     Troque SEU_PROJECT_ID pelo Project ID gerado em clarity.microsoft.com
     (crie um projeto gratuito apontando pra rancho-porto-frontend.vercel.app). -->
     <script type="text/javascript">
+      // Só no catálogo público: painel, login e formulário do cliente têm
+      // dados pessoais (CPF, propostas) e não podem ir pra gravação de sessão.
+      if (!/^\/(painel|login|definir-senha|qualificacao)/.test(location.pathname))
       (function (c, l, a, r, i, t, y) {
         c[a] =
           c[a] ||

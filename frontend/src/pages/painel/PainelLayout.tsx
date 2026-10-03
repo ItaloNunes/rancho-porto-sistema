@@ -4,6 +4,8 @@ import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import BotaoSuporte from "../../components/BotaoSuporte";
 import GateCompletarCadastro from "./GateCompletarCadastro";
+import GateTrocarSenha from "./GateTrocarSenha";
+import AvisoNovaVersao from "../../components/AvisoNovaVersao";
 import { temAcessoAdmin } from "../../types";
 
 // Mudança de setembro/2026: não tem mais Cadastro de Cliente nem
@@ -91,12 +93,18 @@ export default function PainelLayout() {
   // qualquer outra coisa do layout normal (nav, header com abas etc.).
   // Só existe depois que `perfil` carregou (RequireAuth garante isso antes
   // de montar este componente).
+  if (perfil && !perfil.senha_customizada) {
+    return <GateTrocarSenha />;
+  }
   if (perfil && !perfil.perfil_completo) {
     return <GateCompletarCadastro />;
   }
 
   return (
-    <div className="min-h-screen grid grid-rows-[auto_auto_1fr] min-w-0">
+    // data-clarity-mask: o Clarity (mapa de cliques do site público) não grava
+    // nada do que aparece no painel -- CPF, propostas, valores (LGPD, 03/10).
+    <div className="min-h-screen grid grid-rows-[auto_auto_1fr] min-w-0" data-clarity-mask="True">
+      <AvisoNovaVersao />
       <header className="border-b border-border bg-surface min-w-0">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

@@ -25,11 +25,32 @@ class _Consulta:
         return self
 
     def eq(self, campo, valor):
-        self.filtros.append(lambda r: r.get(campo) == valor)
+        if "->>" in campo:  # filtro em campo de JSON (detalhes->>ip)
+            col, chave = campo.split("->>")
+            self.filtros.append(lambda r: str((r.get(col) or {}).get(chave)) == str(valor))
+        else:
+            self.filtros.append(lambda r: r.get(campo) == valor)
         return self
 
     def neq(self, campo, valor):
         self.filtros.append(lambda r: r.get(campo) != valor)
+        return self
+
+    def in_(self, campo, valores):
+        valores = list(valores)
+        self.filtros.append(lambda r: r.get(campo) in valores)
+        return self
+
+    def gte(self, campo, valor):
+        self.filtros.append(lambda r: r.get(campo) is not None and r.get(campo) >= valor)
+        return self
+
+    def lt(self, campo, valor):
+        self.filtros.append(lambda r: r.get(campo) is not None and r.get(campo) < valor)
+        return self
+
+    def delete(self):
+        self.op = "delete"
         return self
 
     def limit(self, *_a):
@@ -50,6 +71,9 @@ class _Consulta:
         linhas = self.banco.setdefault(self.tabela, [])
         if self.op == "insert":
             nova = {"id": f"id-{next(_ids)}", **copy.deepcopy(self.dados)}
+            if self.tabela == "logs_auditoria":
+                import datetime as _dt
+                nova.setdefault("created_at", _dt.datetime.now(_dt.timezone.utc).isoformat())
             if self.tabela == "propostas":
                 nova.setdefault("numero", 1)
                 nova.setdefault("versao", 1)
@@ -61,6 +85,9 @@ class _Consulta:
         if self.op == "update":
             for r in alvo:
                 r.update(copy.deepcopy(self.dados))
+        if self.op == "delete":
+            for r in alvo:
+                linhas.remove(r)
         return type("R", (), {"data": alvo})
 
 
@@ -69,7 +96,7 @@ class _SupabaseFalso:
         self.banco = {
             "lotes": [{"id": "lote-1", "status": "disponivel", "valor_total": 89990.0, "entrada": 8999.0,
                        "entrega": 8999.0, "parcela_mensal": 719.92, "qtd_parcelas": 100}],
-            "clientes": [{"id": "cli-1", "nome": "Cliente", "telefone": "84999990000", "cpf": "52998224725"}],
+            "clientes": [{"id": "cli-1", "nome": "Cliente", "telefone": "84999990000", "cpf": "52998224725", "corretor_id": "cor-1"}],
         }
 
     def table(self, nome):

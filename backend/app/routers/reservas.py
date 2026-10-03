@@ -11,6 +11,7 @@ from ..schemas import (
     ReservaUpdate,
 )
 from ..auditoria import registrar_log
+from ..estoque import PROPOSTA_SEGURA_LOTE, detentores, liberar_lote_se_livre, proposta_viva_da_reserva
 from ..precos import congelar_preco_lote
 from ..security import eh_admin, get_current_corretor
 
@@ -29,7 +30,20 @@ _STATUS_ATIVOS = ["pendente", "em_atendimento", "aguardando_qualificacao"]
 # Status de proposta em que a decisão já saiu da mão do corretor e está com
 # o financeiro/admin — reserva vinculada a uma proposta nesse status não
 # expira mais sozinha, não importa quanto tempo passe (ver _expirar_vencidas).
-_PROPOSTA_STATUS_TRAVA_LOTE = ["aguardando_aprovacao"]
+_PROPOSTA_STATUS_TRAVA_LOTE = list(PROPOSTA_SEGURA_LOTE)  # aguardando, aprovada, enviada, aceita (03/10)
+
+# Transições de status da reserva (03/10). Reserva cancelada não volta à
+# vida (o lote já pode estar com outra pessoa); 'em_analise_financeira' é
+# posto pelo fluxo de qualificação, não à mão; 'confirmada' só admin.
+_TRANSICOES_RESERVA = {
+    "pendente": {"em_atendimento", "aguardando_qualificacao", "cancelada", "confirmada"},
+    "em_atendimento": {"pendente", "aguardando_qualificacao", "cancelada", "confirmada"},
+    "aguardando_qualificacao": {"pendente", "em_atendimento", "cancelada", "confirmada"},
+    "em_analise_financeira": {"cancelada", "confirmada"},
+    "confirmada": {"cancelada"},
+    "cancelada": set(),
+}
+_SO_ADMIN_RESERVA = {"confirmada", "em_analise_financeira"}
 
 
 def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
@@ -68,27 +82,43 @@ def _expirar_vencidas(sb) -> int:
         return 0
 
     proposta_ids = [r["proposta_id"] for r in vencidas if r.get("proposta_id")]
-    travadas_por_proposta = set()
+    propostas = {}
     if proposta_ids:
-        propostas_pendentes = (
-            sb.table("propostas")
-            .select("id")
-            .in_("id", proposta_ids)
-            .in_("status", _PROPOSTA_STATUS_TRAVA_LOTE)
-            .execute()
-            .data
-        )
-        travadas_por_proposta = {p["id"] for p in propostas_pendentes}
+        for p in (
+            sb.table("propostas").select("id, numero, status, documentos_completos_em")
+            .in_("id", proposta_ids).execute().data
+        ) or []:
+            propostas[p["id"]] = p
 
     expiradas = 0
     for r in vencidas:
-        if r.get("proposta_id") in travadas_por_proposta:
-            continue  # decisão pendente com financeiro/admin — não expira
-        sb.table("reservas").update({"status": "cancelada"}).eq("id", r["id"]).execute()
-        sb.table("lotes").update({"status": "disponivel"}).eq("id", r["lote_id"]).execute()
+        prop = propostas.get(r.get("proposta_id"))
+        # Proposta com o financeiro (aguardando, aprovada, vendida) ou com a
+        # documentação completa: a decisão não é mais do corretor -- não
+        # expira (03/10: antes só 'aguardando_aprovacao' era poupada, e uma
+        # venda APROVADA voltava pro catálogo depois de 72h).
+        if prop and (prop["status"] in _PROPOSTA_STATUS_TRAVA_LOTE or prop.get("documentos_completos_em")):
+            continue
+        cancelou = (
+            sb.table("reservas").update({"status": "cancelada"})
+            .eq("id", r["id"]).in_("status", _STATUS_ATIVOS).execute().data
+        )
+        if not cancelou:
+            continue  # alguém mexeu nela nesse meio tempo
+        if prop and prop["status"] == "rascunho":
+            # Rascunho abandonado (sem documentos completos em 72h) expira
+            # junto -- senão ele continuaria segurando o lote sozinho.
+            sb.table("propostas").update({"status": "cancelada"}).eq("id", prop["id"]).eq("status", "rascunho").execute()
+            registrar_log(
+                sb, None, "proposta_expirou", "proposta", prop["id"],
+                f"Proposta Nº {int(prop.get('numero') or 0):04d} (rascunho, sem documentos completos) expirou junto com a reserva.",
+            )
+        liberou = liberar_lote_se_livre(sb, r["lote_id"], exceto_reserva_id=r["id"],
+                                        exceto_proposta_id=r.get("proposta_id"))
         registrar_log(
             sb, None, "reserva_expirou", "reserva", r["id"],
-            "Reserva expirou sozinha (venceu o prazo sem confirmação) e o lote voltou a ficar disponível.",
+            "Reserva expirou sozinha (venceu o prazo sem confirmação)"
+            + (" e o lote voltou a ficar disponível." if liberou else "; o lote continua preso por outra reserva/proposta."),
         )
         expiradas += 1
     return expiradas
@@ -228,11 +258,16 @@ def excluir_reserva(reserva_id: str, corretor: dict = Depends(get_current_corret
     existente = existente[0]
     if not _pode_mexer_na_reserva(corretor, existente):
         raise HTTPException(403, "Esta reserva é de outro corretor.")
+    viva = proposta_viva_da_reserva(sb, existente)
+    if viva:
+        raise HTTPException(
+            409,
+            f"Esta reserva é da proposta Nº {int(viva.get('numero') or 0):04d} ({viva['status']}) — "
+            "cancele a proposta primeiro.",
+        )
     sb.table("reservas").delete().eq("id", reserva_id).execute()
     if existente["status"] != "cancelada":
-        lote = sb.table("lotes").select("status").eq("id", existente["lote_id"]).limit(1).execute().data
-        if lote and lote[0]["status"] == "reservado":
-            sb.table("lotes").update({"status": "disponivel"}).eq("id", existente["lote_id"]).execute()
+        liberar_lote_se_livre(sb, existente["lote_id"], exceto_reserva_id=reserva_id)
     registrar_log(
         sb, corretor, "excluiu_reserva", "reserva", reserva_id,
         f"Excluiu a reserva (cliente: {existente.get('nome') or 'sem nome'}).",
@@ -263,6 +298,37 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
         raise HTTPException(403, "Esta reserva é de outro corretor.")
     if payload.status == "confirmada" and not eh_admin(corretor):
         raise HTTPException(403, "Só um administrador pode confirmar a reserva.")
+    if payload.status in _SO_ADMIN_RESERVA and not eh_admin(corretor):
+        raise HTTPException(403, "Só um administrador pode colocar a reserva nesse status.")
+    if payload.corretor_id and payload.corretor_id != reserva.get("corretor_id") and not eh_admin(corretor):
+        raise HTTPException(403, "Só um administrador pode passar a reserva pra outro corretor.")
+    atual = reserva["status"]
+    if payload.status == atual and not payload.corretor_id:
+        return reserva  # nada muda (ex.: cancelar de novo uma reserva já cancelada)
+    if payload.status != atual and payload.status not in _TRANSICOES_RESERVA.get(atual, set()):
+        if atual == "cancelada":
+            raise HTTPException(
+                409,
+                "Reserva cancelada não pode ser reaberta (o lote pode já estar com outra pessoa). "
+                "Se o lote estiver disponível, crie uma reserva nova.",
+            )
+        raise HTTPException(409, f"Não dá pra mudar a reserva de '{atual}' para '{payload.status}'.")
+    if payload.status == "cancelada" and atual != "cancelada":
+        viva = proposta_viva_da_reserva(sb, reserva)
+        if viva:
+            raise HTTPException(
+                409,
+                f"Esta reserva é da proposta Nº {int(viva.get('numero') or 0):04d} ({viva['status']}) — "
+                "cancele a proposta (o lote é liberado junto).",
+            )
+    if payload.status == "confirmada":
+        outros = detentores(sb, reserva["lote_id"], exceto_reserva_id=reserva_id,
+                            exceto_proposta_id=reserva.get("proposta_id"))
+        if outros:
+            raise HTTPException(409, "O lote desta reserva está com outra pessoa: " + "; ".join(outros) + ".")
+        lote_atual = sb.table("lotes").select("status").eq("id", reserva["lote_id"]).limit(1).execute().data
+        if lote_atual and lote_atual[0]["status"] == "vendido" and not reserva.get("proposta_id"):
+            raise HTTPException(409, "Este lote já consta como vendido.")
 
     updates: dict = {"status": payload.status}
     if payload.corretor_id:
@@ -271,8 +337,8 @@ def atualizar_status_reserva(reserva_id: str, payload: ReservaStatusUpdate, corr
         updates["corretor_id"] = corretor["id"]
 
     updated = sb.table("reservas").update(updates).eq("id", reserva_id).execute().data[0]
-    if payload.status == "cancelada":
-        sb.table("lotes").update({"status": "disponivel"}).eq("id", reserva["lote_id"]).execute()
+    if payload.status == "cancelada" and atual != "cancelada":
+        liberar_lote_se_livre(sb, reserva["lote_id"], exceto_reserva_id=reserva_id)
     elif payload.status == "confirmada":
         # Re-trava o lote mesmo se ele já tiver voltado a 'disponivel'
         # sozinho antes disso (ex.: a reserva expirou pelas 72h — ver

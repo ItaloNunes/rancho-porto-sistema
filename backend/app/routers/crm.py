@@ -16,10 +16,10 @@ Compra/Venda Castel, operada com a JR Imóveis) — ver app/pdf.py.
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from postgrest.exceptions import APIError
 from starlette.concurrency import run_in_threadpool
@@ -38,6 +38,7 @@ from ..documentos_gerados import (
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..cadastro_proposta import email_valido, problemas_cadastro, problemas_conjuge, so_digitos, telefone_valido, tem_conjuge
+from ..estoque import detentores, liberar_lote_se_livre
 from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, resumo_contrato, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
@@ -74,45 +75,110 @@ from ..security import criar_token, eh_admin, get_current_corretor, require_admi
 from ..auditoria import registrar_log
 from ..precos import congelar_preco_lote
 from .reservas import _pode_mexer_na_reserva
-from ..usuarios import gerar_usuario_unico, hash_senha, senha_de_telefone, verificar_senha
+from ..usuarios import gerar_usuario_unico, hash_senha, problemas_senha, senha_de_telefone, verificar_senha
 from ..usuarios import slug as slug_usuario
 
 router = APIRouter(tags=["crm"])
 
 
+# Proteção contra adivinhação de senha (03/10): conta as tentativas erradas
+# no próprio log de auditoria (vale entre reinícios do servidor).
+JANELA_BLOQUEIO_MIN = 15
+MAX_FALHAS_POR_USUARIO = 5
+MAX_FALHAS_POR_IP = 20
+# hash qualquer pra gastar o mesmo tempo quando o usuário não existe
+# (não dá pra descobrir quais usuários existem pelo tempo de resposta)
+_HASH_FALSO = "$2b$12$l3ec0L9utnzDxn7mHOCp1uMtw/MU1mooYmGIx6vW.dilV1wxe9x2i"
+
+
+def _ip_do_cliente(request: Request) -> str:
+    """No Render o IP real é o ÚLTIMO do X-Forwarded-For (o que o proxy
+    deles acrescentou) -- os anteriores o próprio cliente pode inventar."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[-1].strip()
+    return request.client.host if request.client else "?"
+
+
+def _falhas_recentes(sb, campo: str, valor: str) -> int:
+    desde = (datetime.now(timezone.utc) - timedelta(minutes=JANELA_BLOQUEIO_MIN)).isoformat()
+    try:
+        q = sb.table("logs_auditoria").select("id").eq("acao", "login_falhou").gte("created_at", desde)
+        q = q.eq("entidade_id", valor) if campo == "usuario" else q.eq("detalhes->>ip", valor)
+        return len(q.limit(100).execute().data or [])
+    except Exception:
+        logger.exception("Falha ao contar tentativas de login")
+        return 0
+
+
+def _registrar_falha_login(sb, usuario: str, ip: str, motivo: str) -> None:
+    try:
+        sb.table("logs_auditoria").insert({
+            "ator_id": None, "ator_nome": f"tentativa de login: {usuario[:60]}", "ator_papel": None,
+            "acao": "login_falhou", "entidade": "login", "entidade_id": usuario[:120],
+            "descricao": f"Tentativa de login recusada ({motivo}).", "detalhes": {"ip": ip, "motivo": motivo},
+        }).execute()
+    except Exception:
+        logger.exception("Falha ao registrar tentativa de login")
+
+
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest):
+def login(payload: LoginRequest, request: Request):
     """Login próprio do painel — usuário + senha, sem Supabase Auth e sem
-    e-mail em nenhuma etapa (ver app/security.py e app/usuarios.py)."""
+    e-mail em nenhuma etapa (ver app/security.py e app/usuarios.py).
+    Desde 03/10: 5 erros seguidos no mesmo usuário (ou 20 no mesmo IP)
+    bloqueiam novas tentativas por 15 minutos."""
     sb = get_supabase()
-    usuario = payload.usuario.strip().lower()
-    corretor = sb.table("corretores").select("*").eq("usuario", usuario).limit(1).execute().data
-    if not corretor or not verificar_senha(payload.senha, corretor[0].get("senha_hash")):
+    usuario = (payload.usuario or "").strip().lower()[:120]
+    ip = _ip_do_cliente(request)
+    msg_bloqueio = (
+        f"Muitas tentativas erradas. Aguarde {JANELA_BLOQUEIO_MIN} minutos e tente de novo — "
+        "ou peça ao administrador para redefinir sua senha."
+    )
+    if _falhas_recentes(sb, "usuario", usuario) >= MAX_FALHAS_POR_USUARIO or _falhas_recentes(sb, "ip", ip) >= MAX_FALHAS_POR_IP:
+        raise HTTPException(429, msg_bloqueio)
+    corretor = sb.table("corretores").select("*").eq("usuario", usuario).limit(1).execute().data if usuario else []
+    if not corretor:
+        verificar_senha(payload.senha or "", _HASH_FALSO)  # mesmo tempo de resposta
+        _registrar_falha_login(sb, usuario, ip, "usuário inexistente")
         raise HTTPException(401, "Usuário ou senha incorretos.")
+    if not verificar_senha(payload.senha or "", corretor[0].get("senha_hash")):
+        _registrar_falha_login(sb, usuario, ip, "senha errada")
+        restantes = MAX_FALHAS_POR_USUARIO - _falhas_recentes(sb, "usuario", usuario)
+        if restantes <= 0:
+            raise HTTPException(429, msg_bloqueio)
+        aviso = f" Restam {restantes} tentativa(s) antes do bloqueio de {JANELA_BLOQUEIO_MIN} minutos." if restantes <= 2 else ""
+        raise HTTPException(401, "Usuário ou senha incorretos." + aviso)
     if not corretor[0]["ativo"]:
         raise HTTPException(403, "Este login não tem acesso ao painel.")
-    token = criar_token(corretor[0]["id"])
-    registrar_log(sb, corretor[0], "login", "corretor", corretor[0]["id"], "Fez login no painel.")
+    token = criar_token(corretor[0])
+    registrar_log(sb, corretor[0], "login", "corretor", corretor[0]["id"], "Fez login no painel.", {"ip": ip})
     return {"access_token": token, "corretor": corretor[0]}
 
 
-@router.post("/me/senha", response_model=Corretor)
+@router.post("/me/senha", response_model=LoginResponse)
 def trocar_minha_senha(payload: TrocarSenhaRequest, corretor: dict = Depends(get_current_corretor)):
     """O próprio corretor logado troca a senha (precisa confirmar a atual).
     Marca `senha_customizada=True` — daqui pra frente, corrigir o telefone
-    dele não sobrescreve mais essa senha sozinho (ver atualizar_corretor)."""
+    dele não sobrescreve mais essa senha sozinho (ver atualizar_corretor).
+    Devolve um token novo: os anteriores (outros aparelhos) deixam de valer."""
     if not verificar_senha(payload.senha_atual, corretor.get("senha_hash")):
         raise HTTPException(401, "Senha atual incorreta.")
-    if len(payload.senha_nova) < 6:
-        raise HTTPException(400, "A senha nova precisa ter pelo menos 6 caracteres.")
+    problemas = problemas_senha(payload.senha_nova, corretor)
+    if verificar_senha(payload.senha_nova, corretor.get("senha_hash")):
+        problemas.append("A senha nova tem que ser diferente da atual.")
+    if problemas:
+        raise HTTPException(400, " ".join(problemas))
     sb = get_supabase()
-    return (
+    atualizado = (
         sb.table("corretores")
         .update({"senha_hash": hash_senha(payload.senha_nova), "senha_customizada": True})
         .eq("id", corretor["id"])
         .execute()
         .data[0]
     )
+    registrar_log(sb, corretor, "trocou_senha", "corretor", corretor["id"], "Trocou a própria senha.")
+    return {"access_token": criar_token(atualizado), "corretor": atualizado}
 
 
 @router.get("/me", response_model=Corretor)
@@ -395,7 +461,9 @@ def desativar_corretor(corretor_id: str, admin: dict = Depends(require_admin)):
 
 
 def _pode_mexer_no_cliente(corretor: dict, cliente: dict) -> bool:
-    return eh_admin(corretor) or cliente.get("corretor_id") in (None, corretor["id"])
+    # 03/10: cliente sem corretor (criado por admin) é só do admin -- antes
+    # qualquer corretor via CPF/telefone dele.
+    return eh_admin(corretor) or (cliente.get("corretor_id") is not None and cliente.get("corretor_id") == corretor["id"])
 
 
 @router.get("/clientes", response_model=list[Cliente])
@@ -403,7 +471,7 @@ def listar_clientes(corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
     query = sb.table("clientes").select("*").order("nome")
     if not eh_admin(corretor):
-        query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
+        query = query.eq("corretor_id", corretor["id"])
     return query.execute().data
 
 
@@ -462,7 +530,8 @@ def excluir_cliente(cliente_id: str, corretor: dict = Depends(get_current_corret
 
 
 def _pode_mexer_na_proposta(corretor: dict, proposta: dict) -> bool:
-    return eh_admin(corretor) or proposta.get("corretor_id") in (None, corretor["id"])
+    # 03/10: proposta sem corretor é só do admin (antes ficava aberta a todos).
+    return eh_admin(corretor) or (proposta.get("corretor_id") is not None and proposta.get("corretor_id") == corretor["id"])
 
 
 def _numero_proposta(proposta: dict) -> str:
@@ -482,7 +551,7 @@ def _query_propostas(sb, corretor: dict, com_documentos: bool):
         campos += ", documentos:documentos_proposta(*)"
     query = sb.table("propostas").select(campos).order("created_at", desc=True)
     if not eh_admin(corretor):
-        query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
+        query = query.eq("corretor_id", corretor["id"])
     return query
 
 
@@ -569,9 +638,11 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         if problemas:
             raise HTTPException(422, " ".join(problemas))
         fp_validado = normalizar_plano(fp_bruto)
-    cliente = sb.table("clientes").select("id").eq("id", payload.cliente_id).limit(1).execute().data
+    cliente = sb.table("clientes").select("id, corretor_id").eq("id", payload.cliente_id).limit(1).execute().data
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado.")
+    if not _pode_mexer_no_cliente(corretor, cliente[0]):
+        raise HTTPException(403, "Este cliente é de outro corretor.")
 
     if reserva is None:
         if lote[0]["status"] != "disponivel":
@@ -667,6 +738,8 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     existente = existente[0]
     if not _pode_mexer_na_proposta(corretor, existente):
         raise HTTPException(403, "Esta proposta é de outro corretor.")
+    if existente.get("status") in ("cancelada", "recusada"):
+        raise HTTPException(409, "Proposta cancelada/recusada não pode ser editada.")
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existente
@@ -1470,7 +1543,7 @@ def atualizar_status_proposta(
     proposta_id: str, payload: PropostaStatusUpdate, corretor: dict = Depends(get_current_corretor)
 ):
     sb = get_supabase()
-    existente = sb.table("propostas").select("id, numero, versao, lote_id, cliente_id, corretor_id").eq(
+    existente = sb.table("propostas").select("id, numero, versao, lote_id, cliente_id, corretor_id, status").eq(
         "id", proposta_id
     ).limit(1).execute().data
     if not existente:
@@ -1480,6 +1553,17 @@ def atualizar_status_proposta(
         raise HTTPException(403, "Esta proposta é de outro corretor.")
     if payload.status == "aprovada" and not eh_admin(corretor):
         raise HTTPException(403, "Só um administrador pode aprovar a proposta.")
+    atual = existente.get("status") or "rascunho"
+    if payload.status == atual:
+        return existente
+    erro_transicao = _erro_transicao_proposta(atual, payload.status, eh_admin(corretor))
+    if erro_transicao:
+        raise HTTPException(*erro_transicao)
+    if payload.status in ("aprovada", "aceita"):
+        # o lote tem que estar com ESTA proposta (nenhuma outra reserva/proposta viva)
+        outros = detentores(sb, existente["lote_id"], exceto_proposta_id=proposta_id)
+        if outros:
+            raise HTTPException(409, "O lote desta proposta está com outra pessoa: " + "; ".join(outros) + ".")
     if payload.status == "aprovada":
         # Trava (02/10): forma de pagamento que não fecha não vira contrato.
         completa = sb.table("propostas").select("valor_proposto, dados_qualificacao").eq("id", proposta_id).limit(1).execute().data
@@ -1523,10 +1607,12 @@ def atualizar_status_proposta(
             raise HTTPException(
                 409, "Este lote já consta como vendido (por outra proposta) — confira antes de aceitar esta."
             )
+        _confirmar_reserva_da_proposta(sb, proposta_id)
     elif payload.status == "aprovada":
         _gerar_reserva_da_proposta_aprovada(sb, proposta_id, existente)
+        _confirmar_reserva_da_proposta(sb, proposta_id)
     elif payload.status in ("recusada", "cancelada"):
-        _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"])
+        _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"], venda_desfeita=(atual == "aceita"))
     registrar_log(
         sb, corretor, "mudou_status_proposta", "proposta", proposta_id,
         f"Mudou status da proposta {_numero_proposta(existente)} pra '{payload.status}'.",
@@ -1535,7 +1621,43 @@ def atualizar_status_proposta(
     return atualizado
 
 
-def _liberar_lote_da_proposta(sb, proposta_id: str, lote_id: str) -> None:
+# Transições de status da proposta (03/10). Antes qualquer corretor podia pôr
+# qualquer status -- inclusive 'aceita' (lote vendido) sem aprovação, ou
+# reabrir proposta cancelada.
+_TRANSICOES_PROPOSTA = {
+    "rascunho": {"aguardando_aprovacao", "cancelada", "aprovada", "recusada"},
+    "aguardando_aprovacao": {"rascunho", "cancelada", "aprovada", "recusada"},
+    "aprovada": {"enviada", "aceita", "cancelada", "recusada"},
+    "enviada": {"aceita", "cancelada", "recusada"},
+    "aceita": {"cancelada"},
+    "recusada": set(),
+    "cancelada": set(),
+}
+
+
+def _erro_transicao_proposta(atual: str, novo: str, admin: bool) -> Optional[tuple[int, str]]:
+    if novo not in _TRANSICOES_PROPOSTA.get(atual, set()):
+        if atual in ("cancelada", "recusada"):
+            return 409, f"Não dá pra reabrir uma proposta {atual} — o lote pode já estar com outra pessoa. Faça uma proposta nova."
+        return 409, f"Não dá pra mudar a proposta de '{atual}' para '{novo}'."
+    if admin:
+        return None
+    if novo in ("aprovada", "recusada"):
+        return 403, "Só o financeiro (administrador) pode aprovar ou recusar a proposta."
+    if novo == "cancelada" and atual in ("aprovada", "enviada", "aceita"):
+        return 403, "Proposta já aprovada só pode ser cancelada pelo financeiro (administrador)."
+    return None
+
+
+def _confirmar_reserva_da_proposta(sb, proposta_id: str) -> None:
+    """Proposta aprovada/vendida: a reserva dela vira 'confirmada' (sai da
+    contagem de 72h de vez)."""
+    sb.table("reservas").update({"status": "confirmada"}).eq("proposta_id", proposta_id).in_(
+        "status", ["pendente", "em_atendimento", "aguardando_qualificacao", "em_analise_financeira"]
+    ).execute()
+
+
+def _liberar_lote_da_proposta(sb, proposta_id: str, lote_id: str, venda_desfeita: bool = False) -> None:
     """Recusar ou cancelar uma proposta libera o lote de volta pra
     'disponivel'. Necessário desde que criar_proposta passou a reservar o
     lote já na criação (sem esperar aprovação de admin): sem isso, toda
@@ -1544,7 +1666,6 @@ def _liberar_lote_da_proposta(sb, proposta_id: str, lote_id: str) -> None:
     'reservado' nesse instante — nunca destrava um lote que já virou
     'vendido' por outra via (ex.: outra proposta pro mesmo lote que já foi
     aceita antes desta ser recusada)."""
-    sb.table("lotes").update({"status": "disponivel"}).eq("id", lote_id).eq("status", "reservado").execute()
     # Mantém a fila de Reservas em sincronia: se essa proposta já tinha
     # gerado uma reserva (ver _gerar_reserva_da_proposta_aprovada), cancela
     # ela também — sem isso ficaria um registro "pendente" órfão apontando
@@ -1552,6 +1673,11 @@ def _liberar_lote_da_proposta(sb, proposta_id: str, lote_id: str) -> None:
     sb.table("reservas").update({"status": "cancelada"}).eq("proposta_id", proposta_id).neq(
         "status", "cancelada"
     ).execute()
+    # 03/10: só libera se nenhuma OUTRA reserva/proposta viva segura o lote.
+    if venda_desfeita and not detentores(sb, lote_id, exceto_proposta_id=proposta_id):
+        # venda desfeita pelo financeiro: o lote 'vendido' por ESTA proposta volta
+        sb.table("lotes").update({"status": "disponivel"}).eq("id", lote_id).eq("status", "vendido").execute()
+    liberar_lote_se_livre(sb, lote_id, exceto_proposta_id=proposta_id)
 
 
 def _gerar_reserva_da_proposta_aprovada(sb, proposta_id: str, proposta: dict) -> None:

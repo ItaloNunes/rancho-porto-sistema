@@ -5,6 +5,7 @@ import { useAuth } from "../../lib/auth";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import PropostaDocumentos, { PrazoAnaliseBadge } from "./PropostaDocumentos";
 import { temAcessoAdmin } from "../../types";
+import { proximosStatusProposta } from "../../lib/transicoes";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
 const STATUS_LABEL: Record<PropostaStatus, string> = {
@@ -126,9 +127,9 @@ export default function PainelPropostas() {
                       value={p.status}
                       onChange={(e) => mudarStatus(p, e.target.value as PropostaStatus)}
                     >
-                      {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                        <option key={v} value={v} disabled={v === "aprovada" && !temAcessoAdmin(perfil?.papel)}>
-                          {label}
+                      {[p.status, ...proximosStatusProposta(p.status, temAcessoAdmin(perfil?.papel))].map((v) => (
+                        <option key={v} value={v}>
+                          {STATUS_LABEL[v]}
                         </option>
                       ))}
                     </select>

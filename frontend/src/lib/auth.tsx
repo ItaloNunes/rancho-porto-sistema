@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, EVENTO_SESSAO } from "./api";
 import { getToken, setToken } from "./token";
-import type { Corretor } from "../types";
+import type { Corretor, LoginResposta } from "../types";
 
 // 15 min sem nenhuma interacao (mouse, teclado, toque, scroll) derruba a
 // sessao sozinho e manda pro /login de novo -- pedido em 28/09 (painel
 // fica aberto em computador compartilhado da imobiliaria/financeiro, e o
-// JWT em si dura 30 dias -- ver backend/app/config.py -- entao sem isso a
+// JWT dura 12h (admin) ou 7 dias (corretor) -- ver backend/app/security.py -- entao sem isso a
 // sessao continuava valida indefinidamente enquanto a aba ficasse aberta).
 const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000;
 const EVENTOS_ATIVIDADE = ["mousemove", "mousedown", "keydown", "wheel", "scroll", "touchstart"] as const;
@@ -35,6 +35,8 @@ interface AuthState {
    * GateCompletarCadastro.tsx) pra `perfil_completo` virar true sem
    * precisar de um F5. */
   recarregarPerfil: () => Promise<void>;
+  /** Troca de senha devolve um token novo (os antigos morrem) — grava aqui. */
+  aplicarSessao: (resposta: LoginResposta) => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -89,9 +91,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
+  // Sessão derrubada pelo servidor no meio do uso (ver avisarSessao em api.ts).
+  useEffect(() => {
+    function onSessao(e: Event) {
+      const { status, mensagem } = (e as CustomEvent<{ status: number; mensagem: string }>).detail;
+      if (status === 403 && /Troque sua senha/.test(mensagem)) {
+        void recarregarPerfil(); // perfil.senha_customizada=false -> tela de troca obrigatória
+        return;
+      }
+      if (getToken()) sair(mensagem || "Sua sessão terminou. Faça login de novo.");
+    }
+    window.addEventListener(EVENTO_SESSAO, onSessao);
+    return () => window.removeEventListener(EVENTO_SESSAO, onSessao);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function aplicarSessao(resposta: LoginResposta) {
+    setToken(resposta.access_token);
+    setSession(resposta.access_token);
+    setPerfil(resposta.corretor);
+  }
+
   async function entrar(usuario: string, senha: string): Promise<string | null> {
     try {
-      const resposta = await api.login(usuario, senha);
+      const resposta = await api.login(usuario.trim().toLowerCase(), senha);
       setToken(resposta.access_token);
       setSession(resposta.access_token);
       setPerfil(resposta.corretor);
@@ -119,7 +142,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, perfil, carregando, motivoSaida, entrar, sair, recarregarPerfil }}>
+    <AuthContext.Provider
+      value={{ session, perfil, carregando, motivoSaida, entrar, sair, recarregarPerfil, aplicarSessao }}
+    >
       {children}
     </AuthContext.Provider>
   );

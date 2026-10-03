@@ -92,7 +92,7 @@ export default function QualificacaoPublica() {
   }
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen bg-bg" data-clarity-mask="True">
       <header className="border-b border-border bg-surface">
         <div className="max-w-xl mx-auto px-5 py-4">
           <p className="text-xs text-ink-soft">{publica.condominio_nome}</p>
@@ -119,7 +119,7 @@ export default function QualificacaoPublica() {
 
 function TelaCentralizada({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-bg grid place-items-center px-5">
+    <div className="min-h-screen bg-bg grid place-items-center px-5" data-clarity-mask="True">
       <div className="card max-w-md w-full p-6 sm:p-8 text-center">{children}</div>
     </div>
   );

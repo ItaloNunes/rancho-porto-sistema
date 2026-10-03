@@ -40,3 +40,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Segredo padrão em produção = qualquer um forja login. O Render define a
+# variável RENDER; lá o backend nem sobe com o segredo de exemplo (03/10).
+import os as _os  # noqa: E402
+
+if _os.environ.get("RENDER") and settings.jwt_secret == "troque-este-segredo-em-producao":
+    raise RuntimeError("JWT_SECRET não configurado em produção.")

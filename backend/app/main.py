@@ -65,6 +65,24 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def cabecalhos_de_seguranca(request: Request, call_next):
+    """Cabeçalhos de segurança em toda resposta da API (03/10): navegador
+    não "adivinha" tipo de arquivo, a API não pode ser embutida em iframe de
+    outro site, só HTTPS, e nada do painel (CPF, propostas, PDFs) fica
+    guardado em cache de navegador/proxy."""
+    resposta = await call_next(request)
+    h = resposta.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "no-referrer")
+    h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.url.path.startswith(("/crm", "/reservas", "/qualificacao")):
+        h["Cache-Control"] = "no-store"
+    return resposta
+
+
 @app.exception_handler(Exception)
 async def erro_inesperado(request: Request, exc: Exception):
     """Sem isso, uma exceção não tratada (ex.: erro de query no Supabase)

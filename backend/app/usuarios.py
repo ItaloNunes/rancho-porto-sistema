@@ -69,3 +69,32 @@ def gerar_usuario_unico(nome: str, ja_usados: set[str]) -> str:
         n += 1
     ja_usados.add(usuario)
     return usuario
+
+
+# Senhas fracas demais que aparecem em qualquer lista de vazamento.
+_SENHAS_COMUNS = {
+    "12345678", "123456789", "1234567890", "senha123", "senha1234", "password", "password1", "abc12345",
+    "castel123", "castel2026", "rancho123", "porto123", "qwerty123", "mudar123", "teste123", "admin123",
+}
+
+
+def problemas_senha(nova: str, corretor: dict) -> list[str]:
+    """Regras da senha escolhida pela pessoa (03/10) -- mesmas de
+    frontend/src/lib/senha.ts. A senha inicial (telefone) não serve mais."""
+    erros: list[str] = []
+    nova = nova or ""
+    if len(nova) < 8:
+        erros.append("A senha precisa ter pelo menos 8 caracteres.")
+    if not re.search(r"[A-Za-z]", nova) or not re.search(r"\d", nova):
+        erros.append("Use letras E números na senha.")
+    digitos = re.sub(r"\D", "", nova)
+    telefone = re.sub(r"\D", "", corretor.get("telefone") or "")
+    if telefone and len(telefone) >= 6 and (telefone in digitos or digitos and digitos in telefone and len(digitos) >= 6):
+        erros.append("A senha não pode conter o seu telefone.")
+    baixa = nova.lower()
+    partes = [p for p in re.split(r"[^a-z0-9]+", (corretor.get("usuario") or "").lower()) if len(p) >= 4]
+    if any(p in baixa for p in partes):
+        erros.append("A senha não pode conter o seu nome de usuário.")
+    if baixa in _SENHAS_COMUNS:
+        erros.append("Essa senha é muito comum — escolha outra.")
+    return erros

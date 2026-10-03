@@ -141,6 +141,17 @@ async function fetchComRetry(url: string, init: RequestInit): Promise<Response> 
   }
 }
 
+/** Sessão que caiu no meio do uso (token expirado, senha trocada em outro
+ * aparelho, login desativado) ou troca de senha obrigatória: avisa o
+ * AuthProvider (lib/auth.tsx), que leva pra tela certa em vez de cada tela
+ * mostrar um erro solto. */
+export const EVENTO_SESSAO = "painel:sessao";
+function avisarSessao(status: number, mensagem: string): void {
+  if (status === 401 || (status === 403 && /Troque sua senha|não tem acesso ao painel/.test(mensagem))) {
+    window.dispatchEvent(new CustomEvent(EVENTO_SESSAO, { detail: { status, mensagem } }));
+  }
+}
+
 /** `auth=true` anexa o token de sessão do painel (login próprio, ver
  * lib/token.ts) — sem isso, os endpoints do painel (/crm/*, /reservas,
  * PATCH de status) respondem 401. O catálogo público nunca precisa disso. */
@@ -156,7 +167,9 @@ async function request<T>(path: string, init?: RequestInit, auth = false): Promi
   const res = await fetchComRetry(`${API_URL}${path}`, { ...init, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(extrairErro(body, `Erro ${res.status} ao chamar a API`));
+    const msg = extrairErro(body, `Erro ${res.status} ao chamar a API`);
+    if (auth) avisarSessao(res.status, msg);
+    throw new Error(msg);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -170,7 +183,9 @@ async function requestBlob(path: string): Promise<Blob> {
   const res = await fetchComRetry(`${API_URL}${path}`, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(extrairErro(body, `Erro ${res.status} ao gerar o PDF`));
+    const msg = extrairErro(body, `Erro ${res.status} ao gerar o PDF`);
+    avisarSessao(res.status, msg);
+    throw new Error(msg);
   }
   return res.blob();
 }
@@ -401,8 +416,9 @@ export const api = {
   // Painel — perfil de quem está logado
   meuPerfil: () => request<Corretor>("/crm/me", undefined, true),
   // Painel — o próprio corretor logado troca a senha (precisa confirmar a atual)
+  // Devolve um token NOVO (as sessões anteriores deixam de valer — 03/10).
   trocarMinhaSenha: (senhaAtual: string, senhaNova: string) =>
-    request<Corretor>(
+    request<LoginResposta>(
       "/crm/me/senha",
       { method: "POST", body: JSON.stringify({ senha_atual: senhaAtual, senha_nova: senhaNova }) },
       true,

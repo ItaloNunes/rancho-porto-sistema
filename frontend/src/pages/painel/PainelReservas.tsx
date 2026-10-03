@@ -1,3 +1,4 @@
+import { proximosStatusReserva } from "../../lib/transicoes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
@@ -218,9 +219,9 @@ export default function PainelReservas() {
                         disabled={salvandoId !== null}
                         onChange={(e) => selecionarStatus(r, e.target.value as ReservaStatus)}
                       >
-                        {Object.entries(STATUS_LABEL).map(([v, label]) => (
-                          <option key={v} value={v} disabled={v === "confirmada" && !temAcessoAdmin(perfil?.papel)}>
-                            {label}
+                        {[r.status, ...proximosStatusReserva(r.status, temAcessoAdmin(perfil?.papel))].map((v) => (
+                          <option key={v} value={v}>
+                            {STATUS_LABEL[v]}
                           </option>
                         ))}
                       </select>

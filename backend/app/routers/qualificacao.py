@@ -20,7 +20,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from ..cadastro_proposta import tem_conjuge
+from ..cadastro_proposta import problemas_cadastro, tem_conjuge
+from ..estoque import detentores, liberar_lote_se_livre
+from ..plano_pagamento import problemas_para_aprovar
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..schemas import (
@@ -47,7 +49,16 @@ def _gerar_token() -> str:
 
 
 def _pode_mexer(corretor: dict, registro: dict) -> bool:
+    """Reserva sem corretor é um lead que qualquer corretor pode assumir."""
     return eh_admin(corretor) or registro.get("corretor_id") in (None, corretor["id"])
+
+
+def _pode_ver_formulario(corretor: dict, registro: dict) -> bool:
+    """Formulário (CPF, RG, renda, documentos) sem corretor é só do admin (03/10)."""
+    return eh_admin(corretor) or (registro.get("corretor_id") is not None and registro.get("corretor_id") == corretor["id"])
+
+
+_RESERVA_ABERTAS = ("pendente", "em_atendimento", "aguardando_qualificacao")
 
 
 # ---------------------------------------------------------------------------
@@ -69,15 +80,19 @@ def gerar_link_qualificacao(
     reserva = reserva[0]
     if not _pode_mexer(corretor, reserva):
         raise HTTPException(403, "Esta reserva é de outro corretor.")
+    if reserva["status"] not in _RESERVA_ABERTAS:
+        raise HTTPException(409, f"Esta reserva está '{reserva['status']}' — não dá pra gerar link de qualificação nela.")
 
     existente = sb.table("formularios_qualificacao").select("*").eq("reserva_id", reserva_id).limit(1).execute().data
     if existente:
         return existente[0]
 
     if payload.cliente_id:
-        cliente = sb.table("clientes").select("id").eq("id", payload.cliente_id).limit(1).execute().data
+        cliente = sb.table("clientes").select("id, corretor_id").eq("id", payload.cliente_id).limit(1).execute().data
         if not cliente:
             raise HTTPException(404, "Cliente não encontrado.")
+        if not _pode_ver_formulario(corretor, cliente[0]):
+            raise HTTPException(403, "Este cliente é de outro corretor.")
         cliente_id = payload.cliente_id
     elif payload.cliente_novo:
         dados_cliente = payload.cliente_novo.model_dump()
@@ -136,7 +151,7 @@ def listar_qualificacoes(corretor: dict = Depends(get_current_corretor)):
         "*, lote:lotes(*), cliente:clientes(*), corretor:corretores!corretor_id(*)"
     ).order("created_at", desc=True)
     if not eh_admin(corretor):
-        query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
+        query = query.eq("corretor_id", corretor["id"])
     resultado = query.execute().data
     ids = [r["id"] for r in resultado]
     docs_por_form: dict[str, list] = {i: [] for i in ids}
@@ -159,7 +174,7 @@ def listar_qualificacoes(corretor: dict = Depends(get_current_corretor)):
 def detalhe_qualificacao(qualificacao_id: str, corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
     q = _carregar_qualificacao_completa(sb, qualificacao_id)
-    if not _pode_mexer(corretor, q):
+    if not _pode_ver_formulario(corretor, q):
         raise HTTPException(403, "Esta qualificação é de outro corretor.")
     return q
 
@@ -172,7 +187,7 @@ def baixar_documento(qualificacao_id: str, documento_id: str, corretor: dict = D
     q = sb.table("formularios_qualificacao").select("*").eq("id", qualificacao_id).limit(1).execute().data
     if not q:
         raise HTTPException(404, "Qualificação não encontrada.")
-    if not _pode_mexer(corretor, q[0]):
+    if not _pode_ver_formulario(corretor, q[0]):
         raise HTTPException(403, "Esta qualificação é de outro corretor.")
     doc = (
         sb.table("documentos_qualificacao")
@@ -207,6 +222,32 @@ def decidir_qualificacao(
     q = q[0]
     if q["status"] != "em_analise":
         raise HTTPException(409, "Esta qualificação não está em análise (já foi decidida, ou o cliente ainda não enviou).")
+    reserva = sb.table("reservas").select("*").eq("id", q["reserva_id"]).limit(1).execute().data
+    reserva = reserva[0] if reserva else None
+    dados = q.get("dados") or {}
+    if payload.aprovado:
+        # 03/10: antes aprovava sem olhar se a reserva ainda valia, se o lote
+        # já estava com outra pessoa, e sem conferir a forma de pagamento.
+        if not reserva or reserva["status"] == "cancelada":
+            raise HTTPException(409, "A reserva desta qualificação foi cancelada/expirou — não dá pra aprovar.")
+        if reserva.get("proposta_id"):
+            raise HTTPException(409, "Esta reserva já tem uma proposta — aprove pela tela do Financeiro.")
+        outros = detentores(sb, q["lote_id"], exceto_reserva_id=reserva["id"])
+        if outros:
+            raise HTTPException(409, "O lote está com outra pessoa: " + "; ".join(outros) + ".")
+        lote_ap = (
+            sb.table("lotes").select("valor_total, entrada, qtd_parcelas, parcela_mensal, entrega")
+            .eq("id", q["lote_id"]).limit(1).execute().data
+        )
+        fp_ap = dados.get("forma_pagamento") or {}
+        vp_ap = fp_ap.get("valor_proposto") or (lote_ap[0]["valor_total"] if lote_ap else None)
+        problemas = problemas_para_aprovar(fp_ap, vp_ap, lote_ap[0] if lote_ap else None) + problemas_cadastro(dados)
+        if problemas:
+            raise HTTPException(
+                422,
+                "Não dá pra aprovar: " + " ".join(problemas)
+                + " Peça ao corretor pra gerar a proposta pelo formulário do painel a partir desta reserva.",
+            )
 
     novo_status = "aprovada" if payload.aprovado else "reprovada"
     updates = {
@@ -233,7 +274,6 @@ def decidir_qualificacao(
     atualizado = decidido[0]
 
     if payload.aprovado:
-        dados = q.get("dados") or {}
         forma_pgto = dados.get("forma_pagamento") or {}
         valor_proposto = forma_pgto.get("valor_proposto")
         if valor_proposto is None:
@@ -252,12 +292,14 @@ def decidir_qualificacao(
             "valor_proposto": valor_proposto,
             "condicoes_pagamento": condicoes,
             "status": "aprovada",
+            # o contrato lê daqui (antes saía com "-" e o plano de tabela)
+            "dados_qualificacao": dados,
         }
-        sb.table("propostas").insert(proposta).execute()
-        sb.table("reservas").update({"status": "confirmada"}).eq("id", q["reserva_id"]).execute()
+        criada = sb.table("propostas").insert(proposta).execute().data[0]
+        sb.table("reservas").update({"status": "confirmada", "proposta_id": criada["id"]}).eq("id", q["reserva_id"]).execute()
     else:
         sb.table("reservas").update({"status": "cancelada"}).eq("id", q["reserva_id"]).execute()
-        sb.table("lotes").update({"status": "disponivel"}).eq("id", q["lote_id"]).execute()
+        liberar_lote_se_livre(sb, q["lote_id"], exceto_reserva_id=q["reserva_id"])
 
     registrar_log(
         sb, admin, "decidiu_qualificacao", "qualificacao", qualificacao_id,
@@ -446,6 +488,11 @@ def enviar_para_analise(token: str):
             detalhes.append("documentos: " + ", ".join(docs_faltando))
         raise HTTPException(422, "Formulário incompleto — falta preencher " + "; ".join(detalhes) + ".")
 
+    reserva_q = sb.table("reservas").select("status").eq("id", q["reserva_id"]).limit(1).execute().data
+    if not reserva_q or reserva_q[0]["status"] not in _RESERVA_ABERTAS:
+        raise HTTPException(
+            409, "O prazo desta reserva terminou ou ela foi cancelada — fale com o seu corretor antes de enviar."
+        )
     agora = datetime.now(timezone.utc)
     sb.table("formularios_qualificacao").update(
         {"status": "em_analise", "enviado_em": agora.isoformat()}
@@ -455,6 +502,6 @@ def enviar_para_analise(token: str):
         # migration 0018_reserva_expira_72h.sql) — corretor e financeiro
         # enxergam o mesmo número em qualquer tela do painel.
         {"status": "em_analise_financeira", "analise_prazo_em": (agora + timedelta(hours=72)).isoformat()}
-    ).eq("id", q["reserva_id"]).execute()
+    ).eq("id", q["reserva_id"]).in_("status", list(_RESERVA_ABERTAS)).execute()
 
     return abrir_formulario(token)
