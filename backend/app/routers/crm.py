@@ -1442,8 +1442,13 @@ def atualizar_status_proposta(
         completa = sb.table("propostas").select("valor_proposto, dados_qualificacao").eq("id", proposta_id).limit(1).execute().data
         lote_aprov = sb.table("lotes").select("valor_total, entrada, qtd_parcelas, parcela_mensal, entrega").eq("id", existente["lote_id"]).limit(1).execute().data
         if completa:
-            fp_aprov = (completa[0].get("dados_qualificacao") or {}).get("forma_pagamento") or {}
+            dados_aprov = completa[0].get("dados_qualificacao") or {}
+            fp_aprov = dados_aprov.get("forma_pagamento") or {}
             problemas = problemas_para_aprovar(fp_aprov, completa[0].get("valor_proposto"), lote_aprov[0] if lote_aprov else None)
+            # Dados do comprador inválidos (ex.: e-mail no campo de celular)
+            # também seguram a aprovação -- mesma regra da tela do Financeiro.
+            if dados_aprov.get("proponente"):
+                problemas += problemas_cadastro(dados_aprov)
             if problemas:
                 raise HTTPException(
                     422,

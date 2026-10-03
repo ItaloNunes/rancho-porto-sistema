@@ -340,3 +340,15 @@ def test_conferencia_mostra_pendencias_da_0003_e_some_depois_de_corrigir(cliente
     assert api.put("/crm/propostas/p3/dados", json={"dados_qualificacao": _dq_corrigido()}).status_code == 200
     c = api.get("/crm/propostas/p3/conferencia").json()
     assert c == {"plano_estruturado": True, "problemas_pagamento": [], "problemas_contrato": [], "problemas_cadastro": []}
+
+
+def test_aprovacao_trava_celular_invalido(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_0003(sb)
+    dq = _dq_corrigido()
+    assert api.put("/crm/propostas/p3/dados", json={"dados_qualificacao": dq}).status_code == 200
+    # alguém grava direto no banco um celular inválido depois da correção
+    sb.banco["propostas"][0]["dados_qualificacao"]["telefone_celular"] = "fulano@email.com"
+    r = api.patch("/crm/propostas/p3/status", json={"status": "aprovada"})
+    assert r.status_code == 422 and "Celular inválido" in r.text

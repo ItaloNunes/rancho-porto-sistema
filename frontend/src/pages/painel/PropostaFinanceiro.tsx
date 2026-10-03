@@ -73,7 +73,11 @@ export default function PropostaFinanceiro({
   const problemasAprovar = conferencia
     ? [...new Set([...conferencia.problemas_pagamento, ...conferencia.problemas_contrato, ...conferencia.problemas_cadastro])]
     : [];
-  const problemasContrato = conferencia ? [...new Set([...conferencia.problemas_contrato, ...conferencia.problemas_cadastro])] : [];
+  // Contrato: trava só no que o servidor trava (números que não fecham);
+  // dado cadastral inválido numa proposta já aprovada vira aviso.
+  const problemasContrato = conferencia ? conferencia.problemas_contrato : [];
+  const bloqueios = aprovada ? problemasContrato : problemasAprovar;
+  const avisos = aprovada && conferencia ? conferencia.problemas_cadastro : [];
 
   if (editando) {
     return (
@@ -152,11 +156,11 @@ export default function PropostaFinanceiro({
         <p className="text-rust text-sm">Não consegui conferir a proposta agora: {erroCarga}</p>
       ) : !conferencia ? (
         <p className="text-ink-soft text-sm">Conferindo a proposta...</p>
-      ) : !encerrada && problemasAprovar.length > 0 ? (
+      ) : !encerrada && bloqueios.length > 0 ? (
         <section className="rounded-lg border border-rust/40 bg-rust/5 p-3 grid gap-2">
           <h3 className="text-sm font-bold text-rust">Precisa corrigir antes de {aprovada ? "gerar o contrato" : "aprovar"}</h3>
           <ul className="list-disc pl-5 text-sm text-ink grid gap-1">
-            {problemasAprovar.map((p) => (
+            {bloqueios.map((p) => (
               <li key={p}>{p}</li>
             ))}
           </ul>
@@ -165,6 +169,16 @@ export default function PropostaFinanceiro({
               Esta proposta é do formulário antigo: ao corrigir, informe também a forma, o meio e a data da entrada.
             </p>
           )}
+        </section>
+      ) : !encerrada && avisos.length > 0 ? (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-3 grid gap-1">
+          <h3 className="text-sm font-bold text-amber-800">Os valores fecham, mas confira estes dados</h3>
+          <ul className="list-disc pl-5 text-sm text-ink grid gap-1">
+            {avisos.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+          <p className="text-xs text-ink-soft">Dá pra gerar o contrato; use “Corrigir dados” pra acertar antes, se quiser.</p>
         </section>
       ) : !encerrada ? (
         <p className="text-sm text-sage bg-sage/10 border border-sage/30 rounded-lg px-3 py-2">
