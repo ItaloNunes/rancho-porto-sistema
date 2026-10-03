@@ -384,7 +384,7 @@ class LotePrecoHistorico(BaseModel):
 # definido antes do bloco de CRM/propostas, logo abaixo).
 # ---------------------------------------------------------------------------
 
-EstadoCivil = Literal["solteiro", "casado", "viuvo", "divorciado", "outros"]
+EstadoCivil = Literal["solteiro", "casado", "uniao_estavel", "viuvo", "divorciado", "outros"]
 
 
 class EnderecoDados(BaseModel):
@@ -409,6 +409,9 @@ class PessoaDados(BaseModel):
     nacionalidade: Optional[str] = None
     email: Optional[str] = None
     profissao: Optional[str] = None
+    # Cidade/UF de nascimento -- vai no "LOCAL" do QUADRO RESUMO dos
+    # contratos (pedido de 03/10).
+    naturalidade: Optional[str] = None
 
 
 _VALOR_INVALIDO_MSG = "Informe um valor numérico válido (ex.: 5000 ou 5000,00), sem letras ou símbolos."
@@ -507,6 +510,10 @@ class QualificacaoDados(BaseModel):
 
     proponente: PessoaDados = Field(default_factory=PessoaDados)
     estado_civil: Optional[EstadoCivil] = None
+    # Resposta direta do corretor (03/10): "o comprador tem cônjuge ou
+    # companheiro(a) que assina junto?". True exige estado civil casado ou
+    # união estável e os dados do cônjuge; ver cadastro_proposta.tem_conjuge.
+    tem_conjuge: Optional[bool] = None
     conjuge: Optional[PessoaDados] = None
     endereco_residencial: EnderecoDados = Field(default_factory=EnderecoDados)
     endereco_comercial: EnderecoDados = Field(default_factory=EnderecoDados)

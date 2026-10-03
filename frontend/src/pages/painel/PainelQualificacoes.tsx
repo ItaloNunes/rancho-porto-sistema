@@ -1,3 +1,4 @@
+import { temConjuge } from "../../lib/cadastro";
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { abrirAbaComCarregamento, api, formatDateTime, formatMoney, horasRestantes, mostrarErroNaAba } from "../../lib/api";
@@ -57,6 +58,7 @@ function PrazoAnaliseBadge({ enviadoEm }: { enviadoEm?: string | null }) {
 const ESTADO_CIVIL_LABEL: Record<EstadoCivil, string> = {
   solteiro: "Solteiro(a)",
   casado: "Casado(a)",
+  uniao_estavel: "União estável",
   viuvo: "Viúvo(a)",
   divorciado: "Divorciado(a)",
   outros: "Outros",
@@ -167,7 +169,7 @@ function DetalheQualificacao({
   const enderecoRes = dados.endereco_residencial ?? {};
   const enderecoCom = dados.endereco_comercial ?? {};
   const fp = dados.forma_pagamento ?? {};
-  const casado = dados.estado_civil === "casado";
+  const casado = temConjuge(dados);
 
   const obrigatorios: DocumentoTipo[] = [...DOCUMENTOS_OBRIGATORIOS, ...(casado ? DOCUMENTOS_CONJUGE : [])];
   const tiposEnviados = new Set(q.documentos.map((d) => d.tipo));

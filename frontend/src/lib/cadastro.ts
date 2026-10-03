@@ -7,7 +7,26 @@
  * Por que existe (03/10): a proposta 0003 chegou com o e-mail do cliente no
  * campo de celular. */
 
-import type { PessoaDados, QualificacaoDados } from "../types";
+import type { EstadoCivil, PessoaDados, QualificacaoDados } from "../types";
+
+export const ESTADOS_COM_CONJUGE: EstadoCivil[] = ["casado", "uniao_estavel"];
+
+/** Mínimo pra qualificar o cônjuge no contrato (igual CAMPOS_CONJUGE no servidor). */
+const CAMPOS_CONJUGE: [keyof PessoaDados, string][] = [
+  ["nome", "nome"],
+  ["cpf_cnpj", "CPF"],
+  ["rg", "RG"],
+  ["data_nascimento", "data de nascimento"],
+  ["nacionalidade", "nacionalidade"],
+  ["profissao", "profissão"],
+];
+
+/** Se o comprador tem cônjuge/companheiro(a) que entra no contrato: a
+ * resposta direta (tem_conjuge) manda; sem ela, o estado civil. */
+export function temConjuge(dados: Partial<QualificacaoDados>): boolean {
+  if (dados.tem_conjuge !== null && dados.tem_conjuge !== undefined) return !!dados.tem_conjuge;
+  return !!dados.estado_civil && ESTADOS_COM_CONJUGE.includes(dados.estado_civil);
+}
 
 export const soDigitos = (t: string | null | undefined) => (t ?? "").replace(/\D/g, "");
 
@@ -85,12 +104,31 @@ export function problemasTelefones(dados: QualificacaoDados): string[] {
   return erros;
 }
 
+/** Coerência "tem cônjuge?" x estado civil + dados mínimos do cônjuge
+ * (mesma regra de cadastro_proposta.problemas_conjuge). */
+export function problemasConjuge(dados: Partial<QualificacaoDados>): string[] {
+  const erros: string[] = [];
+  const estado = dados.estado_civil ?? null;
+  const comConjuge = !!estado && ESTADOS_COM_CONJUGE.includes(estado);
+  if (dados.tem_conjuge === true && !comConjuge)
+    erros.push("Comprador com cônjuge/companheiro(a): o estado civil tem que ser Casado(a) ou União estável.");
+  if (dados.tem_conjuge === false && comConjuge)
+    erros.push("Estado civil Casado(a)/União estável, mas foi informado que o comprador não tem cônjuge -- confira.");
+  if (temConjuge(dados)) {
+    const c = dados.conjuge ?? {};
+    const faltando = CAMPOS_CONJUGE.filter(([campo]) => !preenchido(c[campo])).map(([, r]) => r);
+    if (faltando.length) erros.push(`Faltam dados do cônjuge/companheiro(a): ${faltando.join(", ")}.`);
+  }
+  return erros;
+}
+
 /** Tudo junto (mesma lista de cadastro_proposta.problemas_cadastro). */
 export function problemasCadastro(dados: QualificacaoDados): string[] {
   const erros: string[] = [];
   if (!preenchido(dados.proponente?.nome)) erros.push("Informe o nome completo do comprador.");
   erros.push(...problemasPessoa(dados.proponente, "do comprador"));
-  if (dados.estado_civil === "casado") erros.push(...problemasPessoa(dados.conjuge, "do cônjuge"));
+  erros.push(...problemasConjuge(dados));
+  if (temConjuge(dados)) erros.push(...problemasPessoa(dados.conjuge, "do cônjuge"));
   erros.push(...problemasTelefones(dados));
   return erros;
 }

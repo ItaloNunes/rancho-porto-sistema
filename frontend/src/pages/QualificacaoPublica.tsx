@@ -1,3 +1,4 @@
+import { ESTADOS_COM_CONJUGE, temConjuge } from "../lib/cadastro";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -199,7 +200,7 @@ function Formulario({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const casado = dados.estado_civil === "casado";
+  const casado = temConjuge(dados);
   const obrigatorios = useMemo<DocumentoTipo[]>(
     () => [...DOCUMENTOS_OBRIGATORIOS, ...(casado ? DOCUMENTOS_CONJUGE : [])],
     [casado],
@@ -418,7 +419,7 @@ function Formulario({
                 setDados({
                   ...dados,
                   estado_civil: (e.target.value || null) as EstadoCivil | null,
-                  conjuge: e.target.value === "casado" ? (dados.conjuge ?? {}) : null,
+                  conjuge: ESTADOS_COM_CONJUGE.includes(e.target.value as EstadoCivil) ? (dados.conjuge ?? {}) : null,
                 })
               }
             >

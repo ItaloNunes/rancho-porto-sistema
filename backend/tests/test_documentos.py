@@ -217,3 +217,36 @@ def test_pdf_tem_exatamente_o_texto_do_libreoffice(gerar):
     esperado = _sem_numeros_de_pagina(_tokens(texto_pdf(ref)))
     obtido = _sem_numeros_de_pagina(_tokens(texto_pdf(docx_para_pdf(b))))
     assert obtido == esperado
+
+
+# ------------------------------------------------------------------ cônjuge / naturalidade (03/10)
+def test_rt_uniao_estavel_entra_como_compradora_com_naturalidade():
+    d = dq(fp_unica(LOTE_RT), casado=True)
+    d["estado_civil"] = "uniao_estavel"
+    d["tem_conjuge"] = True
+    d["proponente"]["naturalidade"] = "Mossoró/RN"
+    d["conjuge"]["naturalidade"] = "Natal/RN"
+    prop = {"numero": 99, "valor_proposto": LOTE_RT["valor_total"], "dados_qualificacao": d}
+    t = texto_docx(preencher_contrato_rancho_texas(proposta=prop, lote=LOTE_RT, cliente=CLIENTE, data_contrato=date(2026, 10, 2)))
+    assert "João Teste" in t and "529.982.247-25" in t
+    assert "União estável" in t
+    assert "LOCAL: Mossoró/RN" in t and "LOCAL: Natal/RN" in t
+
+
+def test_rt_sem_conjuge_respondido_nao_tem_compradora():
+    d = dq(fp_unica(LOTE_RT), casado=True)
+    d["tem_conjuge"] = False  # resposta direta manda (dados de cônjuge esquecidos não entram)
+    prop = {"numero": 99, "valor_proposto": LOTE_RT["valor_total"], "dados_qualificacao": d}
+    t = texto_docx(preencher_contrato_rancho_texas(proposta=prop, lote=LOTE_RT, cliente=CLIENTE, data_contrato=date(2026, 10, 2)))
+    assert "João Teste" not in t
+
+
+def test_pf_local_de_nascimento():
+    d = dq(fp_unica(LOTE_PF))
+    d["proponente"]["naturalidade"] = "Mossoró/RN"
+    prop = {"numero": 99, "valor_proposto": LOTE_PF["valor_total"], "dados_qualificacao": d}
+    t = texto_docx(preencher_contrato_porto_franco(proposta=prop, lote=LOTE_PF, cliente=CLIENTE, corretor=CORRETOR,
+                                                   valor_comissao=0, data_contrato=date(2026, 10, 2)))
+    assert "LOCAL: Mossoró/RN" in t
+    # sem naturalidade: continua em branco, como sempre foi
+    assert "LOCAL: Mossoró" not in texto_docx(pf(fp_unica(LOTE_PF)))

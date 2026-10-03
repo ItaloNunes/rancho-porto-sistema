@@ -359,7 +359,8 @@ def _semear_0001(sb):
     fp = {"renda": "12.000,00", "sinal": "8.999,00", "a_vista": False, "vencimento": "10",
           "primeiro_mes": "10/10/2026", "valor_parcela": "719,92", "valor_proposto": 89990.0, "dividido_em_parcelas": 100}
     dq = {"proponente": {"nome": "ZAIRA", "cpf_cnpj": "52998224725", "email": "zaira@hotmail.com"},
-          "estado_civil": "casado", "conjuge": {"nome": "JUNIOR"}, "endereco_residencial": {}, "endereco_comercial": {},
+          "estado_civil": "casado", "conjuge": {"nome": "TERCIO JUNIOR", "cpf_cnpj": "11144477735", "rg": "1700983",
+          "data_nascimento": "1984-03-10", "nacionalidade": "brasileiro", "profissao": "Consultor"}, "endereco_residencial": {}, "endereco_comercial": {},
           "telefone_celular": "zaira@hotmail.com", "telefone_residencial": " 84 99917-6750", "forma_pagamento": fp}
     sb.banco.setdefault("propostas", []).append({
         "id": "p1", "numero": 1, "versao": 1, "lote_id": "lote-1", "cliente_id": "cli-1", "corretor_id": "cor-1",
@@ -385,3 +386,53 @@ def test_corrige_so_o_celular_de_proposta_antiga_sem_refazer_o_plano(cliente_api
     dq["forma_pagamento"]["valor_parcela"] = "700,00"
     r = api.put("/crm/propostas/p1/dados", json={"dados_qualificacao": dq})
     assert r.status_code == 422 and "Informe se a entrada será paga" in r.text
+
+
+# --------------------------------------------------------------------------
+# Cônjuge / companheiro(a) (03/10)
+# --------------------------------------------------------------------------
+
+CONJUGE_OK = {"nome": "MARIA COMPANHEIRA", "cpf_cnpj": "11144477735", "rg": "998877", "orgao_expedidor": "SSP/RN",
+              "data_nascimento": "1990-01-15", "nacionalidade": "brasileira", "profissao": "Professora",
+              "email": "maria@example.com", "naturalidade": "Natal/RN"}
+
+
+@pytest.mark.parametrize(
+    "extra,trecho",
+    [
+        ({"estado_civil": "casado", "tem_conjuge": True, "conjuge": {"nome": "MARIA"}}, "Faltam dados do cônjuge"),
+        ({"estado_civil": "casado", "conjuge": None}, "Faltam dados do cônjuge"),  # sem responder: pelo estado civil
+        ({"estado_civil": "solteiro", "tem_conjuge": True, "conjuge": CONJUGE_OK}, "Casado(a) ou União estável"),
+        ({"estado_civil": "uniao_estavel", "tem_conjuge": False}, "não tem cônjuge"),
+    ],
+)
+def test_criacao_trava_conjuge_incompleto_ou_incoerente(cliente_api, extra, trecho):
+    api, sb = cliente_api
+    corpo = payload()
+    corpo["dados_qualificacao"].update(extra)
+    r = api.post("/crm/propostas", json=corpo)
+    assert r.status_code == 422 and trecho in r.text, r.text
+    assert not sb.banco.get("propostas")
+
+
+def test_criacao_com_uniao_estavel_completa(cliente_api):
+    api, sb = cliente_api
+    corpo = payload()
+    corpo["dados_qualificacao"].update({"estado_civil": "uniao_estavel", "tem_conjuge": True, "conjuge": CONJUGE_OK})
+    r = api.post("/crm/propostas", json=corpo)
+    assert r.status_code == 200, r.text
+
+
+def test_contrato_rancho_texas_trava_sem_dados_do_conjuge(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_0003(sb, status="aprovada")
+    p = sb.banco["propostas"][0]
+    p["valor_proposto"] = 89990.0
+    p["dados_qualificacao"] = _dq_corrigido()
+    p["dados_qualificacao"].update({"estado_civil": "casado", "conjuge": {"nome": "ESPOSA"}})
+    p["lote"] = {**sb.banco["lotes"][0], "identificador": "LOTE 12", "lote_numero": 12, "tamanho_m2": 800,
+                 "condominio": {"nome": "Rancho Texas"}}
+    p["cliente"] = sb.banco["clientes"][0]
+    r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-03")
+    assert r.status_code == 422 and "Faltam dados do cônjuge" in r.text, r.text

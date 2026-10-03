@@ -14,6 +14,7 @@ from typing import Optional
 
 from fpdf import FPDF
 
+from .cadastro_proposta import tem_conjuge
 from .plano_pagamento import MEIOS_PAGAMENTO, fmt_brl, fmt_data, ler_plano
 
 logger = logging.getLogger(__name__)
@@ -295,6 +296,7 @@ class _PropostaPDF(_CastelPDF):
 ESTADO_CIVIL_LABEL = {
     "solteiro": "Solteiro(a)",
     "casado": "Casado(a)",
+    "uniao_estavel": "União estável",
     "viuvo": "Viúvo(a)",
     "divorciado": "Divorciado(a)",
     "outros": "Outros",
@@ -411,7 +413,7 @@ def gerar_proposta_pdf(
             ("E-mail", proponente.get("email") or cliente.get("email") or "-", 2),
             ("Profissão", proponente.get("profissao") or "-", 1),
         )
-        opcoes_estado_civil = [ESTADO_CIVIL_LABEL[v] for v in ("solteiro", "casado", "viuvo", "divorciado", "outros")]
+        opcoes_estado_civil = [ESTADO_CIVIL_LABEL[v] for v in ("solteiro", "casado", "uniao_estavel", "viuvo", "divorciado", "outros")]
         pdf.campo_grade(("Estado civil", _checkbox_linha(opcoes_estado_civil, ESTADO_CIVIL_LABEL.get(estado_civil)), 1))
     else:
         pdf.campo_grade(
@@ -419,8 +421,8 @@ def gerar_proposta_pdf(
             ("Contato", cliente.get("telefone") or cliente.get("email") or "-", 1),
         )
 
-    if estado_civil == "casado":
-        pdf.campo_grade(("Cônjuge", conjuge.get("nome") or "-", 1))
+    if tem_conjuge(dados_qualificacao or {}):
+        pdf.campo_grade(("Cônjuge / companheiro(a)", conjuge.get("nome") or "-", 1))
         pdf.campo_grade(
             ("RG", conjuge.get("rg") or "-", 1),
             ("Órgão expedidor", conjuge.get("orgao_expedidor") or "-", 1),

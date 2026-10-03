@@ -334,7 +334,7 @@ export interface VisaoGeralCondominio {
 // ---------------------------------------------------------------------------
 
 export type QualificacaoStatus = "aguardando_preenchimento" | "em_analise" | "aprovada" | "reprovada";
-export type EstadoCivil = "solteiro" | "casado" | "viuvo" | "divorciado" | "outros";
+export type EstadoCivil = "solteiro" | "casado" | "uniao_estavel" | "viuvo" | "divorciado" | "outros";
 export type DocumentoTipo =
   | "rg"
   | "cpf"
@@ -389,6 +389,8 @@ export interface PessoaDados {
   nacionalidade?: string | null;
   email?: string | null;
   profissao?: string | null;
+  /** Cidade/UF de nascimento — "LOCAL" do QUADRO RESUMO dos contratos. */
+  naturalidade?: string | null;
 }
 
 export interface FormaPagamentoDados {
@@ -427,6 +429,9 @@ export type EnderecoCorrespondencia = "residencial" | "comercial";
 export interface QualificacaoDados {
   proponente: PessoaDados;
   estado_civil?: EstadoCivil | null;
+  /** "O comprador tem cônjuge ou companheiro(a) que assina junto?" (03/10).
+   * Sem resposta (proposta antiga), vale o estado civil — ver temConjuge. */
+  tem_conjuge?: boolean | null;
   conjuge?: PessoaDados | null;
   endereco_residencial: EnderecoDados;
   endereco_comercial: EnderecoDados;

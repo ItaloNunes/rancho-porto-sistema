@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../../components/qualificacaoCampos";
 import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPagamento";
 import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
-import { problemasPessoa, problemasTelefones } from "../../lib/cadastro";
+import { ESTADOS_COM_CONJUGE, problemasConjuge, problemasPessoa, problemasTelefones, temConjuge } from "../../lib/cadastro";
 import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
@@ -24,6 +24,8 @@ export function dadosParaEdicao(p: PropostaDetalhe): QualificacaoDados {
   return {
     ...vazio,
     ...dq,
+    // proposta antiga não tem a resposta direta: vem do estado civil
+    tem_conjuge: dq.tem_conjuge ?? temConjuge(dq),
     proponente: { ...(dq.proponente ?? {}), nome: dq.proponente?.nome ?? p.cliente?.nome ?? null },
     endereco_residencial: { ...(dq.endereco_residencial ?? {}) },
     endereco_comercial: { ...(dq.endereco_comercial ?? {}) },
@@ -186,7 +188,6 @@ export default function PropostaFormularioCompleto({
     }
     setLoteId(id);
   }
-  const casado = dados.estado_civil === "casado";
   const planoAntigoMantido = planoLegado && mesmoPlano(dados.forma_pagamento, fpOriginal.current!);
 
   function validarEndereco(e: QualificacaoDados["endereco_residencial"], rotulo: string): string | null {
@@ -215,24 +216,32 @@ export default function PropostaFormularioCompleto({
         if (!dados.proponente.data_nascimento?.trim()) return "Informe a data de nascimento.";
         if (!dados.proponente.nacionalidade?.trim()) return "Informe a nacionalidade.";
         if (!dados.proponente.email?.trim()) return "Informe o e-mail.";
+        // correção pelo financeiro: proposta antiga não tinha esse campo — opcional
+        if (!edicao && !dados.proponente.naturalidade?.trim()) return "Informe o local de nascimento (cidade/UF).";
       }
       const invalidos = problemasPessoa(dados.proponente, "do comprador");
       if (invalidos.length) return invalidos.join("\n");
     }
-    if (p === 2 && !modoRapido) {
-      if (!dados.estado_civil) return "Selecione o estado civil.";
-      if (casado) {
-        if (!dados.conjuge?.nome?.trim()) return "Informe o nome do cônjuge.";
-        if (!dados.conjuge?.cpf_cnpj?.trim()) return "Informe o CPF do cônjuge.";
-        if (!dados.conjuge?.rg?.trim()) return "Informe o RG do cônjuge.";
-        if (!dados.conjuge?.data_nascimento?.trim()) return "Informe a data de nascimento do cônjuge.";
-        if (!dados.conjuge?.nacionalidade?.trim()) return "Informe a nacionalidade do cônjuge.";
-        if (!dados.conjuge?.profissao?.trim()) return "Informe a profissão do cônjuge.";
-        if (!dados.conjuge?.email?.trim()) return "Informe o e-mail do cônjuge.";
+    if (p === 2) {
+      // Pergunta direta, obrigatória até no cadastro rápido (03/10): sem
+      // ela o contrato do Rancho Texas poderia sair sem a COMPRADORA.
+      if (dados.tem_conjuge === null || dados.tem_conjuge === undefined)
+        return "Responda se o comprador tem cônjuge ou companheiro(a).";
+      if (dados.tem_conjuge || !modoRapido) {
+        if (!dados.estado_civil) return "Selecione o estado civil.";
       }
-    }
-    if (p === 2 && casado) {
-      const invalidos = problemasPessoa(dados.conjuge, "do cônjuge");
+      if (dados.tem_conjuge) {
+        const c = dados.conjuge ?? {};
+        if (!c.nome?.trim()) return "Informe o nome do cônjuge/companheiro(a).";
+        if (!c.cpf_cnpj?.trim()) return "Informe o CPF do cônjuge/companheiro(a).";
+        if (!c.rg?.trim()) return "Informe o RG do cônjuge/companheiro(a).";
+        if (!c.data_nascimento?.trim()) return "Informe a data de nascimento do cônjuge/companheiro(a).";
+        if (!c.nacionalidade?.trim()) return "Informe a nacionalidade do cônjuge/companheiro(a).";
+        if (!c.profissao?.trim()) return "Informe a profissão do cônjuge/companheiro(a).";
+        if (!edicao && !c.naturalidade?.trim()) return "Informe o local de nascimento do cônjuge/companheiro(a).";
+        if (!c.email?.trim()) return "Informe o e-mail do cônjuge/companheiro(a).";
+      }
+      const invalidos = [...problemasConjuge(dados), ...(dados.tem_conjuge ? problemasPessoa(dados.conjuge, "do cônjuge") : [])];
       if (invalidos.length) return invalidos.join("\n");
     }
     if (p === 3 && !modoRapido) {
@@ -496,6 +505,15 @@ export default function PropostaFormularioCompleto({
                 />
               </Field>
             </div>
+            <Field label={modoRapido || edicao ? "Local de nascimento (cidade/UF)" : "Local de nascimento (cidade/UF) *"}>
+              <input
+                id="proponente-naturalidade"
+                className="input"
+                placeholder="Ex.: Mossoró/RN"
+                value={dados.proponente.naturalidade ?? ""}
+                onChange={(e) => setDados({ ...dados, proponente: { ...dados.proponente, naturalidade: e.target.value } })}
+              />
+            </Field>
             <Field label={modoRapido ? "E-mail" : "E-mail *"}>
               <input
                 className="input"
@@ -509,51 +527,80 @@ export default function PropostaFormularioCompleto({
 
         {passo === 2 && (
           <>
-            {modoRapido && (
-              <p className="text-xs text-ink-soft italic -mt-1 -mb-1">
-                Opcional no cadastro rápido — pode preencher depois.
-              </p>
-            )}
-            <Field label={modoRapido ? "Estado civil" : "Estado civil *"}>
-              <select
-                className="input"
-                value={dados.estado_civil ?? ""}
-                onChange={(e) =>
-                  setDados({
-                    ...dados,
-                    estado_civil: (e.target.value || null) as EstadoCivil | null,
-                    conjuge: e.target.value === "casado" ? (dados.conjuge ?? {}) : null,
-                  })
-                }
-              >
-                <option value="">Selecione...</option>
-                {ESTADO_CIVIL_OPCOES.map((o) => (
-                  <option key={o.valor} value={o.valor}>
-                    {o.label}
-                  </option>
+            <Field label="O comprador tem cônjuge ou companheiro(a) que assina junto? *">
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  [true, "Sim — casado(a) ou união estável"],
+                  [false, "Não"],
+                ] as const).map(([valor, rotulo]) => (
+                  <button
+                    key={String(valor)}
+                    type="button"
+                    id={valor ? "tem-conjuge-sim" : "tem-conjuge-nao"}
+                    className={`rounded-lg border px-3 py-2.5 text-sm font-semibold text-left transition-colors ${
+                      dados.tem_conjuge === valor ? "border-primary bg-primary/10 text-ink" : "border-border text-ink-soft hover:border-primary/50"
+                    }`}
+                    onClick={() =>
+                      setDados({
+                        ...dados,
+                        tem_conjuge: valor,
+                        // troca de resposta: o estado civil anterior pode não servir mais
+                        estado_civil:
+                          dados.estado_civil && ESTADOS_COM_CONJUGE.includes(dados.estado_civil) === valor
+                            ? dados.estado_civil
+                            : null,
+                        conjuge: valor ? (dados.conjuge ?? {}) : null,
+                      })
+                    }
+                  >
+                    {rotulo}
+                  </button>
                 ))}
-              </select>
+              </div>
             </Field>
-            {casado && (
+            {dados.tem_conjuge !== null && dados.tem_conjuge !== undefined && (
+              <Field label={modoRapido && !dados.tem_conjuge ? "Estado civil" : "Estado civil *"}>
+                <select
+                  id="estado-civil"
+                  className="input"
+                  value={dados.estado_civil ?? ""}
+                  onChange={(e) => setDados({ ...dados, estado_civil: (e.target.value || null) as EstadoCivil | null })}
+                >
+                  <option value="">Selecione...</option>
+                  {ESTADO_CIVIL_OPCOES.filter((o) => ESTADOS_COM_CONJUGE.includes(o.valor) === !!dados.tem_conjuge).map((o) => (
+                    <option key={o.valor} value={o.valor}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {dados.tem_conjuge && (
               <>
-                <p className="text-xs text-ink-soft -mb-1">Dados do cônjuge</p>
-                <Field label="Nome do cônjuge *">
+                <p className="text-xs text-ink-soft -mb-1">
+                  Dados do {dados.estado_civil === "uniao_estavel" ? "companheiro(a)" : "cônjuge"} — obrigatórios (até no
+                  cadastro rápido): no contrato do Rancho Texas ele(a) assina como COMPRADORA.
+                </p>
+                <Field label="Nome completo *">
                   <input
+                    id="conjuge-nome"
                     className="input"
                     value={dados.conjuge?.nome ?? ""}
                     onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, nome: e.target.value } })}
                   />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="CPF do cônjuge *">
+                  <Field label="CPF *">
                     <input
+                      id="conjuge-cpf"
                       className="input"
                       value={dados.conjuge?.cpf_cnpj ?? ""}
                       onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, cpf_cnpj: e.target.value } })}
                     />
                   </Field>
-                  <Field label="RG do cônjuge *">
+                  <Field label="RG *">
                     <input
+                      id="conjuge-rg"
                       className="input"
                       value={dados.conjuge?.rg ?? ""}
                       onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, rg: e.target.value } })}
@@ -561,15 +608,16 @@ export default function PropostaFormularioCompleto({
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Órgão expedidor do cônjuge">
+                  <Field label="Órgão expedidor">
                     <input
                       className="input"
                       value={dados.conjuge?.orgao_expedidor ?? ""}
                       onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, orgao_expedidor: e.target.value } })}
                     />
                   </Field>
-                  <Field label="Data de nascimento do cônjuge *">
+                  <Field label="Data de nascimento *">
                     <input
+                      id="conjuge-nascimento"
                       className="input"
                       type="date"
                       value={dados.conjuge?.data_nascimento ?? ""}
@@ -578,29 +626,43 @@ export default function PropostaFormularioCompleto({
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Nacionalidade do cônjuge *">
+                  <Field label="Nacionalidade *">
                     <input
+                      id="conjuge-nacionalidade"
                       className="input"
                       value={dados.conjuge?.nacionalidade ?? ""}
                       onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, nacionalidade: e.target.value } })}
                     />
                   </Field>
-                  <Field label="Profissão do cônjuge *">
+                  <Field label="Profissão *">
                     <input
+                      id="conjuge-profissao"
                       className="input"
                       value={dados.conjuge?.profissao ?? ""}
                       onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, profissao: e.target.value } })}
                     />
                   </Field>
                 </div>
-                <Field label="E-mail do cônjuge *">
-                  <input
-                    className="input"
-                    type="email"
-                    value={dados.conjuge?.email ?? ""}
-                    onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, email: e.target.value } })}
-                  />
-                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={edicao ? "Local de nascimento (cidade/UF)" : "Local de nascimento (cidade/UF) *"}>
+                    <input
+                      id="conjuge-naturalidade"
+                      className="input"
+                      placeholder="Ex.: Natal/RN"
+                      value={dados.conjuge?.naturalidade ?? ""}
+                      onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, naturalidade: e.target.value } })}
+                    />
+                  </Field>
+                  <Field label="E-mail *">
+                    <input
+                      id="conjuge-email"
+                      className="input"
+                      type="email"
+                      value={dados.conjuge?.email ?? ""}
+                      onChange={(e) => setDados({ ...dados, conjuge: { ...dados.conjuge, email: e.target.value } })}
+                    />
+                  </Field>
+                </div>
               </>
             )}
           </>
@@ -851,6 +913,12 @@ function Revisao({
           <span className="text-ink-soft">Estado civil: </span>
           {ESTADO_CIVIL_OPCOES.find((o) => o.valor === dados.estado_civil)?.label || "—"}
         </p>
+        {temConjuge(dados) && (
+          <p>
+            <span className="text-ink-soft">Cônjuge/companheiro(a): </span>
+            {dados.conjuge?.nome || "—"} {dados.conjuge?.cpf_cnpj ? `· CPF ${dados.conjuge.cpf_cnpj}` : ""}
+          </p>
+        )}
       </div>
 
       {planoAntigo ? (

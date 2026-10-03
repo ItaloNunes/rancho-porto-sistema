@@ -9,6 +9,7 @@ import type { EstadoCivil, QualificacaoDados } from "../types";
 export const ESTADO_CIVIL_OPCOES: { valor: EstadoCivil; label: string }[] = [
   { valor: "solteiro", label: "Solteiro(a)" },
   { valor: "casado", label: "Casado(a)" },
+  { valor: "uniao_estavel", label: "União estável" },
   { valor: "viuvo", label: "Viúvo(a)" },
   { valor: "divorciado", label: "Divorciado(a)" },
   { valor: "outros", label: "Outros" },

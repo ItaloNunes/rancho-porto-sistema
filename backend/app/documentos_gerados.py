@@ -18,6 +18,7 @@ import docx
 # 'AAAA-MM-DD' do input do navegador ou texto solto) já usados no PDF da
 # proposta completa (gerar_proposta_pdf) -- mesma fonte de dados
 # (dados_qualificacao), sem duplicar a lógica.
+from .cadastro_proposta import tem_conjuge
 from .pdf import ESTADO_CIVIL_LABEL, _fmt_data_livre
 from .plano_pagamento import (  # noqa: F401 -- normalizar_valor_br reexportado
     MEIOS_PAGAMENTO,
@@ -427,9 +428,10 @@ def preencher_contrato_porto_franco(
     _substituir_texto(
         p[5], "DATA DE NASCIMENTO: ", f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}"
     )
-    # "LOCAL" = naturalidade (cidade de nascimento) -- não existe em nenhum
-    # lugar do sistema hoje (QualificacaoDados não coleta isso); fica em
-    # branco de propósito.
+    # "LOCAL" = naturalidade (cidade/UF de nascimento) -- coletada no
+    # formulário desde 03/10; proposta antiga sem ela deixa em branco.
+    if (proponente.get("naturalidade") or "").strip():
+        _substituir_texto(p[6], "LOCAL: ", f"LOCAL: {proponente['naturalidade'].strip()}")
     _substituir_texto(p[7], "CPF: ", f"CPF: {cpf}")
     _substituir_texto(p[8], "IDENTIDADE: ", f"IDENTIDADE: {_identidade(proponente)}")
     _substituir_texto(p[9], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
@@ -599,7 +601,7 @@ def preencher_contrato_rancho_texas(
     endereco = dq.get("endereco_residencial") or {}
     fp = dq.get("forma_pagamento") or {}
     estado_civil = dq.get("estado_civil")
-    tem_compradora = estado_civil == "casado" and bool(conjuge.get("nome"))
+    tem_compradora = tem_conjuge(dq) and bool(conjuge.get("nome"))
 
     doc = docx.Document(str(_TEMPLATES_DIR / "contrato_rancho_texas.docx"))
     t = doc.tables[0]
@@ -615,7 +617,8 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(
         p[4],
         p[4].text,
-        f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}   LOCAL: -",
+        f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}   "
+        f"LOCAL: {(proponente.get('naturalidade') or '').strip() or '-'}",
     )
     _substituir_texto(p[5], p[5].text, f"CPF: {cpf}   IDENTIDADE: {_identidade(proponente)}")
     _substituir_texto(p[6], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
@@ -630,7 +633,8 @@ def preencher_contrato_rancho_texas(
             f"NACIONALIDADE: {conjuge.get('nacionalidade') or '-'}   PROFISSÃO: {conjuge.get('profissao') or '-'}",
         )
         _substituir_texto(
-            p[10], p[10].text, f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))} LOCAL: -"
+            p[10], p[10].text, f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))} "
+            f"LOCAL: {(conjuge.get('naturalidade') or '').strip() or '-'}"
         )
         _substituir_texto(p[11], p[11].text, f"CPF: {cpf_c} IDENTIDADE: {_identidade(conjuge)}")
         _substituir_texto(p[12], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")

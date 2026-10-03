@@ -37,7 +37,7 @@ from ..documentos_gerados import (
 )
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
-from ..cadastro_proposta import problemas_cadastro, so_digitos, telefone_valido, email_valido
+from ..cadastro_proposta import email_valido, problemas_cadastro, problemas_conjuge, so_digitos, telefone_valido, tem_conjuge
 from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, resumo_contrato, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
@@ -563,6 +563,9 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
     else:
         fp_bruto = payload.dados_qualificacao.forma_pagamento.model_dump(mode="json")
         problemas = validar_plano(fp_bruto, payload.valor_proposto, lote[0].get("valor_total"))
+        # Dados do comprador/cônjuge (03/10): CPF/e-mail/telefone válidos e,
+        # se tem cônjuge, os dados dele(a) -- inclusive no cadastro rápido.
+        problemas += problemas_cadastro(payload.dados_qualificacao.model_dump(mode="json"))
         if problemas:
             raise HTTPException(422, " ".join(problemas))
         fp_validado = normalizar_plano(fp_bruto)
@@ -858,7 +861,7 @@ def _documentos_obrigatorios_da_proposta(dados_qualificacao: Optional[dict]) -> 
     assume solteiro, igual ao checklist do frontend (PropostaDocumentos.tsx)."""
     dados = dados_qualificacao or {}
     obrigatorios = list(DOCUMENTOS_OBRIGATORIOS)
-    if dados.get("estado_civil") == "casado":
+    if tem_conjuge(dados):
         obrigatorios += list(DOCUMENTOS_CONJUGE)
     return tuple(obrigatorios)
 
@@ -1303,6 +1306,15 @@ def gerar_contrato_proposta(
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
     if "rancho" in condominio_nome.lower():
+        # O Rancho Texas qualifica o cônjuge/companheiro(a) como COMPRADORA:
+        # sem os dados dele(a) o contrato sairia incompleto.
+        problemas = problemas_conjuge(proposta.get("dados_qualificacao") or {})
+        if problemas:
+            raise HTTPException(
+                422,
+                "O contrato não foi gerado: " + " ".join(problemas)
+                + " Use \"Corrigir dados\" na proposta pra completar.",
+            )
         docx_bytes = preencher_contrato_rancho_texas(
             proposta=proposta,
             lote=lote,

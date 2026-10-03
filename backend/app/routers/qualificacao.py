@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
+from ..cadastro_proposta import tem_conjuge
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..schemas import (
@@ -398,7 +399,7 @@ def enviar_para_analise(token: str):
     if not estado_civil:
         faltando.append("estado civil")
 
-    if estado_civil == "casado":
+    if tem_conjuge(dados):
         conjuge = dados.get("conjuge") or {}
         for campo, rotulo in [
             ("nome", "nome do cônjuge"), ("cpf_cnpj", "CPF do cônjuge"), ("rg", "RG do cônjuge"),
@@ -429,7 +430,7 @@ def enviar_para_analise(token: str):
             faltando.append("valor da parcela")
 
     obrigatorios = list(DOCUMENTOS_OBRIGATORIOS)
-    if dados.get("estado_civil") == "casado":
+    if tem_conjuge(dados):
         obrigatorios += list(DOCUMENTOS_CONJUGE)
     documentos = (
         sb.table("documentos_qualificacao").select("tipo").eq("formulario_id", q["id"]).execute().data

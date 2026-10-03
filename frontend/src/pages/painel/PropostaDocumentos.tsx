@@ -1,3 +1,4 @@
+import { temConjuge } from "../../lib/cadastro";
 import { useRef, useState } from "react";
 import { abrirAbaComCarregamento, api, formatarNumeroProposta, horasRestantes, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -104,7 +105,7 @@ export default function PropostaDocumentos({
   // conhecido quando a proposta nasceu do formulário completo ou de uma
   // qualificação aprovada (dados_qualificacao preenchido) — sem esse dado,
   // assume-se solteiro (não pede documento do cônjuge à toa).
-  const casado = proposta.dados_qualificacao?.estado_civil === "casado";
+  const casado = temConjuge(proposta.dados_qualificacao ?? {});
   const obrigatorios: DocumentoTipo[] = [...DOCUMENTOS_OBRIGATORIOS, ...(casado ? DOCUMENTOS_CONJUGE : [])];
   const faltando = obrigatorios.filter((tipo) => !documentos.some((d) => d.tipo === tipo));
 

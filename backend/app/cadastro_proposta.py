@@ -93,6 +93,50 @@ def _pessoa(p: dict, quem: str) -> list[str]:
     return erros
 
 
+ESTADOS_COM_CONJUGE = ("casado", "uniao_estavel")
+
+# O mínimo pra qualificar o cônjuge/companheiro(a) no contrato (bloco
+# "B – COMPRADORA" do Rancho Texas) e pros documentos dele(a).
+CAMPOS_CONJUGE = (
+    ("nome", "nome"),
+    ("cpf_cnpj", "CPF"),
+    ("rg", "RG"),
+    ("data_nascimento", "data de nascimento"),
+    ("nacionalidade", "nacionalidade"),
+    ("profissao", "profissão"),
+)
+
+
+def tem_conjuge(dados: Optional[dict]) -> bool:
+    """Se o comprador tem cônjuge/companheiro(a) que entra no contrato.
+    Resposta direta do formulário (tem_conjuge, 03/10); proposta antiga, sem
+    essa resposta, decide pelo estado civil (casado/união estável)."""
+    dados = dados or {}
+    if dados.get("tem_conjuge") is not None:
+        return bool(dados.get("tem_conjuge"))
+    return dados.get("estado_civil") in ESTADOS_COM_CONJUGE
+
+
+def problemas_conjuge(dados: Optional[dict]) -> list[str]:
+    """Coerência entre a resposta "tem cônjuge?" e o estado civil, e dados
+    mínimos do cônjuge quando ele existe. Vale até no cadastro rápido: sem
+    isso o contrato do Rancho Texas sairia sem a COMPRADORA."""
+    dados = dados or {}
+    erros: list[str] = []
+    estado = dados.get("estado_civil")
+    resposta = dados.get("tem_conjuge")
+    if resposta is True and estado not in ESTADOS_COM_CONJUGE:
+        erros.append("Comprador com cônjuge/companheiro(a): o estado civil tem que ser Casado(a) ou União estável.")
+    if resposta is False and estado in ESTADOS_COM_CONJUGE:
+        erros.append("Estado civil Casado(a)/União estável, mas foi informado que o comprador não tem cônjuge -- confira.")
+    if tem_conjuge(dados):
+        conjuge = dados.get("conjuge") or {}
+        faltando = [rotulo for campo, rotulo in CAMPOS_CONJUGE if not _preenchido(conjuge.get(campo))]
+        if faltando:
+            erros.append("Faltam dados do cônjuge/companheiro(a): " + ", ".join(faltando) + ".")
+    return erros
+
+
 def problemas_cadastro(dados: Optional[dict]) -> list[str]:
     dados = dados or {}
     erros: list[str] = []
@@ -100,7 +144,8 @@ def problemas_cadastro(dados: Optional[dict]) -> list[str]:
     if not _preenchido(proponente.get("nome")):
         erros.append("Informe o nome completo do comprador.")
     erros += _pessoa(proponente, "do comprador")
-    if dados.get("estado_civil") == "casado":
+    erros += problemas_conjuge(dados)
+    if tem_conjuge(dados):
         erros += _pessoa(dados.get("conjuge") or {}, "do cônjuge")
     for campo, rotulo in (
         ("telefone_celular", "Celular"),

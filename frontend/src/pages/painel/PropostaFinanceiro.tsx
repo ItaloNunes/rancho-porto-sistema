@@ -12,6 +12,7 @@ import {
 import type { ConferenciaProposta, HistoricoContratos } from "../../lib/api";
 import { fmtBRL, fmtData, lerPlano, lerValor, resumoPlano, textoMeio, valorPorExtenso } from "../../lib/pagamento";
 import { ESTADO_CIVIL_OPCOES } from "../../components/qualificacaoCampos";
+import { temConjuge } from "../../lib/cadastro";
 import PropostaDocumentos from "./PropostaDocumentos";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
 import type { EnderecoDados, PessoaDados, PropostaDetalhe, PropostaStatus, QualificacaoDados } from "../../types";
@@ -228,9 +229,10 @@ export default function PropostaFinanceiro({
           <Bloco titulo="Comprador">
             <Pessoa p={dados.proponente} />
             <Linha rotulo="Estado civil" valor={ESTADO_CIVIL_OPCOES.find((o) => o.valor === dados.estado_civil)?.label} />
+            <Linha rotulo="Cônjuge/comp." valor={temConjuge(dados) ? "Sim (entra no contrato do Rancho Texas)" : "Não"} />
           </Bloco>
-          {dados.estado_civil === "casado" && (
-            <Bloco titulo="Cônjuge">
+          {temConjuge(dados) && (
+            <Bloco titulo={dados.estado_civil === "uniao_estavel" ? "Companheiro(a)" : "Cônjuge"}>
               <Pessoa p={dados.conjuge} />
             </Bloco>
           )}
@@ -329,6 +331,7 @@ function Pessoa({ p }: { p?: PessoaDados | null }) {
       <Linha rotulo="CPF/CNPJ" valor={p?.cpf_cnpj} />
       <Linha rotulo="RG" valor={[p?.rg, p?.orgao_expedidor].filter(Boolean).join(" / ")} />
       <Linha rotulo="Nascimento" valor={dataBR(p?.data_nascimento)} />
+      <Linha rotulo="Local de nasc." valor={p?.naturalidade} />
       <Linha rotulo="Nacionalidade" valor={p?.nacionalidade} />
       <Linha rotulo="Profissão" valor={p?.profissao} />
       <Linha rotulo="E-mail" valor={p?.email} />
