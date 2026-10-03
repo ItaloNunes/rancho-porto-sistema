@@ -38,7 +38,7 @@ from ..documentos_gerados import (
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..cadastro_proposta import problemas_cadastro, so_digitos, telefone_valido, email_valido
-from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar
+from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
 from ..plano_pagamento import validar as validar_plano
@@ -711,6 +711,23 @@ def _vazio(v) -> bool:
     return v is None or v == "" or v == {} or v is False
 
 
+def _plano_antigo_mantido(fp_novo: dict, fp_antigo: dict, vp_novo, vp_antigo, lote: dict) -> bool:
+    """True quando a proposta é do formulário antigo e a correção não mexeu
+    em nada que vá pro contrato: o plano continua não-estruturado e os
+    números impressos (entrada, parcelas, 1ª parcela, chave) e o preço são
+    os mesmos de antes."""
+    if ler_plano(fp_antigo).estruturado or ler_plano(fp_novo).estruturado:
+        return False
+    if vp_novo is None or vp_antigo is None or abs(float(vp_novo) - float(vp_antigo)) > 0.005:
+        return False
+    if bool(fp_novo.get("a_vista")) != bool(fp_antigo.get("a_vista")):
+        return False
+    a, b = valores_contrato(fp_novo, lote), valores_contrato(fp_antigo, lote)
+    # o texto da 1ª parcela pode vir só reformatado (10/10/2026 -> 2026-10-10)
+    campos = ("a_vista", "entrada", "parcelas", "parcela_valor", "chave", "primeira_parcela")
+    return all(getattr(a, c) == getattr(b, c) for c in campos)
+
+
 @router.put("/propostas/{proposta_id}/dados", response_model=Proposta)
 def editar_dados_proposta(
     proposta_id: str, payload: PropostaDadosFinanceiro, corretor: dict = Depends(get_current_corretor)
@@ -749,10 +766,24 @@ def editar_dados_proposta(
     dados = payload.dados_qualificacao.model_dump(mode="json")
     fp = dados.get("forma_pagamento") or {}
     valor_proposto = fp.get("valor_proposto")
-    problemas = validar_plano(fp, valor_proposto, lote.get("valor_total")) + problemas_cadastro(dados)
-    if problemas:
-        raise HTTPException(422, "\n".join(problemas))
-    fp = normalizar_plano(fp)
+    fp_antigo = (existente.get("dados_qualificacao") or {}).get("forma_pagamento") or {}
+    if _plano_antigo_mantido(fp, fp_antigo, valor_proposto, existente.get("valor_proposto"), lote):
+        # Proposta do formulário antigo em que só os dados cadastrais mudaram
+        # (ex.: celular de 0001/0002): o plano fica exatamente como estava e
+        # é conferido pelas regras dele (os números do contrato fecham) --
+        # não obriga a refazer a forma de pagamento só pra corrigir um telefone.
+        valor_proposto = existente.get("valor_proposto")
+        problemas = problemas_para_aprovar(fp_antigo, valor_proposto, lote) + problemas_cadastro(dados)
+        if problemas:
+            raise HTTPException(422, "\n".join(problemas))
+        if not fp.get("confirmado"):
+            raise HTTPException(422, "Falta a confirmação final: marque que conferiu os dados corrigidos.")
+        fp = dict(fp_antigo)
+    else:
+        problemas = validar_plano(fp, valor_proposto, lote.get("valor_total")) + problemas_cadastro(dados)
+        if problemas:
+            raise HTTPException(422, "\n".join(problemas))
+        fp = normalizar_plano(fp)
     dados["forma_pagamento"] = fp
     # cinto e suspensório: exatamente os números que o contrato vai imprimir
     problemas = conferir_contrato(fp, valor_proposto, lote)

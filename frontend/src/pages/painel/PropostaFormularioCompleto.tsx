@@ -3,7 +3,7 @@ import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from
 import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPagamento";
 import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
 import { problemasPessoa, problemasTelefones } from "../../lib/cadastro";
-import { fmtBRL, fmtData, lerPlano, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
+import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
 
@@ -97,6 +97,12 @@ export default function PropostaFormularioCompleto({
 }) {
   const [loteId, setLoteId] = useState(edicao?.lote_id ?? reservaOrigem?.lote_id ?? "");
   const [motivo, setMotivo] = useState("");
+  // Proposta do formulário antigo (sem forma/meio/data da entrada): se a
+  // correção não mexer nos valores, o plano fica como estava e o servidor
+  // confere pelas regras dele (ver crm.py::_plano_antigo_mantido) — dá pra
+  // corrigir só um telefone sem refazer a forma de pagamento.
+  const fpOriginal = useRef(edicao ? dadosParaEdicao(edicao).forma_pagamento : null);
+  const planoLegado = !!fpOriginal.current && !fpOriginal.current.sinal_forma && !fpOriginal.current.avista_meio;
   const [condominioSlug, setCondominioSlug] = useState(
     () => lotes.find((l) => l.id === reservaOrigem?.lote_id)?.condominio_slug ?? "",
   );
@@ -181,6 +187,7 @@ export default function PropostaFormularioCompleto({
     setLoteId(id);
   }
   const casado = dados.estado_civil === "casado";
+  const planoAntigoMantido = planoLegado && mesmoPlano(dados.forma_pagamento, fpOriginal.current!);
 
   function validarEndereco(e: QualificacaoDados["endereco_residencial"], rotulo: string): string | null {
     if (!e.rua?.trim()) return `Informe a rua/avenida do endereço ${rotulo}.`;
@@ -242,6 +249,11 @@ export default function PropostaFormularioCompleto({
     if (p === 5) {
       const invalidos = problemasTelefones(dados);
       if (invalidos.length) return invalidos.join("\n");
+    }
+    if ((p === 6 || p === 7) && planoAntigoMantido) {
+      if (p === 7 && !dados.forma_pagamento.confirmado)
+        return "Falta a confirmação final: marque que conferiu os dados corrigidos.";
+      return null;
     }
     if (p === 6) {
       // Plano de pagamento inteiro (mesmas regras do servidor, ver
@@ -684,6 +696,13 @@ export default function PropostaFormularioCompleto({
           </>
         )}
 
+        {passo === 6 && planoLegado && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Proposta do formulário antigo. Se você não mexer nos valores abaixo, a forma de pagamento continua
+            exatamente como estava. Se mudar qualquer valor, complete também a forma, o meio e a data da entrada.
+            {planoAntigoMantido ? " (Nenhum valor alterado até agora.)" : " (Valores alterados — o plano será conferido por completo.)"}
+          </p>
+        )}
         {passo === 6 && (
           <FormaPagamentoEtapa
             fp={dados.forma_pagamento}
@@ -698,6 +717,7 @@ export default function PropostaFormularioCompleto({
             lote={loteSelecionado}
             modoRapido={modoRapido}
             edicao={!!edicao}
+            planoAntigo={planoAntigoMantido ? edicao : null}
             onChangePagamento={(fp) => setDados((d) => ({ ...d, forma_pagamento: fp }))}
           />
         )}
@@ -754,6 +774,23 @@ export default function PropostaFormularioCompleto({
   );
 }
 
+/** Mesmos valores de plano (só o que vai pro contrato) — pra saber se a
+ * correção mexeu na forma de pagamento de uma proposta antiga. */
+function mesmoPlano(a: QualificacaoDados["forma_pagamento"], b: QualificacaoDados["forma_pagamento"]): boolean {
+  const n = (v: string | null | undefined) => lerValor(v ?? null);
+  return (
+    !!a.a_vista === !!b.a_vista &&
+    !a.sinal_forma &&
+    !a.avista_meio &&
+    (a.valor_proposto ?? null) === (b.valor_proposto ?? null) &&
+    n(a.sinal) === n(b.sinal) &&
+    (a.dividido_em_parcelas ?? null) === (b.dividido_em_parcelas ?? null) &&
+    n(a.valor_parcela) === n(b.valor_parcela) &&
+    n(a.chave_valor) === n(b.chave_valor) &&
+    (a.primeiro_mes ?? "") === (b.primeiro_mes ?? "")
+  );
+}
+
 function formatMoneySimples(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -763,8 +800,11 @@ function Revisao({
   lote,
   modoRapido,
   edicao = false,
+  planoAntigo = null,
   onChangePagamento,
 }: {
+  /** Proposta antiga cujo plano não foi mexido: mostra o plano como está. */
+  planoAntigo?: PropostaDetalhe | null;
   dados: QualificacaoDados;
   lote: LoteComCondominio | null;
   modoRapido: boolean;
@@ -813,6 +853,19 @@ function Revisao({
         </p>
       </div>
 
+      {planoAntigo ? (
+        <section className="rounded-lg border border-border p-3 text-sm">
+          <h3 className="text-sm font-bold text-ink mb-1">Forma de pagamento (mantida como estava)</h3>
+          <p className="text-ink">
+            {formatMoneySimples(planoAntigo.valor_proposto)} — {planoAntigo.condicoes_pagamento || "plano de tabela do lote"}
+          </p>
+          <p className="text-xs text-ink-soft mt-1">
+            Proposta do formulário antigo: o contrato continua usando os mesmos valores (entrada, parcelas e chave do
+            plano de tabela), que o servidor confere de novo ao salvar.
+          </p>
+        </section>
+      ) : (
+      <>
       <section className="rounded-lg border border-border p-3">
         <h3 className="text-sm font-bold text-ink mb-1">Valores que vão para o contrato</h3>
         {linhaValor("Valor de tabela do lote", tabela)}
@@ -839,9 +892,11 @@ function Revisao({
       </section>
 
       <ConferenciaPlano fp={fp} valorTabela={tabela} />
+      </>
+      )}
 
       <div className="grid gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
-        {foraTabela && (
+        {foraTabela && !planoAntigo && (
           <label className="flex items-start gap-2 text-sm text-ink">
             <input
               id="fp-confirma-fora-tabela"

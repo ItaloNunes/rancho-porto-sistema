@@ -352,3 +352,35 @@ def test_aprovacao_trava_celular_invalido(cliente_api):
     sb.banco["propostas"][0]["dados_qualificacao"]["telefone_celular"] = "fulano@email.com"
     r = api.patch("/crm/propostas/p3/status", json={"status": "aprovada"})
     assert r.status_code == 422 and "Celular inválido" in r.text
+
+
+def _semear_0001(sb):
+    # real: proposta antiga aprovada, plano fecha com a chave do lote, e-mail no celular
+    fp = {"renda": "12.000,00", "sinal": "8.999,00", "a_vista": False, "vencimento": "10",
+          "primeiro_mes": "10/10/2026", "valor_parcela": "719,92", "valor_proposto": 89990.0, "dividido_em_parcelas": 100}
+    dq = {"proponente": {"nome": "ZAIRA", "cpf_cnpj": "52998224725", "email": "zaira@hotmail.com"},
+          "estado_civil": "casado", "conjuge": {"nome": "JUNIOR"}, "endereco_residencial": {}, "endereco_comercial": {},
+          "telefone_celular": "zaira@hotmail.com", "telefone_residencial": " 84 99917-6750", "forma_pagamento": fp}
+    sb.banco.setdefault("propostas", []).append({
+        "id": "p1", "numero": 1, "versao": 1, "lote_id": "lote-1", "cliente_id": "cli-1", "corretor_id": "cor-1",
+        "valor_proposto": 89990.0, "status": "aprovada", "created_at": "2026-09-21T00:00:00+00:00",
+        "dados_qualificacao": copy.deepcopy(dq)})
+    return dq
+
+
+def test_corrige_so_o_celular_de_proposta_antiga_sem_refazer_o_plano(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    dq = _semear_0001(sb)
+    dq["telefone_celular"] = "(84) 99917-6750"
+    dq["forma_pagamento"] = {**dq["forma_pagamento"], "primeiro_mes": "2026-10-10", "confirmado": True}  # como o form manda
+    r = api.put("/crm/propostas/p1/dados", json={"dados_qualificacao": dq, "motivo": "celular"})
+    assert r.status_code == 200, r.text
+    p = sb.banco["propostas"][0]
+    assert p["versao"] == 2 and p["dados_qualificacao"]["telefone_celular"] == "(84) 99917-6750"
+    assert p["dados_qualificacao"]["forma_pagamento"]["primeiro_mes"] == "10/10/2026"  # plano antigo intacto
+    assert p["valor_proposto"] == 89990.0
+    # mexer no valor da parcela de um plano antigo exige refazer o plano no formato novo
+    dq["forma_pagamento"]["valor_parcela"] = "700,00"
+    r = api.put("/crm/propostas/p1/dados", json={"dados_qualificacao": dq})
+    assert r.status_code == 422 and "Informe se a entrada será paga" in r.text
