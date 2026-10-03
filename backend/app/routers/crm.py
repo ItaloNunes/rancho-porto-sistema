@@ -38,7 +38,7 @@ from ..documentos_gerados import (
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..cadastro_proposta import problemas_cadastro, so_digitos, telefone_valido, email_valido
-from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, valores_contrato
+from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, resumo_contrato, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
 from ..plano_pagamento import validar as validar_plano
@@ -807,7 +807,7 @@ def editar_dados_proposta(
     updates = {
         "dados_qualificacao": dados,
         "valor_proposto": valor_proposto,
-        "condicoes_pagamento": resumo_plano(fp),
+        "condicoes_pagamento": resumo_contrato(fp, lote, valor_proposto),
         "observacoes": (fp.get("observacoes") or "").strip() or None,
         "versao": versao_anterior + 1,
     }

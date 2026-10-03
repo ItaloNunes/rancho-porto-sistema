@@ -380,6 +380,7 @@ def test_corrige_so_o_celular_de_proposta_antiga_sem_refazer_o_plano(cliente_api
     assert p["versao"] == 2 and p["dados_qualificacao"]["telefone_celular"] == "(84) 99917-6750"
     assert p["dados_qualificacao"]["forma_pagamento"]["primeiro_mes"] == "10/10/2026"  # plano antigo intacto
     assert p["valor_proposto"] == 89990.0
+    assert p["condicoes_pagamento"] == "Entrada R$ 8.999,00 + 100x de R$ 719,92 + chave R$ 8.999,00"
     # mexer no valor da parcela de um plano antigo exige refazer o plano no formato novo
     dq["forma_pagamento"]["valor_parcela"] = "700,00"
     r = api.put("/crm/propostas/p1/dados", json={"dados_qualificacao": dq})

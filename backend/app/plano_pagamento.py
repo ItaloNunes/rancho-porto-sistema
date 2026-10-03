@@ -426,6 +426,24 @@ def valores_contrato(fp: Optional[dict], lote: Optional[dict]) -> ValoresContrat
     )
 
 
+def resumo_contrato(fp: Optional[dict], lote: Optional[dict], valor_total: Optional[float]) -> str:
+    """Resumo com os MESMOS números que o contrato imprime (proposta antiga
+    inclusive, em que a chave vem da tabela do lote)."""
+    if ler_plano(fp).estruturado:
+        return resumo(fp)
+    v = valores_contrato(fp, lote)
+    if v.a_vista:
+        return f"À vista: R$ {fmt_brl(valor_total)}"
+    partes = []
+    if v.entrada:
+        partes.append(f"Entrada R$ {fmt_brl(v.entrada)}")
+    if v.parcelas and v.parcela_valor:
+        partes.append(f"{v.parcelas}x de R$ {fmt_brl(v.parcela_valor)}")
+    if v.chave:
+        partes.append(f"chave R$ {fmt_brl(v.chave)}")
+    return " + ".join(partes) or "A combinar"
+
+
 def conferir_contrato(fp: Optional[dict], valor_total: Optional[float], lote: Optional[dict]) -> list[str]:
     """Última trava, antes de emitir o contrato (e na aprovação): os números
     que VÃO ser impressos têm que fechar com o preço impresso, no centavo.
