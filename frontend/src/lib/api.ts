@@ -565,6 +565,19 @@ export const api = {
     requestBlob(`/crm/propostas/${id}/recibo?valor=${valor}&data=${data}`),
   gerarContratoProposta: (id: string, comissao: number, data: string) =>
     requestBlob(`/crm/propostas/${id}/contrato?comissao=${comissao}&data=${data}`),
+  // Financeiro (03/10): corrige os dados da proposta (comprador, cônjuge,
+  // endereços, contatos, forma de pagamento) — mesmas conferências da
+  // criação; sobe a versão da proposta (e do contrato).
+  editarDadosProposta: (id: string, dados_qualificacao: QualificacaoDados, motivo?: string | null) =>
+    request<Proposta>(
+      `/crm/propostas/${id}/dados`,
+      { method: "PUT", body: JSON.stringify({ dados_qualificacao, motivo: motivo || null }) },
+      true,
+    ),
+  // Pendências que o servidor vê agora (mesmas da aprovação e do contrato).
+  conferenciaProposta: (id: string) => request<ConferenciaProposta>(`/crm/propostas/${id}/conferencia`, undefined, true),
+  // Contratos já emitidos (número, versão, quem/quando).
+  historicoContratos: (id: string) => request<HistoricoContratos>(`/crm/propostas/${id}/contratos`, undefined, true),
   // Anexos da proposta (RG, CPF, comprovante de renda etc.) — diferente do
   // fluxo de qualificação por link, aqui o corretor pode anexar/remover a
   // qualquer momento, mesmo com a proposta já criada há tempos. A lista já
@@ -686,6 +699,34 @@ export function formatArea(v: number): string {
  * backend/app/pdf.py::gerar_proposta_pdf) e nas descrições do log de
  * auditoria (backend/app/routers/crm.py::_numero_proposta), pra bater com
  * o que aparece impresso quando alguém for procurar essa proposta. */
+export interface ConferenciaProposta {
+  plano_estruturado: boolean;
+  problemas_pagamento: string[];
+  problemas_contrato: string[];
+  problemas_cadastro: string[];
+}
+
+export interface EmissaoContrato {
+  emitido_em: string;
+  emitido_por?: string | null;
+  numero_contrato?: string | null;
+  versao?: number | null;
+  data_contrato?: string | null;
+  comissao?: number | null;
+}
+
+export interface HistoricoContratos {
+  numero_contrato: string;
+  versao_atual: number;
+  emissoes: EmissaoContrato[];
+}
+
+/** "0003/2026" — mesmo número que sai no título do contrato (ano em que a
+ * proposta foi feita; ver documentos_gerados.identificacao_contrato). */
+export function numeroContrato(numero: number, createdAt: string): string {
+  return `${String(numero).padStart(4, "0")}/${createdAt.slice(0, 4)}`;
+}
+
 export function formatarNumeroProposta(numero: number, versao: number): string {
   return `Nº ${String(numero).padStart(4, "0")}-v${versao}`;
 }

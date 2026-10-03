@@ -266,6 +266,31 @@ def _endereco_completo(endereco: dict) -> str:
     return linha or "-"
 
 
+
+def identificacao_contrato(proposta: dict, data_contrato: Optional[date] = None) -> tuple[str, int]:
+    """Número e versão do contrato (pedido de 03/10).
+
+    - Número: o mesmo da proposta + ano em que ela foi feita -> "0003/2026".
+      Um contrato por proposta; o número não muda se o contrato for emitido
+      de novo (nem se for emitido no ano seguinte).
+    - Versão: a versão da proposta. Toda correção de dados (financeiro ou
+      corretor) sobe a versão da proposta, então um contrato "Versão 2" é o
+      emitido depois da 1ª correção -- dá pra saber, só de olhar o papel, se
+      aquela via é a vigente."""
+    numero = int(proposta.get("numero") or 0)
+    ano = None
+    criado = proposta.get("created_at")
+    if isinstance(criado, str) and re.match(r"\d{4}-", criado):
+        ano = int(criado[:4])
+    if ano is None:
+        ano = (data_contrato or date.today()).year
+    return f"{numero:04d}/{ano}", int(proposta.get("versao") or 1)
+
+
+def titulo_contrato(proposta: dict, data_contrato: Optional[date] = None) -> str:
+    numero, versao = identificacao_contrato(proposta, data_contrato)
+    return f"CONTRATO Nº {numero} – VERSÃO {versao}"
+
 def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
     """Textos da forma de pagamento pros dois contratos, montados a partir
     do plano da proposta (app/plano_pagamento.py). Proposta antiga (sem o
@@ -509,7 +534,7 @@ def preencher_contrato_porto_franco(
     _substituir_texto(
         doc.paragraphs[0],
         "CONTRATO Nº  0/2026",
-        f"CONTRATO Nº {proposta.get('numero', 0):04d}/{data_contrato.year}",
+        titulo_contrato(proposta, data_contrato),
     )
 
     # --- Assinatura: CPF do comprador ---------------------------------------
@@ -724,7 +749,7 @@ def preencher_contrato_rancho_texas(
 
     # --- Título (número do contrato) -------------------------------------------
     _substituir_texto(
-        doc.paragraphs[0], "CONTRATO Nº /2026", f"CONTRATO Nº {proposta.get('numero', 0):04d}/{data_contrato.year}"
+        doc.paragraphs[0], "CONTRATO Nº /2026", titulo_contrato(proposta, data_contrato)
     )
 
     # --- Assinaturas: nome e CPF do(s) comprador(es) ----------------------------

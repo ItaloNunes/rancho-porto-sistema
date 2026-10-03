@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { api, formatMoney, formatarNumeroProposta } from "../../lib/api";
-import PropostaDocumentos, { PrazoAnaliseBadge } from "./PropostaDocumentos";
+import { api, formatMoney, formatarNumeroProposta, numeroContrato } from "../../lib/api";
+import { PrazoAnaliseBadge } from "./PropostaDocumentos";
+import PropostaFinanceiro from "./PropostaFinanceiro";
 import type { PropostaDetalhe, PropostaStatus } from "../../types";
 
 // Uma proposta sai da fila do financeiro assim que alguém decide algo sobre
@@ -47,12 +48,16 @@ export default function PainelFinanceiro() {
   const [propostas, setPropostas] = useState<PropostaDetalhe[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aprovandoId, setAprovandoId] = useState<string | null>(null);
+  // Proposta aberta na tela de conferência (dados + documentos + contrato).
   const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
   const [reciboDe, setReciboDe] = useState<PropostaDetalhe | null>(null);
   const [contratoDe, setContratoDe] = useState<PropostaDetalhe | null>(null);
 
+  const [atualizacao, setAtualizacao] = useState(0);
+
   function recarregar() {
     setErro(null);
+    setAtualizacao((n) => n + 1);
     api.listarPropostas().then(setPropostas).catch((e) => setErro(e.message));
   }
 
@@ -74,7 +79,13 @@ export default function PainelFinanceiro() {
   const encerradas = (propostas ?? []).filter((p) => STATUS_ENCERRADAS.includes(p.status)).sort(porMaisRecente);
 
   async function aprovar(p: PropostaDetalhe) {
-    if (!confirm(`Aprovar a proposta ${formatarNumeroProposta(p.numero, p.versao)}?`)) return;
+    if (
+      !confirm(
+        `Aprovar a proposta ${formatarNumeroProposta(p.numero, p.versao)} — ${p.cliente?.nome ?? ""}, ` +
+          `${formatMoney(p.valor_proposto)}?\n\nConfira antes: os valores e dados desta versão são os que vão para o contrato.`,
+      )
+    )
+      return;
     setAprovandoId(p.id);
     try {
       await api.atualizarStatusProposta(p.id, "aprovada");
@@ -99,13 +110,14 @@ export default function PainelFinanceiro() {
 
   async function gerarContrato(p: PropostaDetalhe, comissao: number, data: string) {
     const blob = await api.gerarContratoProposta(p.id, comissao, data);
-    const nomeArquivo = `contrato-${p.lote?.identificador ?? p.id}.pdf`;
+    const nomeArquivo = `contrato-${numeroContrato(p.numero, p.created_at).replace("/", "-")}-v${p.versao}-${p.lote?.identificador ?? p.id}.pdf`;
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = nomeArquivo;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    recarregar(); // histórico de contratos emitidos (número/versão)
   }
 
   return (
@@ -113,8 +125,9 @@ export default function PainelFinanceiro() {
       <div>
         <h1 className="text-xl font-bold text-ink">Financeiro</h1>
         <p className="text-xs text-ink-soft mt-1">
-          No topo, as propostas com todos os documentos obrigatórios anexados aguardando aprovação. Depois de
-          aprovada, a proposta desce pra “Aprovadas”, onde ficam o recibo e o contrato.
+          No topo, as propostas com todos os documentos obrigatórios anexados aguardando aprovação. Clique em
+          “abrir” pra conferir a proposta com os documentos, corrigir qualquer dado e aprovar. Depois de aprovada,
+          a proposta desce pra “Aprovadas”, onde ficam o recibo e o contrato (numerado e com versão).
         </p>
       </div>
 
@@ -202,10 +215,15 @@ export default function PainelFinanceiro() {
           // (ex.: aprovada em outra aba) — nesse caso só não reabre o modal.
           if (!proposta) return null;
           return (
-            <Modal onClose={() => setVerDocumentosDe(null)} labelledBy="financeiro-documentos-title">
-              <div className="p-6 sm:p-8">
-                <PropostaDocumentos proposta={proposta} onAtualizado={recarregar} />
-              </div>
+            <Modal onClose={() => setVerDocumentosDe(null)} labelledBy="financeiro-proposta-title" largo>
+              <PropostaFinanceiro
+                proposta={proposta}
+                onAtualizado={recarregar}
+                onAprovar={aprovar}
+                onGerarRecibo={setReciboDe}
+                onGerarContrato={setContratoDe}
+                atualizacao={atualizacao}
+              />
             </Modal>
           );
         })()}
@@ -245,7 +263,7 @@ function TabelaFinanceiro({
             <th className="px-4 py-3 font-medium">Lote</th>
             <th className="px-4 py-3 font-medium">Cliente</th>
             <th className="px-4 py-3 font-medium">Valor proposto</th>
-            <th className="px-4 py-3 font-medium">Documentos</th>
+            <th className="px-4 py-3 font-medium">Conferência</th>
             <th className="px-4 py-3 font-medium" />
           </tr>
         </thead>
@@ -259,8 +277,8 @@ function TabelaFinanceiro({
               <td className="px-4 py-3 text-ink">{p.cliente?.nome ?? "—"}</td>
               <td className="px-4 py-3 text-ink-soft">{formatMoney(p.valor_proposto)}</td>
               <td className="px-4 py-3 whitespace-nowrap">
-                <button className="btn-row btn-row-neutral mr-1.5" onClick={() => onVerDocumentos(p.id)}>
-                  ver documentos
+                <button className="btn-row btn-row-primary mr-1.5" onClick={() => onVerDocumentos(p.id)}>
+                  abrir
                 </button>
                 {colunaSituacao(p)}
               </td>
@@ -399,6 +417,9 @@ function FormularioContrato({
           Gerar contrato
         </h2>
         <p className="text-xs text-ink-soft mt-1">
+          <span className="block font-mono text-ink mb-1">
+            Contrato Nº {numeroContrato(proposta.numero, proposta.created_at)} – versão {proposta.versao}
+          </span>
           {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O contrato sai
           em PDF, preenchido com os dados já cadastrados (comprador, lote, forma de pagamento) no modelo real da
           imobiliária, mantendo o texto jurídico exato. Confira os campos que não existem no sistema (ex.: local de

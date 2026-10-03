@@ -5,10 +5,13 @@ export default function Modal({
   onClose,
   children,
   labelledBy,
+  largo = false,
 }: {
   onClose: () => void;
   children: React.ReactNode;
   labelledBy?: string;
+  /** Telas de conferência com muita informação (ex.: proposta no Financeiro). */
+  largo?: boolean;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -34,9 +37,9 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className="relative w-full sm:max-w-lg max-h-[92vh] sm:max-h-[85vh] overflow-y-auto
+        className={`relative w-full ${largo ? "sm:max-w-4xl" : "sm:max-w-lg"} max-h-[92vh] sm:max-h-[90vh] overflow-y-auto
                    bg-surface rounded-t-2xl sm:rounded-2xl shadow-2xl
-                   animate-slide-up sm:animate-scale-in"
+                   animate-slide-up sm:animate-scale-in`}
       >
         <button
           onClick={onClose}

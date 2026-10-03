@@ -1,10 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../../components/qualificacaoCampos";
 import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPagamento";
-import { api, prewarmBackend } from "../../lib/api";
+import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
+import { problemasPessoa, problemasTelefones } from "../../lib/cadastro";
 import { fmtBRL, fmtData, lerPlano, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
-import type { EstadoCivil, LoteComCondominio, QualificacaoDados, ReservaComLote } from "../../types";
+import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
+
+/** 'DD/MM/AAAA' (texto de proposta antiga) -> 'AAAA-MM-DD' (campo de data). */
+function dataParaIso(v: string | null | undefined): string | null | undefined {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((v ?? "").trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : v;
+}
+
+/** Dados gravados na proposta -> estado do formulário (correção pelo
+ * financeiro, 03/10). Completa o que faltar com o formulário vazio, traz as
+ * datas de propostas antigas pro formato do campo de data e DESMARCA as
+ * confirmações — quem corrige confere e confirma de novo. */
+export function dadosParaEdicao(p: PropostaDetalhe): QualificacaoDados {
+  const vazio = qualificacaoDadosVazio();
+  const dq = (p.dados_qualificacao ?? {}) as Partial<QualificacaoDados>;
+  const fp = { ...(dq.forma_pagamento ?? {}) };
+  return {
+    ...vazio,
+    ...dq,
+    proponente: { ...(dq.proponente ?? {}), nome: dq.proponente?.nome ?? p.cliente?.nome ?? null },
+    endereco_residencial: { ...(dq.endereco_residencial ?? {}) },
+    endereco_comercial: { ...(dq.endereco_comercial ?? {}) },
+    forma_pagamento: {
+      ...fp,
+      valor_proposto: fp.valor_proposto ?? p.valor_proposto,
+      primeiro_mes: dataParaIso(fp.primeiro_mes),
+      sinal_vencimento: dataParaIso(fp.sinal_vencimento),
+      avista_data: dataParaIso(fp.avista_data),
+      chave_vencimento: dataParaIso(fp.chave_vencimento),
+      confirmado: false,
+      confirma_valor_fora_tabela: false,
+    },
+  };
+}
 
 /** Mesmas etapas e campos do formulário de qualificação que o cliente final
  * preenche pelo link público (ver QualificacaoPublica.tsx) — só que aqui é
@@ -46,9 +80,14 @@ export default function PropostaFormularioCompleto({
   lotes,
   onSalvo,
   reservaOrigem = null,
+  edicao = null,
 }: {
   lotes: LoteComCondominio[];
   onSalvo: () => void;
+  /** Financeiro corrigindo uma proposta que já existe (03/10): mesmo
+   * formulário e mesmas conferências, lote fixo, e no fim grava a correção
+   * (PUT /crm/propostas/{id}/dados) em vez de criar outra proposta. */
+  edicao?: PropostaDetalhe | null;
   /** Quando a proposta nasce do botão "Gerar proposta" na fila de Reservas
    * (ver PainelReservas.tsx) em vez de "+ Nova proposta": o lote já vem
    * fixo (é o da própria reserva, já 'reservado' — não passaria no filtro
@@ -56,11 +95,13 @@ export default function PropostaFormularioCompleto({
    * vêm pré-preenchidos do que a reserva já tinha. */
   reservaOrigem?: ReservaComLote | null;
 }) {
-  const [loteId, setLoteId] = useState(reservaOrigem?.lote_id ?? "");
+  const [loteId, setLoteId] = useState(edicao?.lote_id ?? reservaOrigem?.lote_id ?? "");
+  const [motivo, setMotivo] = useState("");
   const [condominioSlug, setCondominioSlug] = useState(
     () => lotes.find((l) => l.id === reservaOrigem?.lote_id)?.condominio_slug ?? "",
   );
   const [dados, setDados] = useState<QualificacaoDados>(() => {
+    if (edicao) return dadosParaEdicao(edicao);
     const vazio = qualificacaoDadosVazio();
     if (!reservaOrigem) return vazio;
     return {
@@ -110,7 +151,11 @@ export default function PropostaFormularioCompleto({
     return condominioSlug ? disponiveis.filter((l) => l.condominio_slug === condominioSlug) : disponiveis;
   }, [lotes, condominioSlug, reservaOrigem]);
 
-  const loteSelecionado = lotes.find((l) => l.id === loteId) ?? null;
+  const loteSelecionado: LoteComCondominio | null = edicao
+    ? edicao.lote
+      ? { ...edicao.lote, condominio_nome: lotes.find((l) => l.id === edicao.lote_id)?.condominio_nome ?? "", condominio_slug: "" }
+      : null
+    : lotes.find((l) => l.id === loteId) ?? null;
 
   /** Trocar de lote invalida o plano montado pro lote anterior (outro preço,
    * outro plano de tabela): zera os valores e as confirmações — a etapa de
@@ -164,6 +209,8 @@ export default function PropostaFormularioCompleto({
         if (!dados.proponente.nacionalidade?.trim()) return "Informe a nacionalidade.";
         if (!dados.proponente.email?.trim()) return "Informe o e-mail.";
       }
+      const invalidos = problemasPessoa(dados.proponente, "do comprador");
+      if (invalidos.length) return invalidos.join("\n");
     }
     if (p === 2 && !modoRapido) {
       if (!dados.estado_civil) return "Selecione o estado civil.";
@@ -177,6 +224,10 @@ export default function PropostaFormularioCompleto({
         if (!dados.conjuge?.email?.trim()) return "Informe o e-mail do cônjuge.";
       }
     }
+    if (p === 2 && casado) {
+      const invalidos = problemasPessoa(dados.conjuge, "do cônjuge");
+      if (invalidos.length) return invalidos.join("\n");
+    }
     if (p === 3 && !modoRapido) {
       const msg = validarEndereco(dados.endereco_residencial, "residencial");
       if (msg) return msg;
@@ -187,6 +238,10 @@ export default function PropostaFormularioCompleto({
     }
     if (p === 5 && !modoRapido) {
       if (!dados.telefone_celular?.trim()) return "Informe um telefone celular pra contato.";
+    }
+    if (p === 5) {
+      const invalidos = problemasTelefones(dados);
+      if (invalidos.length) return invalidos.join("\n");
     }
     if (p === 6) {
       // Plano de pagamento inteiro (mesmas regras do servidor, ver
@@ -238,6 +293,21 @@ export default function PropostaFormularioCompleto({
       return;
     }
     setSalvando(true);
+    if (edicao) {
+      try {
+        await api.editarDadosProposta(
+          edicao.id,
+          { ...dados, forma_pagamento: planoParaEnvio(dados.forma_pagamento) },
+          motivo.trim() || null,
+        );
+        onSalvo();
+      } catch (e) {
+        setErro(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSalvando(false);
+      }
+      return;
+    }
     try {
       // Não existe cadastro prévio de cliente no painel — o registro em
       // "clientes" é criado aqui na hora, a partir dos dados do proponente
@@ -278,10 +348,16 @@ export default function PropostaFormularioCompleto({
   return (
     <div className="p-5 sm:p-6" id="proposta-formulario-topo">
       <h2 id="proposta-modal-title" className="text-lg font-bold text-ink mb-1">
-        {reservaOrigem ? "Gerar proposta desta reserva" : "Nova proposta"}
+        {edicao
+          ? `Corrigir dados da proposta ${formatarNumeroProposta(edicao.numero, edicao.versao)}`
+          : reservaOrigem
+            ? "Gerar proposta desta reserva"
+            : "Nova proposta"}
       </h2>
       <p className="text-xs text-ink-soft mb-4">
-        {reservaOrigem
+        {edicao
+          ? `Mesmas conferências da criação. Ao salvar, a proposta passa para a versão ${edicao.versao + 1} (o contrato também) e o antes/depois de cada campo fica registrado.`
+          : reservaOrigem
           ? "O lote já está reservado — falta só completar os dados da Proposta de Compra/Venda pra gerar o PDF."
           : "Mesmos dados da Proposta de Compra/Venda em papel — preencha aqui e o PDF já sai pronto."}
       </p>
@@ -290,12 +366,12 @@ export default function PropostaFormularioCompleto({
       <div className="grid gap-4">
         {passo === 0 && (
           <>
-            {reservaOrigem ? (
+            {edicao || reservaOrigem ? (
               <div className="rounded-lg border border-border bg-surface-alt/60 p-3">
-                <p className="text-xs text-ink-soft mb-0.5">Lote desta reserva</p>
+                <p className="text-xs text-ink-soft mb-0.5">{edicao ? "Lote desta proposta (não muda na correção)" : "Lote desta reserva"}</p>
                 <p className="text-sm font-semibold text-ink">
                   {loteSelecionado?.identificador ?? "—"}
-                  {loteSelecionado ? ` — ${loteSelecionado.condominio_nome}` : ""}
+                  {loteSelecionado?.condominio_nome ? ` — ${loteSelecionado.condominio_nome}` : ""}
                 </p>
                 {loteSelecionado?.valor_total != null && (
                   <p className="text-xs text-ink-soft mt-1">
@@ -621,8 +697,23 @@ export default function PropostaFormularioCompleto({
             dados={dados}
             lote={loteSelecionado}
             modoRapido={modoRapido}
+            edicao={!!edicao}
             onChangePagamento={(fp) => setDados((d) => ({ ...d, forma_pagamento: fp }))}
           />
+        )}
+
+        {passo === 7 && edicao && (
+          <Field label="Motivo da correção (vai pro histórico)">
+            <textarea
+              id="edicao-motivo"
+              className="input"
+              rows={2}
+              maxLength={500}
+              placeholder="Ex.: valor proposto digitado errado (R$ 89,99 em vez de R$ 89.990,00)"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+            />
+          </Field>
         )}
 
         {erro && (
@@ -648,7 +739,13 @@ export default function PropostaFormularioCompleto({
               disabled={salvando || !dados.forma_pagamento.confirmado}
               title={!dados.forma_pagamento.confirmado ? "Marque a confirmação dos valores acima" : undefined}
             >
-              {salvando ? "Criando..." : "Criar proposta"}
+              {edicao
+                ? salvando
+                  ? "Salvando..."
+                  : `Salvar correção (vai para a versão ${edicao.versao + 1})`
+                : salvando
+                  ? "Criando..."
+                  : "Criar proposta"}
             </button>
           )}
         </div>
@@ -665,11 +762,13 @@ function Revisao({
   dados,
   lote,
   modoRapido,
+  edicao = false,
   onChangePagamento,
 }: {
   dados: QualificacaoDados;
   lote: LoteComCondominio | null;
   modoRapido: boolean;
+  edicao?: boolean;
   onChangePagamento: (fp: QualificacaoDados["forma_pagamento"]) => void;
 }) {
   const fp = dados.forma_pagamento;
@@ -687,8 +786,8 @@ function Revisao({
   );
   return (
     <div className="grid gap-3 text-sm">
-      <p className="text-ink-soft">Confira antes de criar a proposta.</p>
-      {modoRapido && (
+      <p className="text-ink-soft">{edicao ? "Confira antes de salvar a correção." : "Confira antes de criar a proposta."}</p>
+      {modoRapido && !edicao && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Cadastro rápido — documentos, estado civil, endereço e telefone ficaram em branco. Volte nas etapas
           anteriores agora se quiser completar, porque depois de criada a proposta esses dados não dá mais pra
@@ -698,7 +797,7 @@ function Revisao({
       <div className="grid gap-1">
         <p>
           <span className="text-ink-soft">Lote: </span>
-          {lote ? `${lote.condominio_nome} — ${lote.identificador}` : "—"}
+          {lote ? [lote.condominio_nome, lote.identificador].filter(Boolean).join(" — ") : "—"}
         </p>
         <p>
           <span className="text-ink-soft">Proponente: </span>
@@ -766,14 +865,17 @@ function Revisao({
             onChange={(e) => onChangePagamento({ ...fp, confirmado: e.target.checked })}
           />
           <span>
-            Conferi com o cliente o valor proposto, a entrada (valor, forma, meio e data), as parcelas e a chave — os
-            valores acima estão corretos.
+            {edicao
+              ? "Conferi a correção: o valor proposto, a entrada (valor, forma, meio e data), as parcelas e a chave acima estão corretos e combinados com o cliente."
+              : "Conferi com o cliente o valor proposto, a entrada (valor, forma, meio e data), as parcelas e a chave — os valores acima estão corretos."}
           </span>
         </label>
       </div>
-      <p className="text-ink-soft text-xs">
-        A proposta nasce como rascunho — um administrador precisa aprová-la antes que o contrato possa ser gerado.
-      </p>
+      {!edicao && (
+        <p className="text-ink-soft text-xs">
+          A proposta nasce como rascunho — um administrador precisa aprová-la antes que o contrato possa ser gerado.
+        </p>
+      )}
     </div>
   );
 }

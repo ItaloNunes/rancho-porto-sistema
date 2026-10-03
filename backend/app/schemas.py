@@ -749,6 +749,20 @@ class PropostaCreate(BaseModel):
     reserva_id: Optional[str] = None
 
 
+class PropostaDadosFinanceiro(BaseModel):
+    """Body de PUT /crm/propostas/{id}/dados -- o financeiro (admin) corrige
+    os dados da proposta antes de aprovar/gerar o contrato: comprador,
+    cônjuge, endereços, contatos e a forma de pagamento inteira (o valor
+    proposto vem dentro de forma_pagamento.valor_proposto, igual na criação).
+    Passa pelas mesmas conferências da criação (ver routers/crm.py::
+    editar_dados_proposta)."""
+
+    dados_qualificacao: QualificacaoDados
+    # Por que mudou (opcional) -- vai pro log de auditoria junto com o
+    # antes/depois de cada campo alterado.
+    motivo: Optional[str] = Field(default=None, max_length=500)
+
+
 class PropostaStatusUpdate(BaseModel):
     status: PropostaStatus
 

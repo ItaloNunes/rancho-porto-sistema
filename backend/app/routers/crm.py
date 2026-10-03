@@ -14,6 +14,7 @@ layout exato do formulário em papel usado pela imobiliária (Proposta de
 Compra/Venda Castel, operada com a JR Imóveis) — ver app/pdf.py.
 """
 
+import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -29,12 +30,14 @@ from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..documentos_gerados import (
+    identificacao_contrato,
     preencher_contrato_porto_franco,
     preencher_contrato_rancho_texas,
     preencher_recibo,
 )
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
+from ..cadastro_proposta import problemas_cadastro, so_digitos, telefone_valido, email_valido
 from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
@@ -60,6 +63,7 @@ from ..schemas import (
     LoteComCondominio,
     Proposta,
     PropostaCreate,
+    PropostaDadosFinanceiro,
     PropostaDetalhe,
     PropostaStatusUpdate,
     PropostaUpdate,
@@ -687,6 +691,127 @@ def atualizar_proposta(proposta_id: str, payload: PropostaUpdate, corretor: dict
     return atualizado
 
 
+# Proposta recusada/cancelada não volta a valer -- não faz sentido corrigir.
+STATUS_EDITAVEIS_FINANCEIRO = ("rascunho", "aguardando_aprovacao", "aprovada", "enviada", "aceita")
+
+
+def _achatar(d, prefixo: str = "") -> dict:
+    """{"proponente": {"nome": "X"}} -> {"proponente.nome": "X"} (pro
+    antes/depois do log de auditoria)."""
+    out: dict = {}
+    if isinstance(d, dict):
+        for k, v in d.items():
+            out.update(_achatar(v, f"{prefixo}{k}."))
+    else:
+        out[prefixo.rstrip(".")] = d
+    return out
+
+
+def _vazio(v) -> bool:
+    return v is None or v == "" or v == {} or v is False
+
+
+@router.put("/propostas/{proposta_id}/dados", response_model=Proposta)
+def editar_dados_proposta(
+    proposta_id: str, payload: PropostaDadosFinanceiro, corretor: dict = Depends(get_current_corretor)
+):
+    """O financeiro (admin/developer) corrige os dados da proposta direto na
+    tela do Financeiro -- comprador, cônjuge, endereços, contatos e a forma
+    de pagamento inteira (valor, entrada, parcelas, chave). Pedido de 03/10:
+    resolve propostas que chegaram com dado errado (ex.: 0003, R$ 89,99 e
+    parcelas que não fechavam) sem precisar cancelar e refazer.
+
+    Passa pelas MESMAS conferências da criação: plano de pagamento fechando
+    no centavo, entrada obrigatória, datas válidas, confirmação dupla (agora
+    de quem corrigiu) e CPF/telefone/e-mail válidos. Sobe a versão da
+    proposta (0003 -> 0003-v2), atualiza o cadastro do cliente (nome/CPF/
+    contato, que o recibo usa) e grava no log o antes/depois de cada campo.
+    O lote não muda por aqui (trocar de lote mexe no estoque -- isso é
+    cancelar e fazer outra proposta)."""
+    if not eh_admin(corretor):
+        raise HTTPException(403, "Só o financeiro (administrador) pode editar os dados da proposta.")
+    sb = get_supabase()
+    existente = _carregar_proposta_ou_404(sb, proposta_id)
+    if existente["status"] not in STATUS_EDITAVEIS_FINANCEIRO:
+        raise HTTPException(409, "Proposta recusada ou cancelada não pode ser editada.")
+    lote = (
+        sb.table("lotes")
+        .select("id, valor_total, entrada, qtd_parcelas, parcela_mensal, entrega")
+        .eq("id", existente["lote_id"])
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not lote:
+        raise HTTPException(409, "O lote desta proposta não foi encontrado.")
+    lote = lote[0]
+
+    dados = payload.dados_qualificacao.model_dump(mode="json")
+    fp = dados.get("forma_pagamento") or {}
+    valor_proposto = fp.get("valor_proposto")
+    problemas = validar_plano(fp, valor_proposto, lote.get("valor_total")) + problemas_cadastro(dados)
+    if problemas:
+        raise HTTPException(422, "\n".join(problemas))
+    fp = normalizar_plano(fp)
+    dados["forma_pagamento"] = fp
+    # cinto e suspensório: exatamente os números que o contrato vai imprimir
+    problemas = conferir_contrato(fp, valor_proposto, lote)
+    if problemas:
+        raise HTTPException(422, "\n".join(problemas))
+
+    antes = _achatar(existente.get("dados_qualificacao") or {})
+    depois = _achatar(dados)
+    alterados = sorted(
+        k for k in set(antes) | set(depois)
+        if not (_vazio(antes.get(k)) and _vazio(depois.get(k))) and antes.get(k) != depois.get(k)
+        # confirmações mudam sempre (quem corrigiu confirma de novo) -- não é "dado alterado"
+        and not k.startswith(("forma_pagamento.confirmado", "forma_pagamento.confirma_valor_fora_tabela"))
+    )
+    valor_antes = existente.get("valor_proposto")
+    if valor_antes != valor_proposto and "forma_pagamento.valor_proposto" not in alterados:
+        alterados.append("forma_pagamento.valor_proposto")
+
+    versao_anterior = existente.get("versao") or 1
+    numero_antes = _numero_proposta(existente)
+    updates = {
+        "dados_qualificacao": dados,
+        "valor_proposto": valor_proposto,
+        "condicoes_pagamento": resumo_plano(fp),
+        "observacoes": (fp.get("observacoes") or "").strip() or None,
+        "versao": versao_anterior + 1,
+    }
+    atualizado = sb.table("propostas").update(updates).eq("id", proposta_id).execute().data[0]
+
+    # Cadastro do cliente acompanha (o recibo usa nome/CPF de lá).
+    proponente = dados.get("proponente") or {}
+    cliente_upd = {}
+    if (proponente.get("nome") or "").strip():
+        cliente_upd["nome"] = proponente["nome"].strip()
+    if so_digitos(proponente.get("cpf_cnpj")):
+        cliente_upd["cpf"] = so_digitos(proponente.get("cpf_cnpj"))
+    if telefone_valido(dados.get("telefone_celular")):
+        cliente_upd["telefone"] = dados["telefone_celular"].strip()
+    if email_valido(proponente.get("email")):
+        cliente_upd["email"] = proponente["email"].strip()
+    if cliente_upd and existente.get("cliente_id"):
+        sb.table("clientes").update(cliente_upd).eq("id", existente["cliente_id"]).execute()
+
+    registrar_log(
+        sb, corretor, "editou_proposta", "proposta", proposta_id,
+        f"Financeiro corrigiu os dados da proposta {numero_antes} "
+        f"({len(alterados)} campo(s)) -- agora {_numero_proposta(atualizado)}."
+        + (f" Motivo: {payload.motivo.strip()}" if payload.motivo and payload.motivo.strip() else ""),
+        {
+            "versao_anterior": versao_anterior,
+            "versao_nova": updates["versao"],
+            "motivo": payload.motivo,
+            "alteracoes": {k: {"antes": antes.get(k), "depois": depois.get(k)} for k in alterados},
+            "valor_proposto": {"antes": valor_antes, "depois": valor_proposto},
+        },
+    )
+    return atualizado
+
+
 def _carregar_proposta_ou_404(sb, proposta_id: str) -> dict:
     proposta = sb.table("propostas").select("*").eq("id", proposta_id).limit(1).execute().data
     if not proposta:
@@ -1164,12 +1289,94 @@ def gerar_contrato_proposta(
         )
     # Todo contrato sai em PDF (pedido de 02/10) -- ver app/docx_pdf.py.
     pdf_bytes = docx_para_pdf(docx_bytes)
-    nome_arquivo = f"contrato-{lote.get('identificador', proposta_id)}.pdf".replace(" ", "-")
+    # Numeração e versão (03/10): "0003/2026", versão = versão da proposta.
+    # Cada emissão fica registrada (quem, quando, qual versão, impressão
+    # digital do PDF) -- é o histórico mostrado no Financeiro.
+    numero_contrato, versao_contrato = identificacao_contrato(proposta, data_contrato)
+    registrar_log(
+        sb, corretor, "gerou_contrato", "proposta", proposta_id,
+        f"Emitiu o contrato Nº {numero_contrato} – versão {versao_contrato} "
+        f"(proposta {_numero_proposta(proposta)}).",
+        {
+            "numero_contrato": numero_contrato,
+            "versao": versao_contrato,
+            "data_contrato": (data_contrato or datetime.now(timezone.utc).date()).isoformat(),
+            "comissao": comissao,
+            "valor_proposto": proposta.get("valor_proposto"),
+            "sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+        },
+    )
+    nome_arquivo = (
+        f"contrato-{numero_contrato.replace('/', '-')}-v{versao_contrato}-{lote.get('identificador', proposta_id)}.pdf"
+    ).replace(" ", "-")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
     )
+
+
+@router.get("/propostas/{proposta_id}/conferencia")
+def conferencia_proposta(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
+    """O que o servidor acha desta proposta AGORA -- as mesmas checagens da
+    aprovação e da emissão do contrato, pra tela do Financeiro mostrar as
+    pendências antes de alguém clicar em "aprovar" (03/10)."""
+    if not eh_admin(corretor):
+        raise HTTPException(403, "Só o financeiro pode conferir a proposta.")
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    lote = (
+        sb.table("lotes")
+        .select("id, valor_total, entrada, qtd_parcelas, parcela_mensal, entrega")
+        .eq("id", proposta["lote_id"])
+        .limit(1)
+        .execute()
+        .data
+    )
+    lote = lote[0] if lote else {}
+    dados = proposta.get("dados_qualificacao") or {}
+    fp = dados.get("forma_pagamento") or {}
+    preco = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    return {
+        "plano_estruturado": ler_plano(fp).estruturado,
+        "problemas_pagamento": problemas_para_aprovar(fp, proposta.get("valor_proposto"), lote),
+        "problemas_contrato": conferir_contrato(fp, preco, lote),
+        "problemas_cadastro": problemas_cadastro(dados) if dados else ["A proposta não tem os dados do comprador."],
+    }
+
+
+@router.get("/propostas/{proposta_id}/contratos")
+def historico_contratos(proposta_id: str, corretor: dict = Depends(get_current_corretor)):
+    """Contratos já emitidos desta proposta (mais recente primeiro): número,
+    versão, quem emitiu e quando -- e se a versão atual da proposta ainda é
+    a mesma do último emitido (senão, o contrato em mãos está desatualizado)."""
+    if not eh_admin(corretor):
+        raise HTTPException(403, "Só o financeiro pode ver o histórico de contratos.")
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    logs = (
+        sb.table("logs_auditoria")
+        .select("created_at, ator_nome, detalhes")
+        .eq("entidade", "proposta")
+        .eq("entidade_id", proposta_id)
+        .eq("acao", "gerou_contrato")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+    ) or []
+    numero, versao_atual = identificacao_contrato(proposta)
+    emissoes = [
+        {
+            "emitido_em": l.get("created_at"),
+            "emitido_por": l.get("ator_nome"),
+            "numero_contrato": (l.get("detalhes") or {}).get("numero_contrato"),
+            "versao": (l.get("detalhes") or {}).get("versao"),
+            "data_contrato": (l.get("detalhes") or {}).get("data_contrato"),
+            "comissao": (l.get("detalhes") or {}).get("comissao"),
+        }
+        for l in logs
+    ]
+    return {"numero_contrato": numero, "versao_atual": versao_atual, "emissoes": emissoes}
 
 
 @router.get("/propostas/{proposta_id}/documento-completo")
