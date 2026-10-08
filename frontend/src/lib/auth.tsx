@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { api, EVENTO_SESSAO } from "./api";
+import { EVENTO_SALVAR_AGORA, limparRascunhosVencidos } from "./rascunho";
 import { getToken, setToken } from "./token";
 import type { Corretor, LoginResposta } from "../types";
 
@@ -8,7 +9,10 @@ import type { Corretor, LoginResposta } from "../types";
 // fica aberto em computador compartilhado da imobiliaria/financeiro, e o
 // JWT dura 12h (admin) ou 7 dias (corretor) -- ver backend/app/security.py -- entao sem isso a
 // sessao continuava valida indefinidamente enquanto a aba ficasse aberta).
-const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000;
+// 08/10: corretor (em campo, preenchendo proposta com o cliente do lado)
+// tem 1 hora; admin/financeiro continua com 15 min (computador compartilhado).
+const LIMITE_INATIVIDADE_MS = { corretor: 60 * 60 * 1000, admin: 15 * 60 * 1000 };
+const AVISO_ANTES_MS = 60 * 1000;
 const EVENTOS_ATIVIDADE = ["mousemove", "mousedown", "keydown", "wheel", "scroll", "touchstart"] as const;
 
 interface AuthState {
@@ -71,14 +75,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // atividade reinicia o contador; sem nenhum por 15 min, desloga sozinho
   // com um motivo (a tela de login mostra pro usuario por que caiu).
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avisoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [avisoAte, setAvisoAte] = useState<number | null>(null);
+  const papel = perfil?.papel;
   useEffect(() => {
     if (!session) return;
+    limparRascunhosVencidos();
+    const ehCorretor = papel === "corretor";
+    const limite = ehCorretor ? LIMITE_INATIVIDADE_MS.corretor : LIMITE_INATIVIDADE_MS.admin;
+    const minutos = Math.round(limite / 60000);
 
     function reiniciarContador() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (avisoRef.current) clearTimeout(avisoRef.current);
+      setAvisoAte(null);
+      avisoRef.current = setTimeout(() => setAvisoAte(Date.now() + AVISO_ANTES_MS), limite - AVISO_ANTES_MS);
       timeoutRef.current = setTimeout(() => {
-        sair("Sua sessao foi encerrada apos 15 minutos sem uso. Faca login de novo.");
-      }, LIMITE_INATIVIDADE_MS);
+        setAvisoAte(null);
+        sair(
+          `Sua sessão foi encerrada após ${minutos === 60 ? "1 hora" : `${minutos} minutos`} sem uso. ` +
+            "O que você estava preenchendo ficou salvo — faça login de novo para continuar.",
+        );
+      }, limite);
     }
 
     reiniciarContador();
@@ -86,10 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (avisoRef.current) clearTimeout(avisoRef.current);
       EVENTOS_ATIVIDADE.forEach((ev) => window.removeEventListener(ev, reiniciarContador));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, papel]);
 
   // Sessão derrubada pelo servidor no meio do uso (ver avisarSessao em api.ts).
   useEffect(() => {
@@ -126,6 +145,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function sair(motivo?: string) {
+    // Formulários abertos gravam o rascunho AGORA, enquanto o token (que
+    // identifica de quem é o rascunho) ainda existe.
+    window.dispatchEvent(new Event(EVENTO_SALVAR_AGORA));
     setToken(null);
     setSession(null);
     setPerfil(null);
@@ -146,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{ session, perfil, carregando, motivoSaida, entrar, sair, recarregarPerfil, aplicarSessao }}
     >
       {children}
+      {avisoAte && session && <AvisoInatividade ate={avisoAte} />}
     </AuthContext.Provider>
   );
 }
@@ -154,4 +177,29 @@ export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth precisa estar dentro de <AuthProvider>");
   return ctx;
+}
+
+/** Aviso 1 minuto antes de encerrar a sessão por inatividade. Qualquer
+ * movimento do mouse/teclado (inclusive clicar no botão) já reinicia o
+ * contador e o aviso some. */
+function AvisoInatividade({ ate }: { ate: number }) {
+  const [agora, setAgora] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const seg = Math.max(0, Math.ceil((ate - agora) / 1000));
+  return (
+    <div
+      role="alertdialog"
+      aria-live="assertive"
+      className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 z-[70] max-w-sm rounded-lg shadow-xl border border-amber-300 bg-amber-50 p-4 text-sm text-ink"
+    >
+      <p className="font-semibold">Sua sessão vai encerrar em {seg}s por falta de uso.</p>
+      <p className="text-ink-soft mt-1">O que você estiver preenchendo fica salvo.</p>
+      <button className="btn btn-primary !py-1.5 !px-4 !text-sm mt-3" onClick={() => undefined}>
+        Continuar conectado
+      </button>
+    </div>
+  );
 }

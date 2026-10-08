@@ -2,10 +2,32 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../../components/qualificacaoCampos";
 import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPagamento";
 import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
+import { apagarRascunho, lerRascunho, quandoFoiSalvo, useRascunhoAutomatico } from "../../lib/rascunho";
 import { ESTADOS_COM_CONJUGE, problemasConjuge, problemasPessoa, problemasTelefones, temConjuge } from "../../lib/cadastro";
 import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
+
+export interface RascunhoProposta {
+  dados: QualificacaoDados;
+  loteId: string;
+  condominioSlug?: string;
+  passo?: number;
+  modoRapido?: boolean;
+  motivo?: string;
+  clienteIdCriado?: string | null;
+}
+
+/** Um rascunho por "formulário": proposta nova, proposta de uma reserva, ou
+ * correção de uma versão de proposta (financeiro). */
+export function chaveRascunhoProposta(
+  edicao?: { id: string; versao: number } | null,
+  reservaOrigem?: { id: string } | null,
+): string {
+  if (edicao) return `proposta-edicao:${edicao.id}:v${edicao.versao}`;
+  if (reservaOrigem) return `proposta-reserva:${reservaOrigem.id}`;
+  return "proposta-nova";
+}
 
 /** 'DD/MM/AAAA' (texto de proposta antiga) -> 'AAAA-MM-DD' (campo de data). */
 function dataParaIso(v: string | null | undefined): string | null | undefined {
@@ -83,6 +105,7 @@ export default function PropostaFormularioCompleto({
   onSalvo,
   reservaOrigem = null,
   edicao = null,
+  retomarRascunho = false,
 }: {
   lotes: LoteComCondominio[];
   onSalvo: () => void;
@@ -90,6 +113,8 @@ export default function PropostaFormularioCompleto({
    * formulário e mesmas conferências, lote fixo, e no fim grava a correção
    * (PUT /crm/propostas/{id}/dados) em vez de criar outra proposta. */
   edicao?: PropostaDetalhe | null;
+  /** Abrir já continuando o rascunho salvo (botão "continuar" das listas). */
+  retomarRascunho?: boolean;
   /** Quando a proposta nasce do botão "Gerar proposta" na fila de Reservas
    * (ver PainelReservas.tsx) em vez de "+ Nova proposta": o lote já vem
    * fixo (é o da própria reserva, já 'reservado' — não passaria no filtro
@@ -133,6 +158,39 @@ export default function PropostaFormularioCompleto({
   // "Criar proposta" reaproveitar em vez de cadastrar o mesmo proponente de
   // novo a cada tentativa — ver criar() abaixo.
   const clienteIdCriadoRef = useRef<string | null>(null);
+
+  // Rascunho automático (08/10): tudo o que é digitado fica salvo neste
+  // navegador; se a sessão cair ou a janela fechar, dá pra continuar depois.
+  const chaveRascunho = chaveRascunhoProposta(edicao, reservaOrigem);
+  const [rascunhoPendente, setRascunhoPendente] = useState(() => lerRascunho<RascunhoProposta>(chaveRascunho));
+  const inicialRef = useRef(JSON.stringify({ dados, loteId }));
+  const mexeu = JSON.stringify({ dados, loteId }) !== inicialRef.current;
+  useRascunhoAutomatico<RascunhoProposta>(
+    chaveRascunho,
+    { dados, loteId, condominioSlug, passo, modoRapido, motivo, clienteIdCriado: clienteIdCriadoRef.current },
+    mexeu && !rascunhoPendente,
+  );
+  function retomar() {
+    const r = rascunhoPendente?.dados;
+    if (!r) return;
+    setDados(r.dados);
+    setLoteId(r.loteId);
+    setCondominioSlug(r.condominioSlug ?? "");
+    setPasso(Math.min(Math.max(r.passo ?? 0, 0), PASSOS.length - 1));
+    setModoRapido(!!r.modoRapido);
+    setMotivo(r.motivo ?? "");
+    clienteIdCriadoRef.current = r.clienteIdCriado ?? null;
+    setRascunhoPendente(null);
+    setErro(null);
+  }
+  function descartarRascunho() {
+    apagarRascunho(chaveRascunho);
+    setRascunhoPendente(null);
+  }
+  useEffect(() => {
+    if (retomarRascunho) retomar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Formulário de 8 etapas — dá tempo de sobra pro backend (Render, plano
   // free) acordar em paralelo, em vez de só na hora crítica de salvar no
@@ -321,6 +379,7 @@ export default function PropostaFormularioCompleto({
           { ...dados, forma_pagamento: planoParaEnvio(dados.forma_pagamento) },
           motivo.trim() || null,
         );
+        apagarRascunho(chaveRascunho);
         onSalvo();
       } catch (e) {
         setErro(e instanceof Error ? e.message : String(e));
@@ -358,6 +417,7 @@ export default function PropostaFormularioCompleto({
         dados_qualificacao: { ...dados, forma_pagamento: planoParaEnvio(dados.forma_pagamento) },
         reserva_id: reservaOrigem?.id,
       });
+      apagarRascunho(chaveRascunho);
       onSalvo();
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
@@ -382,6 +442,29 @@ export default function PropostaFormularioCompleto({
           ? "O lote já está reservado — falta só completar os dados da Proposta de Compra/Venda pra gerar o PDF."
           : "Mesmos dados da Proposta de Compra/Venda em papel — preencha aqui e o PDF já sai pronto."}
       </p>
+      {rascunhoPendente && (
+        <div
+          id="aviso-rascunho"
+          className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-ink grid gap-2"
+        >
+          <p>
+            <strong>Você tem um rascunho salvo</strong> em {quandoFoiSalvo(rascunhoPendente.salvoEm)}
+            {` — parou na etapa ${(rascunhoPendente.dados.passo ?? 0) + 1} de ${PASSOS.length}`}
+            {rascunhoPendente.dados.dados?.proponente?.nome ? ` (cliente: ${rascunhoPendente.dados.dados.proponente.nome})` : ""}.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button id="rascunho-continuar" type="button" className="btn btn-primary !py-1.5 !px-4 !text-sm" onClick={retomar}>
+              Continuar de onde parei
+            </button>
+            <button type="button" className="btn btn-outline !py-1.5 !px-4 !text-sm" onClick={descartarRascunho}>
+              Descartar e começar do zero
+            </button>
+          </div>
+        </div>
+      )}
+      {!rascunhoPendente && mexeu && (
+        <p className="text-[11px] text-ink-soft -mt-2 mb-2">Rascunho salvo automaticamente neste navegador.</p>
+      )}
       <ProgressBar passo={passo} total={PASSOS.length} />
 
       <div className="grid gap-4">

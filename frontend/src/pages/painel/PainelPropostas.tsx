@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import { abrirAbaComCarregamento, api, formatMoney, formatarNumeroProposta, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
+import PropostaFormularioCompleto, { chaveRascunhoProposta } from "./PropostaFormularioCompleto";
+import { lerRascunho, quandoFoiSalvo } from "../../lib/rascunho";
+import type { RascunhoProposta } from "./PropostaFormularioCompleto";
 import PropostaDocumentos, { PrazoAnaliseBadge } from "./PropostaDocumentos";
 import { temAcessoAdmin } from "../../types";
 import { proximosStatusProposta } from "../../lib/transicoes";
@@ -26,7 +28,9 @@ export default function PainelPropostas() {
   const { perfil } = useAuth();
   const [propostas, setPropostas] = useState<PropostaDetalhe[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [criando, setCriando] = useState(false);
+  const [criando, setCriando] = useState<false | "nova" | "retomar">(false);
+  // Proposta que ficou pela metade (sessão caiu, janela fechou...) — 08/10.
+  const rascunho = criando ? null : lerRascunho<RascunhoProposta>(chaveRascunhoProposta());
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
   const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
 
@@ -87,10 +91,23 @@ export default function PainelPropostas() {
     <div>
       <div className="flex items-center justify-between mb-5 gap-3">
         <h1 className="text-xl font-bold text-ink">Propostas de compra e venda</h1>
-        <button className="btn btn-primary" onClick={() => setCriando(true)}>
+        <button className="btn btn-primary" onClick={() => setCriando("nova")}>
           + Nova proposta
         </button>
       </div>
+
+      {rascunho && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-ink">
+          <span>
+            <strong>Proposta em andamento</strong>
+            {rascunho.dados.dados?.proponente?.nome ? ` de ${rascunho.dados.dados.proponente.nome}` : ""} — salva em{" "}
+            {quandoFoiSalvo(rascunho.salvoEm)}, na etapa {(rascunho.dados.passo ?? 0) + 1} de 8.
+          </span>
+          <button id="continuar-rascunho-proposta" className="btn btn-primary !py-1.5 !px-4 !text-sm" onClick={() => setCriando("retomar")}>
+            Continuar de onde parei
+          </button>
+        </div>
+      )}
 
       {erro && <p className="text-rust text-sm mb-4">{erro}</p>}
 
@@ -167,6 +184,7 @@ export default function PainelPropostas() {
         <Modal onClose={() => setCriando(false)} labelledBy="proposta-modal-title">
           <PropostaFormularioCompleto
             lotes={lotes}
+            retomarRascunho={criando === "retomar"}
             onSalvo={() => {
               setCriando(false);
               recarregar();

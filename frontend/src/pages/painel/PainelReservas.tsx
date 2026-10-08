@@ -6,7 +6,8 @@ import { api, formatDateTime, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { temAcessoAdmin } from "../../types";
 import type { LoteComCondominio, Reserva, ReservaComLote, ReservaStatus } from "../../types";
-import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
+import PropostaFormularioCompleto, { chaveRascunhoProposta } from "./PropostaFormularioCompleto";
+import { apagarRascunho, lerRascunho, quandoFoiSalvo, useRascunhoAutomatico } from "../../lib/rascunho";
 
 const STATUS_LABEL: Record<ReservaStatus, string> = {
   pendente: "Pendente",
@@ -247,7 +248,7 @@ export default function PainelReservas() {
                           className="btn-row btn-row-primary mr-1.5"
                           onClick={() => setGerandoPropostaDe(r)}
                         >
-                          gerar proposta
+                          {lerRascunho(chaveRascunhoProposta(null, r)) ? "continuar proposta" : "gerar proposta"}
                         </button>
                       )
                     )}
@@ -291,6 +292,7 @@ export default function PainelReservas() {
           <PropostaFormularioCompleto
             lotes={lotes}
             reservaOrigem={gerandoPropostaDe}
+            retomarRascunho={!!lerRascunho(chaveRascunhoProposta(null, gerandoPropostaDe))}
             onSalvo={() => {
               setGerandoPropostaDe(null);
               recarregar();
@@ -478,6 +480,31 @@ function ReservaForm({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  // Rascunho automático do pedido novo (08/10) — volta preenchido se a
+  // sessão cair no meio.
+  const CHAVE = reserva ? null : "reserva-nova";
+  const [recuperado, setRecuperado] = useState<number | null>(null);
+  useEffect(() => {
+    if (!CHAVE) return;
+    const r = lerRascunho<{ loteId: string; condominioSlug: string; nome: string; contato: string; cpf: string; observacao: string }>(CHAVE);
+    if (!r) return;
+    if (!loteIdInicial) {
+      setLoteId(r.dados.loteId);
+      setCondominioSlug(r.dados.condominioSlug);
+    }
+    setNome(r.dados.nome);
+    setContato(r.dados.contato);
+    setCpf(r.dados.cpf);
+    setObservacao(r.dados.observacao);
+    setRecuperado(r.salvoEm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useRascunhoAutomatico(
+    CHAVE,
+    { loteId, condominioSlug, nome: nome ?? "", contato: contato ?? "", cpf: cpf ?? "", observacao: observacao ?? "" },
+    !!(nome || contato || cpf || observacao),
+  );
+
   const empreendimentos = useMemo(() => {
     const vistos = new Map<string, string>();
     for (const l of lotes) vistos.set(l.condominio_slug, l.condominio_nome);
@@ -506,6 +533,7 @@ function ReservaForm({
           ...payload,
           lote_id: loteId,
         });
+        apagarRascunho("reserva-nova");
       }
       onSalvo();
     } catch (e) {
@@ -520,6 +548,25 @@ function ReservaForm({
       <h2 id="reserva-modal-title" className="text-lg font-bold text-ink mb-1">
         {reserva ? "Editar pedido" : "Novo pedido de reserva"}
       </h2>
+      {recuperado && (
+        <p className="text-xs text-ink bg-amber-50 border border-amber-200 rounded px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+          <span>Recuperamos o que você tinha preenchido em {quandoFoiSalvo(recuperado)}.</span>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              apagarRascunho("reserva-nova");
+              setNome("");
+              setContato("");
+              setCpf("");
+              setObservacao("");
+              setRecuperado(null);
+            }}
+          >
+            limpar
+          </button>
+        </p>
+      )}
       {!reserva && (
         <>
           {empreendimentos.length > 1 && (
