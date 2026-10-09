@@ -732,15 +732,16 @@ export interface EmissaoContrato {
 }
 
 export interface HistoricoContratos {
-  numero_contrato: string;
+  /** "0091" — null enquanto nenhum contrato foi emitido (o número é dado na 1ª emissão). */
+  numero_contrato: string | null;
   versao_atual: number;
   emissoes: EmissaoContrato[];
 }
 
-/** "0003/2026" — mesmo número que sai no título do contrato (ano em que a
- * proposta foi feita; ver documentos_gerados.identificacao_contrato). */
-export function numeroContrato(numero: number, createdAt: string): string {
-  return `${String(numero).padStart(4, "0")}/${createdAt.slice(0, 4)}`;
+/** 91 -> "0091" (mesmo formato do título do contrato); null se a proposta
+ * ainda não teve contrato emitido -- o número é dado na 1ª emissão. */
+export function numeroContrato(numero?: number | null): string | null {
+  return numero ? String(numero).padStart(4, "0") : null;
 }
 
 export function formatarNumeroProposta(numero: number, versao: number): string {

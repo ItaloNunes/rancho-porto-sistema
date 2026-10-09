@@ -162,6 +162,9 @@ export interface Proposta {
    * um número junto com a versão deixa claro se um PDF/print em mãos de
    * alguém ainda é a versão vigente da proposta. */
   versao: number;
+  /** Nº do contrato (sequência própria a partir do 91, 09/10) — dado na 1ª
+   * emissão do contrato; null antes disso. Ver numeroContrato em lib/api.ts. */
+  numero_contrato?: number | null;
   lote_id: string;
   cliente_id: string;
   corretor_id?: string | null;

@@ -7,7 +7,6 @@ import {
   formatMoney,
   mostrarErroNaAba,
   mostrarPdfNaAba,
-  numeroContrato,
 } from "../../lib/api";
 import type { ConferenciaProposta, HistoricoContratos } from "../../lib/api";
 import { fmtBRL, fmtData, lerPlano, lerValor, resumoPlano, textoMeio, valorPorExtenso } from "../../lib/pagamento";
@@ -266,7 +265,13 @@ export default function PropostaFinanceiro({
       <section className="rounded-lg border border-border p-3 grid gap-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Contrato</h3>
         <p className="text-sm text-ink">
-          Nº <strong className="font-mono">{historico?.numero_contrato ?? numeroContrato(proposta.numero, proposta.created_at)}</strong>{" "}
+          {historico?.numero_contrato ? (
+            <>
+              Nº <strong className="font-mono">{historico.numero_contrato}</strong>{" "}
+            </>
+          ) : (
+            <span className="text-ink-soft">Nº definido na 1ª emissão (sequência a partir do 91) </span>
+          )}
           · versão atual <strong>{proposta.versao}</strong>
           <span className="text-ink-soft"> (sobe a cada correção de dados)</span>
         </p>

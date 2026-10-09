@@ -319,8 +319,6 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
             erros.append("A 1ª parcela mensal não pode vencer antes do pagamento da entrada.")
         if _invalido(fp, "chave_valor"):
             erros.append(f"Valor da chave inválido: {FORMATO_VALOR}")
-        if fp.get("chave_vencimento") and not p.chave_data:
-            erros.append("Data da chave inválida (use dia/mês/ano).")
         if not erros:
             total = p.total_calculado
             if abs(total - vp) > tolerancia(p):
@@ -346,9 +344,12 @@ def normalizar(fp: dict) -> dict:
         if v is not None:
             out[chave] = fmt_brl(v)
     for chave, d in (("avista_data", p.avista_data), ("sinal_vencimento", p.entrada_data),
-                     ("primeiro_mes", p.primeira_parcela), ("chave_vencimento", p.chave_data)):
+                     ("primeiro_mes", p.primeira_parcela)):
         if d:
             out[chave] = d.isoformat()
+    # Chave não tem data (09/10): é paga na entrega das chaves, que não tem
+    # dia certo. Some com qualquer data antiga digitada.
+    out["chave_vencimento"] = None
     if p.primeira_parcela:
         out["vencimento"] = str(p.primeira_parcela.day)
     if p.a_vista:

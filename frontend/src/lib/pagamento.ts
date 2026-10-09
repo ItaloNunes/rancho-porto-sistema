@@ -269,7 +269,6 @@ export function validarPlano(
     if (!dPrimeira) erros.push("Informe a data da 1ª parcela mensal (dia/mês/ano).");
     else if (dEntrada && dPrimeira < dEntrada) erros.push("A 1ª parcela mensal não pode vencer antes do pagamento da entrada.");
     if (invalido(fp.chave_valor)) erros.push(`Valor da chave inválido: ${FORMATO_VALOR}`);
-    if (fp.chave_vencimento && !lerData(fp.chave_vencimento)) erros.push("Data da chave inválida (use dia/mês/ano).");
     if (erros.length === 0 && Math.abs(p.total - vp) > tolerancia(p)) {
       erros.push(
         `A soma não fecha: entrada R$ ${fmtBRL(p.entrada)} + ${p.parcelas} x R$ ${fmtBRL(p.parcelaValor)} + chave R$ ${fmtBRL(p.chave)} = R$ ${fmtBRL(p.total)}, mas o valor proposto é R$ ${fmtBRL(vp)} (diferença de R$ ${fmtBRL(Math.abs(p.total - vp))}).`,

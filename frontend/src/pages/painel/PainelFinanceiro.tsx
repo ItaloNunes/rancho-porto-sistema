@@ -110,7 +110,8 @@ export default function PainelFinanceiro() {
 
   async function gerarContrato(p: PropostaDetalhe, comissao: number, data: string) {
     const blob = await api.gerarContratoProposta(p.id, comissao, data);
-    const nomeArquivo = `contrato-${numeroContrato(p.numero, p.created_at).replace("/", "-")}-v${p.versao}-${p.lote?.identificador ?? p.id}.pdf`;
+    const n = numeroContrato(p.numero_contrato);
+    const nomeArquivo = `contrato-${n ? `${n}-` : ""}v${p.versao}-${p.lote?.identificador ?? p.id}.pdf`;
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -418,7 +419,9 @@ function FormularioContrato({
         </h2>
         <p className="text-xs text-ink-soft mt-1">
           <span className="block font-mono text-ink mb-1">
-            Contrato Nº {numeroContrato(proposta.numero, proposta.created_at)} – versão {proposta.versao}
+            {numeroContrato(proposta.numero_contrato)
+              ? `Contrato Nº ${numeroContrato(proposta.numero_contrato)} – versão ${proposta.versao}`
+              : `Contrato novo — recebe o próximo número da sequência (a partir do 91) ao gerar · versão ${proposta.versao}`}
           </span>
           {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"}. O contrato sai
           em PDF, preenchido com os dados já cadastrados (comprador, lote, forma de pagamento) no modelo real da

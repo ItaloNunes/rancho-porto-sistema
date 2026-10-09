@@ -102,6 +102,16 @@ class _SupabaseFalso:
     def table(self, nome):
         return _Consulta(self.banco, nome)
 
+    def rpc(self, nome, params):
+        """atribuir_numero_contrato (migration 0027): sequência a partir do 91."""
+        assert nome == "atribuir_numero_contrato"
+        prop = next(p for p in self.banco["propostas"] if p["id"] == params["p_proposta"])
+        if not prop.get("numero_contrato"):
+            usados = [p.get("numero_contrato") or 0 for p in self.banco["propostas"]]
+            prop["numero_contrato"] = max([90, *usados]) + 1
+        n = prop["numero_contrato"]
+        return type("Q", (), {"execute": lambda self_: type("R", (), {"data": n})})()
+
 
 @pytest.fixture()
 def cliente_api(monkeypatch):
@@ -326,9 +336,10 @@ def test_proposta_cancelada_nao_edita(cliente_api):
 def test_identificacao_do_contrato():
     from datetime import date
     from app.documentos_gerados import identificacao_contrato, titulo_contrato
-    p = {"numero": 3, "versao": 2, "created_at": "2026-09-24T23:31:38+00:00"}
-    assert identificacao_contrato(p, date(2027, 1, 5)) == ("0003/2026", 2)  # ano da proposta, não da emissão
-    assert titulo_contrato(p) == "CONTRATO Nº 0003/2026 – VERSÃO 2"
+    p = {"numero": 3, "versao": 2, "numero_contrato": 91, "created_at": "2026-09-24T23:31:38+00:00"}
+    assert identificacao_contrato(p, date(2027, 1, 5)) == ("0091", 2)  # sequência própria, sem ano
+    assert titulo_contrato(p) == "CONTRATO Nº 0091 – VERSÃO 2"
+    assert identificacao_contrato({"numero": 3, "versao": 1}) == (None, 1)  # ainda não emitido
 
 
 def test_contrato_sai_numerado_versionado_e_registrado(cliente_api, monkeypatch):
@@ -343,16 +354,30 @@ def test_contrato_sai_numerado_versionado_e_registrado(cliente_api, monkeypatch)
                     "tamanho_m2": 300, "condominio": {"nome": "Porto Franco"}}
     prop["cliente"] = sb.banco["clientes"][0]
     prop["corretor"] = {"nome": "Corretor", "cpf_cnpj": "52998224725", "creci": "123"}
+    # sem o lote no memorial descritivo o contrato não sai (09/10)
+    r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-03")
+    assert r.status_code == 422 and "memorial descritivo" in r.text
+    assert not sb.banco["propostas"][0].get("numero_contrato")  # barrado não gasta número
+    sb.banco["lotes_memorial"] = [{"condominio_slug": "porto-franco", "quadra": "10", "lote_numero": 8,
+                                   "area_privativa": 300.0, "area_comum": 135.24, "area_real": 435.24,
+                                   "area_texto": "Área privativa: 300,00m², Área comum: 135,24m² e Área real: 435,24m²",
+                                   "confrontacoes": ["10,00m de frente com a Rua X", "10,00m de fundo com o lote 9",
+                                                     "30,00m de comprimento pelo lado direito com o lote 7",
+                                                     "30,00m de comprimento pelo lado esquerdo com o lote 9"]}]
     r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-03")
     assert r.status_code == 200, r.text
     assert r.headers["content-type"] == "application/pdf"
-    assert 'contrato-0003-2026-v2-Q10-L8.pdf' in r.headers["content-disposition"]
+    assert 'contrato-0091-v2-Q10-L8.pdf' in r.headers["content-disposition"]
     import io
     from pypdf import PdfReader
     texto = PdfReader(io.BytesIO(r.content)).pages[0].extract_text()
-    assert "CONTRATO Nº 0003/2026 – VERSÃO 2" in " ".join(texto.split())
+    assert "CONTRATO Nº 0091 – VERSÃO 2" in " ".join(texto.split())
     h = api.get("/crm/propostas/p3/contratos").json()
-    assert h["numero_contrato"] == "0003/2026" and h["versao_atual"] == 2
+    assert h["numero_contrato"] == "0091" and h["versao_atual"] == 2
+    # reemitir mantém o número (só a versão acompanha a proposta)
+    r2 = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-04")
+    assert r2.status_code == 200 and 'contrato-0091-v2' in r2.headers["content-disposition"]
+    assert sb.banco["propostas"][0]["numero_contrato"] == 91
     assert h["emissoes"][0]["versao"] == 2 and h["emissoes"][0]["emitido_por"] == "Admin"
 
 

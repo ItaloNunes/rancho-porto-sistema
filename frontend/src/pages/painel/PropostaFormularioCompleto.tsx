@@ -57,7 +57,7 @@ export function dadosParaEdicao(p: PropostaDetalhe): QualificacaoDados {
       primeiro_mes: dataParaIso(fp.primeiro_mes),
       sinal_vencimento: dataParaIso(fp.sinal_vencimento),
       avista_data: dataParaIso(fp.avista_data),
-      chave_vencimento: dataParaIso(fp.chave_vencimento),
+      chave_vencimento: null, // chave sem data (09/10)
       confirmado: false,
       confirma_valor_fora_tabela: false,
     },

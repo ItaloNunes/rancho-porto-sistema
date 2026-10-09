@@ -444,19 +444,15 @@ export default function FormaPagamentoEtapa({
           </Bloco>
 
           <Bloco titulo="3. Chave (paga na entrega das chaves)">
+            {/* Sem campo de data (09/10): a chave é paga na entrega das
+                chaves, que não tem dia certo -- o contrato não traz data. */}
             <div className="grid sm:grid-cols-2 gap-3 items-start">
               <CampoDinheiro
                 id="fp-chave"
                 label="Valor da chave"
                 valor={fp.chave_valor}
-                onChange={(v) => set({ chave_valor: v })}
-                ajuda="Deixe 0,00 se não houver."
-              />
-              <CampoData
-                id="fp-chave-data"
-                label="Pagar até (opcional)"
-                valor={fp.chave_vencimento}
-                onChange={(v) => set({ chave_vencimento: v })}
+                onChange={(v) => set({ chave_valor: v, chave_vencimento: null })}
+                ajuda="Paga na entrega das chaves, sem data. Deixe 0,00 se não houver."
               />
             </div>
           </Bloco>

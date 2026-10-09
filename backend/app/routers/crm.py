@@ -1303,6 +1303,54 @@ def gerar_recibo_proposta(
     )
 
 
+def _memorial_do_lote(sb, condominio_slug: str, lote: dict) -> Optional[dict]:
+    """Linha do memorial descritivo (migration 0028) do lote: áreas e
+    confrontações exatamente como estão no documento da arquiteta. A quadra
+    é comparada sem zero à esquerda ("01" == "1")."""
+    quadra = str(lote.get("quadra") or "").strip().lstrip("0") or "0"
+    try:
+        numero = int(lote.get("lote_numero"))
+    except (TypeError, ValueError):
+        return None
+    try:
+        linhas = (
+            sb.table("lotes_memorial")
+            .select("*")
+            .eq("condominio_slug", condominio_slug)
+            .eq("quadra", quadra)
+            .eq("lote_numero", numero)
+            .limit(1)
+            .execute()
+            .data
+        )
+    except Exception:  # noqa: BLE001 -- tabela ainda não criada (0028 não rodada)
+        return None
+    return linhas[0] if linhas else None
+
+
+def _garantir_numero_contrato(sb, proposta: dict) -> int:
+    """Número do contrato (09/10): o que a proposta já tem ou o próximo da
+    sequência (começa no 91) -- atribuído no banco, de forma atômica, pela
+    função atribuir_numero_contrato (migration 0027). Chamado só depois de
+    todas as validações, pra contrato barrado não gastar número."""
+    if proposta.get("numero_contrato"):
+        return int(proposta["numero_contrato"])
+    try:
+        n = sb.rpc("atribuir_numero_contrato", {"p_proposta": proposta["id"]}).execute().data
+    except Exception as e:  # noqa: BLE001 -- banco sem a migration 0027
+        raise HTTPException(
+            503,
+            "Não foi possível numerar o contrato: falta a atualização 0027 no banco (numeração a partir do 91).",
+        ) from e
+    if isinstance(n, list):
+        n = n[0] if n else None
+    if isinstance(n, dict):
+        n = next(iter(n.values()), None)
+    if not n:
+        raise HTTPException(503, "Não foi possível numerar o contrato -- tente de novo.")
+    return int(n)
+
+
 @router.get("/propostas/{proposta_id}/contrato")
 def gerar_contrato_proposta(
     proposta_id: str,
@@ -1388,6 +1436,7 @@ def gerar_contrato_proposta(
                 "O contrato não foi gerado: " + " ".join(problemas)
                 + " Use \"Corrigir dados\" na proposta pra completar.",
             )
+        proposta["numero_contrato"] = _garantir_numero_contrato(sb, proposta)
         docx_bytes = preencher_contrato_rancho_texas(
             proposta=proposta,
             lote=lote,
@@ -1395,6 +1444,30 @@ def gerar_contrato_proposta(
             data_contrato=data_contrato,
         )
     else:
+        # Porto Franco (09/10): o cônjuge marcado no formulário entra no item
+        # IX com 50% -- sem o nome dele(a) a proporção sairia errada. Proposta
+        # antiga sem a pergunta respondida continua saindo só com o comprador.
+        dq_pf = proposta.get("dados_qualificacao") or {}
+        if dq_pf.get("tem_conjuge") is True:
+            problemas = problemas_conjuge(dq_pf)
+            if problemas:
+                raise HTTPException(
+                    422,
+                    "O contrato não foi gerado: " + " ".join(problemas)
+                    + " Use \"Corrigir dados\" na proposta pra completar.",
+                )
+        # Área e confrontações do lote saem do MEMORIAL DESCRITIVO (09/10).
+        # Lote que não está no memorial não gera contrato -- melhor travar do
+        # que imprimir medidas em branco ou erradas.
+        memorial = _memorial_do_lote(sb, "porto-franco", lote)
+        if not memorial:
+            raise HTTPException(
+                422,
+                f"O contrato não foi gerado: o lote {lote.get('lote_numero')} da quadra {lote.get('quadra')} "
+                "não está no memorial descritivo do Porto Franco (tabela lotes_memorial) -- confira a quadra/lote "
+                "do cadastro ou se a atualização 0028 foi rodada no banco.",
+            )
+        proposta["numero_contrato"] = _garantir_numero_contrato(sb, proposta)
         docx_bytes = preencher_contrato_porto_franco(
             proposta=proposta,
             lote=lote,
@@ -1402,6 +1475,7 @@ def gerar_contrato_proposta(
             corretor=proposta.get("corretor"),
             valor_comissao=comissao,
             data_contrato=data_contrato,
+            memorial=memorial,
         )
     # Todo contrato sai em PDF (pedido de 02/10) -- ver app/docx_pdf.py.
     pdf_bytes = docx_para_pdf(docx_bytes)

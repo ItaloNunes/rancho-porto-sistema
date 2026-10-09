@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Optional
 
 import docx
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 # Reaproveita o mapa de rótulos e o parser de data "livre" (aceita
 # 'AAAA-MM-DD' do input do navegador ou texto solto) já usados no PDF da
@@ -268,28 +270,34 @@ def _endereco_completo(endereco: dict) -> str:
 
 
 
-def identificacao_contrato(proposta: dict, data_contrato: Optional[date] = None) -> tuple[str, int]:
-    """Número e versão do contrato (pedido de 03/10).
+def formatar_numero_contrato(numero) -> Optional[str]:
+    """91 -> "0091". None quando a proposta ainda não teve contrato emitido."""
+    try:
+        n = int(numero)
+    except (TypeError, ValueError):
+        return None
+    return f"{n:04d}" if n > 0 else None
 
-    - Número: o mesmo da proposta + ano em que ela foi feita -> "0003/2026".
-      Um contrato por proposta; o número não muda se o contrato for emitido
-      de novo (nem se for emitido no ano seguinte).
+
+def identificacao_contrato(proposta: dict, data_contrato: Optional[date] = None) -> tuple[Optional[str], int]:
+    """Número e versão do contrato.
+
+    - Número (09/10): sequência própria dos contratos, começando no 91 --
+      dado na 1ª emissão (banco: atribuir_numero_contrato, migration 0027)
+      e gravado em propostas.numero_contrato. Reemitir mantém o número.
+      Formato "0091", sem ano.
     - Versão: a versão da proposta. Toda correção de dados (financeiro ou
       corretor) sobe a versão da proposta, então um contrato "Versão 2" é o
       emitido depois da 1ª correção -- dá pra saber, só de olhar o papel, se
       aquela via é a vigente."""
-    numero = int(proposta.get("numero") or 0)
-    ano = None
-    criado = proposta.get("created_at")
-    if isinstance(criado, str) and re.match(r"\d{4}-", criado):
-        ano = int(criado[:4])
-    if ano is None:
-        ano = (data_contrato or date.today()).year
-    return f"{numero:04d}/{ano}", int(proposta.get("versao") or 1)
+    return formatar_numero_contrato(proposta.get("numero_contrato")), int(proposta.get("versao") or 1)
 
 
 def titulo_contrato(proposta: dict, data_contrato: Optional[date] = None) -> str:
     numero, versao = identificacao_contrato(proposta, data_contrato)
+    if not numero:
+        # nunca emitir contrato sem número -- o endpoint numera antes de preencher
+        raise ValueError("Contrato sem número: a numeração tem que ser atribuída antes de preencher o modelo.")
     return f"CONTRATO Nº {numero} – VERSÃO {versao}"
 
 def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
@@ -314,7 +322,6 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
         out["entrada_compl_pf"] = out["entrada_compl_rt"] = compl
         out["parcelas"] = None
         out["chave_valor"] = 0.0
-        out["chave_data"] = None
         return out
 
     v = valores_contrato(fp, lote)  # mesmos números que conferir_contrato confere
@@ -351,7 +358,6 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
     else:
         out["parcelas"] = None
     out["chave_valor"] = v.chave
-    out["chave_data"] = plano.chave_data
     return out
 
 
@@ -389,6 +395,146 @@ def _substituir_texto(paragrafo, velho: str, novo: str) -> None:
         pos = r_fim
 
 
+def _todas_tabelas(container):
+    """Todas as tabelas do documento, inclusive as que estão dentro de
+    células (o QUADRO RESUMO é uma tabela grande com tabelas dentro)."""
+    for t in container.tables:
+        yield t
+        for row in t.rows:
+            for cell in row.cells:
+                yield from _todas_tabelas(cell)
+
+
+def _escrever_celula(celula, texto: str, rpr_modelo=None) -> None:
+    """Escreve `texto` na célula com a formatação `rpr_modelo` (a do "100%"
+    que o modelo já traz -- célula vazia do Word não tem fonte própria e o
+    texto saía em outra fonte/negrito) e apaga o resto."""
+    paragrafos = celula.paragraphs
+    primeiro = paragrafos[0]
+    runs = primeiro.runs
+    if not runs:
+        if not texto:
+            return
+        primeiro.add_run("")
+        runs = primeiro.runs
+    run = runs[0]
+    run.text = texto
+    if rpr_modelo is not None:
+        if run._r.rPr is not None:
+            run._r.remove(run._r.rPr)
+        run._r.insert(0, copy.deepcopy(rpr_modelo))
+    for r in runs[1:]:
+        r.text = ""
+    for p in paragrafos[1:]:
+        for r in p.runs:
+            r.text = ""
+
+
+def _celulas_unicas(row) -> list:
+    """Células de uma linha sem repetir as mescladas (python-docx devolve a
+    mesma célula várias vezes quando ela ocupa mais de uma coluna)."""
+    vistas, out = set(), []
+    for c in row.cells:
+        if id(c._tc) not in vistas:
+            vistas.add(id(c._tc))
+            out.append(c)
+    return out
+
+
+def preencher_proporcao(doc, compradores: list[tuple[str, str]], obrigatoria: bool = True) -> None:
+    """IX. PROPORÇÃO DA AQUISIÇÃO IMOBILIÁRIA (pedido de 09/10): o modelo
+    traz a tabela "Nome (s) | (%)" com "100%" e o nome em branco. Só o
+    comprador -> ele com 100%; com cônjuge marcado no formulário -> 50% cada.
+    Só escreve nas células da tabela, o texto do contrato não muda. Lança
+    ValueError se não achar a tabela (melhor travar do que sair sem)."""
+    alvo = None
+    for t in _todas_tabelas(doc):
+        if not t.rows:
+            continue
+        cab = [c.text.strip() for c in _celulas_unicas(t.rows[0])]
+        if len(cab) >= 2 and cab[0].lower().startswith("nome") and "%" in cab[-1]:
+            alvo = t
+            break
+    if alvo is None:
+        if not obrigatoria:
+            return
+        raise ValueError("Tabela da proporção da aquisição (Nome (s) / (%)) não encontrada no modelo.")
+    linhas = alvo.rows[1:]
+    if len(linhas) < len(compradores):
+        raise ValueError("A tabela da proporção da aquisição tem menos linhas que compradores.")
+    # Formatação de referência: o primeiro texto já impresso nas linhas de
+    # dados (o "100%" do modelo); sem ele, a do cabeçalho.
+    rpr_modelo = None
+    for row in [*linhas, alvo.rows[0]]:
+        for c in _celulas_unicas(row):
+            for par in c.paragraphs:
+                for r in par.runs:
+                    if r.text.strip() and r._r.rPr is not None:
+                        rpr_modelo = r._r.rPr
+                        break
+                if rpr_modelo is not None:
+                    break
+            if rpr_modelo is not None:
+                break
+        if rpr_modelo is not None:
+            break
+    rpr_modelo = copy.deepcopy(rpr_modelo) if rpr_modelo is not None else None
+    for i, row in enumerate(linhas):
+        celulas = _celulas_unicas(row)
+        nome, perc = compradores[i] if i < len(compradores) else ("", "")
+        _escrever_celula(celulas[0], nome, rpr_modelo)
+        _escrever_celula(celulas[-1], perc, rpr_modelo)
+
+
+def compradores_proporcao(nome_comprador: str, dq: dict, so_resposta_direta: bool = True) -> list[tuple[str, str]]:
+    """Quem entra no item IX: o comprador sozinho (100%) ou comprador e
+    cônjuge/companheiro(a) (50% cada) -- cônjuge só conta se o corretor
+    marcou "tem cônjuge" no formulário e informou o nome. Proposta antiga,
+    sem essa resposta, fica 100% do comprador (`so_resposta_direta`); o
+    Rancho Texas passa False pra seguir o mesmo critério da COMPRADORA."""
+    dq = dq or {}
+    conjuge = dq.get("conjuge") or {}
+    nome_conjuge = (conjuge.get("nome") or "").strip()
+    marcou = dq.get("tem_conjuge") is True if so_resposta_direta else tem_conjuge(dq)
+    if marcou and nome_conjuge:
+        return [(nome_comprador, "50%"), (nome_conjuge, "50%")]
+    return [(nome_comprador, "100%")]
+
+
+def _escrever_confrontacoes(celula, p_referencia, linhas: list[str]) -> None:
+    """Escreve as linhas do memorial descritivo (áreas + frente/fundo/
+    laterais) nos parágrafos em branco logo abaixo do texto do item V do
+    Porto Franco -- uma linha por parágrafo, na fonte normal do texto do
+    item V. O modelo traz 2 parágrafos vazios ali; se precisar de mais,
+    cria cópias do primeiro (mesmo espaçamento/recuo)."""
+    paragrafos = celula.paragraphs
+    idx = next(i for i, p in enumerate(paragrafos) if p._p is p_referencia._p)
+    vazios = [p for p in paragrafos[idx + 1:] if not p.text.strip()]
+    if not vazios:
+        raise ValueError("Modelo do Porto Franco sem espaço para as confrontações no item V.")
+    base = vazios[0]
+    # fonte do texto corrido do item V (1º run, sem negrito)
+    rpr = None
+    for r in p_referencia.runs:
+        if r._r.rPr is not None and not r.bold:
+            rpr = r._r.rPr
+            break
+    alvo = base
+    for i, texto in enumerate(linhas):
+        if i > 0:
+            novo = copy.deepcopy(base._p)
+            for r in novo.findall(qn("w:r")):
+                novo.remove(r)
+            alvo._p.addnext(novo)
+            alvo = Paragraph(novo, base._parent)
+        for r in list(alvo.runs):
+            r._r.getparent().remove(r._r)
+        run = alvo.add_run(texto)
+        if rpr is not None:
+            run._r.insert(0, copy.deepcopy(rpr))
+            run.bold = False
+
+
 def preencher_contrato_porto_franco(
     *,
     proposta: dict,
@@ -397,6 +543,7 @@ def preencher_contrato_porto_franco(
     corretor: Optional[dict],
     valor_comissao: float,
     data_contrato: Optional[date] = None,
+    memorial: Optional[dict] = None,
 ) -> bytes:
     """Preenche o modelo real do contrato do Porto Franco (alienação
     fiduciária) com os dados da proposta, do lote e da qualificação do
@@ -443,15 +590,23 @@ def preencher_contrato_porto_franco(
     _substituir_texto(p[13], " UF: ", f" UF: {endereco.get('estado') or '-'}")
     _substituir_texto(p[14], "CEP: ", f"CEP: {formatar_cep(endereco.get('cep'))}")
 
-    # --- V. OBJETIVO (lote, quadra, área) --------------------------------
+    # --- V. OBJETIVO (lote, quadra, área + confrontações do memorial) ------
+    # Pedido de 09/10: área e confrontações exatamente como no MEMORIAL
+    # DESCRITIVO do condomínio (tabela lotes_memorial, migration 0028) --
+    # a área total do contrato é a área privativa do memorial.
     p_objetivo = t.rows[7].cells[0].paragraphs[1]
-    area_fmt = formatar_valor(lote.get("tamanho_m2") or 0)
+    area_total = (memorial or {}).get("area_privativa") or lote.get("tamanho_m2") or 0
+    area_fmt = formatar_valor(float(area_total))
     _substituir_texto(
         p_objetivo,
         "LOTE N°  QUADRA N° , com área total de 200,00 m²",
         f"LOTE N° {lote.get('lote_numero', '-')} QUADRA N° {lote.get('quadra', '-')}, "
         f"com área total de {area_fmt} m²",
     )
+    if memorial:
+        _escrever_confrontacoes(
+            t.rows[7].cells[0], p_objetivo, [memorial["area_texto"], *memorial["confrontacoes"]]
+        )
 
     # --- VI. PREÇO --------------------------------------------------------
     valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
@@ -472,7 +627,7 @@ def preencher_contrato_porto_franco(
         _substituir_texto(
             pp[3],
             "Entrada / Arras confirmatórias: ",
-            f"Entrada / Arras confirmatórias: {tp['entrada']}{tp['entrada_compl_pf']}",
+            f"Entrada / Arras confirmatórias: {tp['entrada']}{tp['entrada_compl_pf']}.",
         )
     if tp["a_vista"]:
         _substituir_texto(pp[5], "Parcelas mensais", "Parcelas mensais: não há (pagamento à vista).")
@@ -484,7 +639,7 @@ def preencher_contrato_porto_franco(
         )
         if pc["primeira"] or pc["dia"]:
             texto_parcelas += (
-                f", vencendo a primeira em {pc['primeira'] or '-'}, dia {pc['dia'] or '-'}, "
+                f", vencendo a primeira em {pc['primeira'] or '-'} "
                 "e as demais no mesmo dia dos meses subsequentes"
             )
         _substituir_texto(pp[5], "Parcelas mensais", f"Parcelas mensais: {texto_parcelas}.")
@@ -492,13 +647,18 @@ def preencher_contrato_porto_franco(
     if tp["a_vista"] or tp["chave_valor"] == 0:
         _substituir_texto(pp[7], "Chave: ", "Chave: não há" + (" (pagamento à vista)." if tp["a_vista"] else "."))
     elif tp["chave_valor"]:
+        # Sem data (09/10): a entrega das chaves não tem dia certo -- uma
+        # data impressa aqui ficava errada quando a obra mudava de prazo (ou
+        # saía a data de hoje por engano). Data antiga gravada é ignorada.
         chave = tp["chave_valor"]
-        prazo = f", até {fmt_data(tp['chave_data'])}" if tp["chave_data"] else ""
         _substituir_texto(
             pp[7],
             "Chave: ",
-            f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves{prazo}.",
+            f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves.",
         )
+
+    # --- IX. PROPORÇÃO DA AQUISIÇÃO -----------------------------------------
+    preencher_proporcao(doc, compradores_proporcao(nome, dq))
 
     # DA COMISSÃO DE CORRETAGEM -- corretor responsável pela venda,
     # qualificado com os dados do próprio cadastro dele (ver
@@ -633,10 +793,10 @@ def preencher_contrato_rancho_texas(
             f"NACIONALIDADE: {conjuge.get('nacionalidade') or '-'}   PROFISSÃO: {conjuge.get('profissao') or '-'}",
         )
         _substituir_texto(
-            p[10], p[10].text, f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))} "
+            p[10], p[10].text, f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))}   "
             f"LOCAL: {(conjuge.get('naturalidade') or '').strip() or '-'}"
         )
-        _substituir_texto(p[11], p[11].text, f"CPF: {cpf_c} IDENTIDADE: {_identidade(conjuge)}")
+        _substituir_texto(p[11], p[11].text, f"CPF: {cpf_c}   IDENTIDADE: {_identidade(conjuge)}")
         _substituir_texto(p[12], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
     # Sem cônjuge na qualificação: o bloco "B – COMPRADORA" fica como o
     # modelo já traz (rótulos em branco, sem exemplo nenhum pra tirar) --
@@ -725,7 +885,7 @@ def preencher_contrato_rancho_texas(
             parcelas_modelo,
             f"Parcelas: {pc['qtd']} ({_numero_extenso_feminino(pc['qtd'])}) parcelas mensais e sucessivas no valor "
             f"de R$ {formatar_valor(pc['valor'])} ({valor_por_extenso(pc['valor'])}), vencendo a primeira "
-            f"em {pc['primeira'] or '-'}, dia {dia}, e as demais todo dia {dia} dos meses subsequentes.",
+            f"em {pc['primeira'] or '-'} e as demais todo dia {dia} dos meses subsequentes.",
         )
     else:
         _substituir_texto(pp[5], parcelas_modelo, "Parcelas: -.")
@@ -734,14 +894,15 @@ def preencher_contrato_rancho_texas(
     if tp["a_vista"] or tp["chave_valor"] == 0:
         _substituir_texto(pp[7], chave_modelo, "Chave: não há" + (" (pagamento à vista)." if tp["a_vista"] else "."))
     elif tp["chave_valor"]:
+        # Mesma regra do Porto Franco (09/10): chave sem data no contrato.
         chave = tp["chave_valor"]
-        if tp["chave_data"]:
-            texto_chave = f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}) a ser pago até {fmt_data(tp['chave_data'])}."
-        else:
-            texto_chave = f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves."
+        texto_chave = f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves."
         _substituir_texto(pp[7], chave_modelo, texto_chave)
     else:
         _substituir_texto(pp[7], chave_modelo, "Chave: -.")
+
+    # --- IX. PROPORÇÃO DA AQUISIÇÃO (mesma regra do Porto Franco) -----------
+    preencher_proporcao(doc, compradores_proporcao(nome, dq, so_resposta_direta=False), obrigatoria=False)
 
     # --- XII. LOCAL E DATA DE CELEBRAÇÃO --------------------------------------
     p_data = t.rows[19].cells[0].paragraphs[1]
