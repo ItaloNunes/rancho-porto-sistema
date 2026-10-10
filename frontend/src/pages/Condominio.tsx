@@ -16,6 +16,9 @@ export default function Condominio() {
   const [condo, setCondo] = useState<CondominioDetalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [view, setView] = useState<View>("planta");
+  // Empreendimento sem planta cadastrada (os novos de 10/10): só a Lista.
+  const temPlanta = !!(condo?.plan_image_url || condo?.plan_w);
+  const viewAtual: View = temPlanta ? view : "lista";
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>("todos");
   const [zonaFiltro, setZonaFiltro] = useState<QuadraZona | null>(null);
@@ -157,7 +160,8 @@ export default function Condominio() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 sm:px-8 py-6 sm:py-8 w-full min-w-0">
-        <div className={`grid grid-cols-1 gap-3 mb-6 ${view === "lista" ? "sm:grid-cols-[auto_1fr_auto]" : ""}`}>
+        <div className={`grid grid-cols-1 gap-3 mb-6 ${viewAtual === "lista" ? "sm:grid-cols-[auto_1fr_auto]" : ""}`}>
+          {temPlanta && (
           <div className="inline-grid grid-cols-2 rounded border border-border overflow-hidden w-full sm:w-auto sm:justify-self-start">
             {(["planta", "lista"] as View[]).map((v) => (
               <button
@@ -171,9 +175,10 @@ export default function Condominio() {
               </button>
             ))}
           </div>
+          )}
           {/* Busca e status só filtram a Lista — na Planta eles não têm nenhum efeito visual
               (a planta não é colorida por status), então ficam escondidos pra não confundir. */}
-          {view === "lista" && (
+          {viewAtual === "lista" && (
             <>
               <input
                 className="input"
@@ -222,7 +227,7 @@ export default function Condominio() {
           </div>
         )}
 
-        {view === "planta" ? (
+        {viewAtual === "planta" ? (
           <PlantaSVG
             condo={condo}
             selecionado={selecionado}

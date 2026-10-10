@@ -521,3 +521,47 @@ def test_corretor_nao_gera_pdf_de_proposta_cancelada_ou_recusada(cliente_api, st
     assert r.status_code == 403 and "cancelada ou recusada" in r.text
     app.dependency_overrides[get_current_corretor] = lambda: ADMIN  # financeiro continua podendo, pra conferência
     assert api.get("/crm/propostas/p3/documento").status_code == 200
+
+
+# --------------------------------------------------------------------------
+# Empreendimentos novos ocultos (10/10)
+# --------------------------------------------------------------------------
+
+def _semear_oculto(sb):
+    sb.banco["condominios"] = [{"id": "c-pf", "nome": "Porto Franco Residencial", "slug": "porto-franco", "ativo": True},
+                               {"id": "c-bv", "nome": "Boulevard Residence", "slug": "boulevard", "ativo": False}]
+    sb.banco["lotes"][0].update({"condominio_id": "c-pf", "quadra": "10", "lote_numero": 8,
+                                 "identificador": "LOTE 08 - QUADRA 10", "tamanho_m2": 200.0, "poligono": []})
+    sb.banco["lotes"].append({"id": "lote-bv", "condominio_id": "c-bv", "quadra": "2", "lote_numero": 1,
+                              "identificador": "LOTE 01 - QUADRA 2", "tamanho_m2": 389.03, "valor_total": 321000.0,
+                              "status": "disponivel", "poligono": [], "detalhes": "Lote sombra"})
+
+
+def test_corretor_nao_ve_nem_negocia_empreendimento_oculto(cliente_api):
+    api, sb = cliente_api  # corretor comum
+    _semear_oculto(sb)
+    ids = [l["id"] for l in api.get("/crm/lotes").json()]
+    assert "lote-bv" not in ids and "lote-1" in ids
+    r = api.post("/crm/propostas", json={**payload(), "lote_id": "lote-bv"})
+    assert r.status_code == 409 and "liberado" in r.text
+    from app.routers import reservas as reservas_mod
+    reservas_mod.get_supabase = lambda: sb
+    r = api.post("/reservas", json={"lote_id": "lote-bv", "nome": "Fulano", "contato": "84999990000"})
+    assert r.status_code == 409 and "liberado" in r.text
+
+
+def test_financeiro_ve_empreendimento_oculto_marcado(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_oculto(sb)
+    lotes = {l["id"]: l for l in api.get("/crm/lotes").json()}
+    assert lotes["lote-bv"]["condominio_ativo"] is False and lotes["lote-bv"]["detalhes"] == "Lote sombra"
+    assert lotes["lote-1"]["condominio_ativo"] is True
+
+
+def test_empreendimento_sem_modelo_nao_gera_contrato_nem_recibo():
+    from app.documentos_gerados import modelo_documentos
+    assert modelo_documentos("Porto Franco Residencial") == "porto_franco"
+    assert modelo_documentos("Rancho Texas") == "rancho_texas"
+    for nome in ("Boulevard Residence", "Praia Mar", "Rota dos Ventos", "Riviera Residence Beach", "Veneza Residencial"):
+        assert modelo_documentos(nome) is None

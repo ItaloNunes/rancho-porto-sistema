@@ -43,6 +43,11 @@ export interface Lote {
    * a forma real do lote na planta em imagem). */
   poligono_definido?: boolean;
   foto_url?: string | null;
+  /** Características da tabela da construtora (posição esquina/sol/sombra,
+   * etapa, "saldo só por financiamento bancário"...) — empreendimentos de 10/10. */
+  detalhes?: string | null;
+  /** Só para casas (Veneza): área construída, em m². */
+  area_construida_m2?: number | null;
 }
 
 export interface QuadraZona {
@@ -259,6 +264,8 @@ export interface ReservaComLote extends Reserva {
 export interface LoteComCondominio extends Lote {
   condominio_nome: string;
   condominio_slug: string;
+  /** false = empreendimento oculto (ainda não liberado); só o financeiro recebe esses lotes. */
+  condominio_ativo?: boolean;
   // "Observação" com data/hora de uma proposta ainda aberta (rascunho ou
   // aguardando aprovação) pra esse lote — ver GET /crm/lotes. null quando
   // não tem nenhuma proposta pendente no momento.

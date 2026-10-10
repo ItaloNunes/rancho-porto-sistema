@@ -70,3 +70,15 @@ def proposta_viva_da_reserva(sb, reserva: dict) -> Optional[dict]:
     if p and p[0]["status"] in PROPOSTA_VIVAS:
         return p[0]
     return None
+
+
+def lote_em_empreendimento_ativo(sb, lote_id: str) -> bool:
+    """O empreendimento do lote está visível (condominios.ativo)? Os
+    empreendimentos novos entram ocultos (10/10) até o financeiro conferir:
+    corretor não reserva nem faz proposta neles antes disso. Lote sem
+    empreendimento achado conta como ativo (não trava nada por engano)."""
+    lote = sb.table("lotes").select("condominio_id").eq("id", lote_id).limit(1).execute().data
+    if not lote or not lote[0].get("condominio_id"):
+        return True
+    condo = sb.table("condominios").select("ativo").eq("id", lote[0]["condominio_id"]).limit(1).execute().data
+    return not condo or condo[0].get("ativo") is not False

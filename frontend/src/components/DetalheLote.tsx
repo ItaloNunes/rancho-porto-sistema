@@ -68,8 +68,10 @@ export default function DetalheLote({
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-4 mt-6 pb-6 border-b border-border">
-        <Field label="Área" value={formatArea(lote.tamanho_m2)} />
+        <Field label={lote.area_construida_m2 ? "Área do lote" : "Área"} value={formatArea(lote.tamanho_m2)} />
         <Field label="Valor total à prazo" value={formatMoney(lote.valor_total)} highlight />
+        {lote.area_construida_m2 ? <Field label="Área construída" value={formatArea(lote.area_construida_m2)} /> : null}
+        {lote.detalhes ? <Field label="Características" value={lote.detalhes} span2={!lote.area_construida_m2} /> : null}
         <Field label="Entrada" value={formatMoney(lote.entrada)} />
         <Field label="Na entrega" value={formatMoney(lote.entrega)} />
         <Field

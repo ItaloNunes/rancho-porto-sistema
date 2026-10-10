@@ -30,6 +30,7 @@ from ..data.corretores_iniciais import RAW as CORRETORES_INICIAIS
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..documentos_gerados import (
+    modelo_documentos,
     identificacao_contrato,
     preencher_contrato_porto_franco,
     preencher_contrato_rancho_texas,
@@ -38,7 +39,7 @@ from ..documentos_gerados import (
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..cadastro_proposta import email_valido, problemas_cadastro, problemas_conjuge, so_digitos, telefone_valido, tem_conjuge
-from ..estoque import PROPOSTA_VIVAS, detentores, liberar_lote_se_livre
+from ..estoque import PROPOSTA_VIVAS, detentores, liberar_lote_se_livre, lote_em_empreendimento_ativo
 from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, resumo_contrato, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
@@ -620,6 +621,8 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
     lote = sb.table("lotes").select("id, status, valor_total").eq("id", lote_id).limit(1).execute().data
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
+    if not eh_admin(corretor) and not lote_em_empreendimento_ativo(sb, lote_id):
+        raise HTTPException(409, "Este empreendimento ainda não foi liberado para vendas.")
 
     # Plano de pagamento (formulário de 02/10): só cria a proposta se a conta
     # fechar -- entrada obrigatória, datas válidas, entrada + parcelas + chave
@@ -1282,6 +1285,12 @@ def gerar_recibo_proposta(
         raise HTTPException(409, "Cliente sem CPF cadastrado -- não é possível gerar o recibo sem isso.")
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
+    if modelo_documentos(condominio_nome) is None:
+        raise HTTPException(
+            422,
+            f"O recibo do {condominio_nome or 'empreendimento'} ainda não está disponível: "
+            "falta cadastrar o modelo de recibo deste empreendimento.",
+        )
     docx_bytes, _slug = preencher_recibo(
         condominio_nome=condominio_nome,
         cliente_nome=cliente["nome"],
@@ -1425,6 +1434,12 @@ def gerar_contrato_proposta(
         )
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
+    if modelo_documentos(condominio_nome) is None:
+        raise HTTPException(
+            422,
+            f"O contrato do {condominio_nome or 'empreendimento'} ainda não está disponível: "
+            "falta cadastrar o modelo de contrato deste empreendimento.",
+        )
     if "rancho" in condominio_nome.lower():
         # O Rancho Texas qualifica o cônjuge/companheiro(a) como COMPRADORA:
         # sem os dados dele(a) o contrato sairia incompleto.
@@ -2068,8 +2083,12 @@ def visao_geral_pdf(
 @router.get("/lotes", response_model=list[LoteComCondominio])
 def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
-    condos = {c["id"]: c for c in sb.table("condominios").select("id, nome, slug").execute().data}
+    condos = {c["id"]: c for c in sb.table("condominios").select("id, nome, slug, ativo").execute().data}
     lotes = sb.table("lotes").select("*").order("condominio_id").order("lote_numero").execute().data
+    # Empreendimento oculto (ativo = false, 10/10): só o financeiro vê os
+    # lotes dele, pra conferir antes de liberar; corretor não vê.
+    if not eh_admin(_corretor):
+        lotes = [l for l in lotes if condos.get(l["condominio_id"], {}).get("ativo") is not False]
 
     # "Observação" com data/hora que a tela de Lotes mostra assim que um
     # corretor cria uma proposta (mesmo em rascunho) pra aquele lote — avisa
@@ -2129,6 +2148,7 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
                 **l,
                 "condominio_nome": condo.get("nome", "?"),
                 "condominio_slug": condo.get("slug", ""),
+                "condominio_ativo": condo.get("ativo") is not False,
                 "proposta_pendente_status": proposta["status"] if proposta else None,
                 "proposta_pendente_desde": proposta["created_at"] if proposta else None,
                 "preco_pode_reverter": pode_reverter,

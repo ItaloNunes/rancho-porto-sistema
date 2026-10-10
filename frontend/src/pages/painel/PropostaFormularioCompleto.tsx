@@ -662,7 +662,8 @@ export default function PropostaFormularioCompleto({
               <>
                 <p className="text-xs text-ink-soft -mb-1">
                   Dados do {dados.estado_civil === "uniao_estavel" ? "companheiro(a)" : "cônjuge"} — obrigatórios (até no
-                  cadastro rápido): no contrato do Rancho Texas ele(a) assina como COMPRADORA.
+                  cadastro rápido): no contrato a proporção fica 50% para cada (item IX), e no Rancho Texas
+                  ele(a) também assina como COMPRADORA.
                 </p>
                 <Field label="Nome completo *">
                   <input
@@ -1169,5 +1170,5 @@ function LoteCombobox({
 }
 
 function rotuloLote(l: LoteComCondominio): string {
-  return `${l.condominio_nome} — ${l.identificador} (${l.status})`;
+  return `${l.condominio_nome} — ${l.identificador} (${l.status})${l.condominio_ativo === false ? " · oculto" : ""}`;
 }

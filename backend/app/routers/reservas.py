@@ -11,7 +11,7 @@ from ..schemas import (
     ReservaUpdate,
 )
 from ..auditoria import registrar_log
-from ..estoque import PROPOSTA_SEGURA_LOTE, detentores, liberar_lote_se_livre, proposta_viva_da_reserva
+from ..estoque import PROPOSTA_SEGURA_LOTE, detentores, liberar_lote_se_livre, lote_em_empreendimento_ativo, proposta_viva_da_reserva
 from ..precos import congelar_preco_lote
 from ..security import eh_admin, get_current_corretor
 
@@ -189,6 +189,8 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
     )
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
+    if not eh_admin(corretor) and not lote_em_empreendimento_ativo(sb, payload.lote_id):
+        raise HTTPException(409, "Este empreendimento ainda não foi liberado para vendas.")
     if lote[0]["status"] != "disponivel":
         raise HTTPException(409, f"Este lote não está disponível (status atual: {lote[0]['status']}).")
 

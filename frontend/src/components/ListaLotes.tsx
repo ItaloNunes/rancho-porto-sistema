@@ -38,9 +38,16 @@ export default function ListaLotes({ lotes, onSelecionar }: { lotes: Lote[]; onS
             <div className="hidden md:grid items-center gap-3 px-5 py-3.5 text-sm" style={{ gridTemplateColumns: ROW_COLS }}>
               <span className="font-medium text-ink">
                 {l.identificador}
-                <span className="block text-xs text-ink-soft font-normal">quadra {l.quadra}</span>
+                <span className="block text-xs text-ink-soft font-normal">
+                  {l.detalhes ?? `quadra ${l.quadra}`}
+                </span>
               </span>
-              <span className="text-ink-soft">{formatArea(l.tamanho_m2)}</span>
+              <span className="text-ink-soft">
+                {formatArea(l.tamanho_m2)}
+                {l.area_construida_m2 ? (
+                  <span className="block text-xs">{formatArea(l.area_construida_m2)} construídos</span>
+                ) : null}
+              </span>
               <span className="font-medium">{formatMoney(l.valor_total)}</span>
               <span className="text-ink-soft">{formatMoney(l.entrada)}</span>
               <span className="text-ink-soft">{formatMoney(l.parcela_mensal)}</span>
@@ -54,7 +61,9 @@ export default function ListaLotes({ lotes, onSelecionar }: { lotes: Lote[]; onS
               <div className="flex items-center justify-between">
                 <span className="font-medium text-ink text-sm">
                   {l.identificador}
-                  <span className="block text-xs text-ink-soft font-normal">quadra {l.quadra}</span>
+                  <span className="block text-xs text-ink-soft font-normal">
+                    {l.detalhes ?? `quadra ${l.quadra}`}
+                  </span>
                 </span>
                 <span className={`badge badge-${l.status}`}>{STATUS_LABEL[l.status]}</span>
               </div>

@@ -234,9 +234,26 @@ export default function PainelLotes() {
             <tbody>
               {filtrados.map((l) => (
                 <tr key={l.id} className={`border-b border-border last:border-0 transition-colors ${LINHA_COR[l.status]}`}>
-                  <td className="px-4 py-3 text-ink-soft">{l.condominio_nome}</td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {l.condominio_nome}
+                    {l.condominio_ativo === false && (
+                      <span
+                        className="ml-1.5 inline-block rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide align-middle"
+                        title="Empreendimento ainda não liberado: corretores não veem estes lotes"
+                      >
+                        oculto
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-medium text-ink">
                     {l.identificador}
+                    {(l.detalhes || l.area_construida_m2) && (
+                      <div className="mt-0.5 text-[11px] font-normal text-ink-soft">
+                        {[l.area_construida_m2 ? `${l.area_construida_m2.toLocaleString("pt-BR")} m² construídos` : null, l.detalhes]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )}
                     {l.proposta_pendente_desde && (
                       <div className="mt-1 text-[11px] font-normal text-ink-soft">
                         📝 Proposta ({PROPOSTA_STATUS_LABEL[l.proposta_pendente_status ?? ""] ?? l.proposta_pendente_status}

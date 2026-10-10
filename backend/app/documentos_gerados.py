@@ -134,8 +134,25 @@ def formatar_valor(valor: float) -> str:
     return s.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
+def modelo_documentos(condominio_nome: str) -> Optional[str]:
+    """Qual modelo de contrato/recibo serve pro empreendimento: só Porto
+    Franco e Rancho Texas têm modelo cadastrado. Os empreendimentos novos
+    (Boulevard, Praia Mar, Rota dos Ventos, Riviera, Veneza -- 10/10) ainda
+    não têm: antes caíam no do Porto Franco por engano (o padrão era "se não
+    é Rancho, é Porto Franco"), o que imprimiria a SPE errada."""
+    nome = (condominio_nome or "").lower()
+    if "rancho" in nome:
+        return "rancho_texas"
+    if "porto franco" in nome:
+        return "porto_franco"
+    return None
+
+
 def _empreendimento_slug(condominio_nome: str) -> str:
-    return "rancho_texas" if "rancho" in (condominio_nome or "").lower() else "porto_franco"
+    slug = modelo_documentos(condominio_nome)
+    if slug is None:
+        raise ValueError(f"Empreendimento sem modelo de contrato/recibo cadastrado: {condominio_nome!r}")
+    return slug
 
 
 def preencher_recibo(

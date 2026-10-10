@@ -96,6 +96,12 @@ class Lote(BaseModel):
     # a forma real do lote.
     poligono_definido: bool = False
     foto_url: Optional[str] = None
+    # Empreendimentos novos (10/10): características que a tabela da
+    # construtora traz e o sistema não tinha onde guardar -- posição do lote
+    # (esquina/sol/sombra), casa só com financiamento bancário etc. -- e a
+    # área construída, quando o imóvel é casa (Veneza).
+    detalhes: Optional[str] = None
+    area_construida_m2: Optional[float] = None
 
 
 class CondominioDetalhe(CondominioResumo):
@@ -335,6 +341,7 @@ class LoteComCondominio(Lote):
 
     condominio_nome: str
     condominio_slug: str
+    condominio_ativo: bool = True
     # "Observação" com data/hora que a tela de Lotes mostra assim que um
     # corretor cria uma proposta (mesmo em rascunho) pra esse lote — avisa o
     # admin que tem gente em negociação antes mesmo de virar reserva. Vem só
