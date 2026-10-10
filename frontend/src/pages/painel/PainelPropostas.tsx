@@ -20,9 +20,9 @@ const STATUS_LABEL: Record<PropostaStatus, string> = {
   cancelada: "Cancelada",
 };
 
-/** Só a partir daqui o PDF em papel timbrado pode ser gerado — ver mesma
- * regra no backend (routers/crm.py: gerar_pdf_proposta). */
-const STATUS_LIBERA_PDF: PropostaStatus[] = ["aprovada", "enviada", "aceita"];
+// Corretor gera o PDF assim que preenche a proposta (10/10) -- só não gera
+// de proposta cancelada/recusada (ver _montar_pdf_proposta no backend).
+const STATUS_LIBERA_PDF: PropostaStatus[] = ["rascunho", "aguardando_aprovacao", "aprovada", "enviada", "aceita"];
 
 export default function PainelPropostas() {
   const { perfil } = useAuth();
@@ -165,7 +165,7 @@ export default function PainelPropostas() {
                         !p.lote || !p.cliente
                           ? "Proposta sem lote ou cliente vinculado"
                           : !STATUS_LIBERA_PDF.includes(p.status)
-                            ? "Aguardando aprovação de um administrador"
+                            ? "Proposta cancelada ou recusada"
                             : undefined
                       }
                       onClick={() => abrirPdf(p)}

@@ -86,11 +86,9 @@ export default function PropostaDocumentos({
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  // Financeiro (admin/developer) já pode gerar o PDF completo antes da
-  // aprovação — é a própria pessoa que decide, não precisa esperar por
-  // ninguém (ver mesma exceção em backend/app/routers/crm.py::_montar_pdf_proposta,
-  // pedido em 28/09). Corretor comum continua vendo o aviso de que só
-  // funciona depois de aprovada.
+  // Desde 10/10 o corretor gera o PDF sem esperar a aprovação; só proposta
+  // cancelada/recusada fica bloqueada pra ele (o financeiro gera sempre --
+  // ver backend/app/routers/crm.py::_montar_pdf_proposta).
   const { perfil } = useAuth();
   const podeGerarAntesDeAprovada = temAcessoAdmin(perfil?.papel);
 
@@ -317,8 +315,8 @@ export default function PropostaDocumentos({
         </button>
         <p className="text-xs text-ink-soft mt-1.5">
           Junta a proposta e todos os documentos anexados acima num único PDF, pronto pra enviar ou arquivar.
-          {!podeGerarAntesDeAprovada && (proposta.status === "rascunho" || proposta.status === "aguardando_aprovacao") ? (
-            <> Só funciona depois que a proposta for aprovada por um administrador.</>
+          {!podeGerarAntesDeAprovada && (proposta.status === "cancelada" || proposta.status === "recusada") ? (
+            <> Indisponível para proposta cancelada ou recusada.</>
           ) : null}
         </p>
       </div>

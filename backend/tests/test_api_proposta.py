@@ -488,3 +488,36 @@ def test_contrato_rancho_texas_trava_sem_dados_do_conjuge(cliente_api):
     p["cliente"] = sb.banco["clientes"][0]
     r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-03")
     assert r.status_code == 422 and "Faltam dados do cônjuge" in r.text, r.text
+
+
+# --------------------------------------------------------------------------
+# PDF da proposta liberado pro corretor antes da aprovação (10/10)
+# --------------------------------------------------------------------------
+
+def _prop_com_joins(sb):
+    prop = sb.banco["propostas"][0]
+    prop["lote"] = {**sb.banco["lotes"][0], "identificador": "Q10-L8", "quadra": "10", "lote_numero": 8,
+                    "tamanho_m2": 200, "condominio": {"nome": "Porto Franco"}}
+    prop["cliente"] = sb.banco["clientes"][0]
+    return prop
+
+
+@pytest.mark.parametrize("status", ["rascunho", "aguardando_aprovacao", "aprovada"])
+def test_corretor_gera_pdf_sem_esperar_aprovacao(cliente_api, status):
+    api, sb = cliente_api  # corretor comum (cor-1), dono da proposta
+    _semear_0003(sb, status=status)
+    _prop_com_joins(sb)
+    r = api.get("/crm/propostas/p3/documento")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+
+
+@pytest.mark.parametrize("status", ["cancelada", "recusada"])
+def test_corretor_nao_gera_pdf_de_proposta_cancelada_ou_recusada(cliente_api, status):
+    api, sb = cliente_api
+    _semear_0003(sb, status=status)
+    _prop_com_joins(sb)
+    r = api.get("/crm/propostas/p3/documento")
+    assert r.status_code == 403 and "cancelada ou recusada" in r.text
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN  # financeiro continua podendo, pra conferência
+    assert api.get("/crm/propostas/p3/documento").status_code == 200

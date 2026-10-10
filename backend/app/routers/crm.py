@@ -38,7 +38,7 @@ from ..documentos_gerados import (
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..cadastro_proposta import email_valido, problemas_cadastro, problemas_conjuge, so_digitos, telefone_valido, tem_conjuge
-from ..estoque import detentores, liberar_lote_se_livre
+from ..estoque import PROPOSTA_VIVAS, detentores, liberar_lote_se_livre
 from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, resumo_contrato, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
@@ -1162,17 +1162,16 @@ def _montar_pdf_proposta(sb, proposta_id: str, corretor: dict) -> tuple[bytes, s
     proposta = proposta[0]
     if not _pode_mexer_na_proposta(corretor, proposta):
         raise HTTPException(403, "Esta proposta é de outro corretor.")
-    # A trava abaixo é só pro corretor comum: ele não deve mandar pro cliente
-    # (nem baixar) um contrato de uma proposta que o financeiro ainda nem
-    # decidiu. Pra quem já é o financeiro (admin/developer, ver eh_admin) a
-    # trava não faz sentido: é essa mesma pessoa que aprova, então ela pode
-    # gerar o documento (inclusive o relatório completo) pra conferir/revisar
-    # ANTES de decidir, e aprovar a compra do lote em seguida — não precisa
-    # esperar uma aprovação anterior de ninguém pra isso. Pedido em 28/09.
-    if proposta["status"] not in ("aprovada", "enviada", "aceita") and not eh_admin(corretor):
+    # Corretor gera o PDF da proposta assim que preenche (pedido de 10/10):
+    # é o documento que ele manda pro cliente na hora, sem esperar o
+    # financeiro aprovar -- a aprovação continua valendo só como status.
+    # Proposta cancelada ou recusada não gera mais PDF (não pode ir pro
+    # cliente um documento de uma venda que já caiu); o financeiro
+    # (eh_admin) continua podendo gerar sempre, pra conferência.
+    if proposta["status"] not in PROPOSTA_VIVAS and not eh_admin(corretor):
         raise HTTPException(
             403,
-            "Esta proposta ainda não foi aprovada — o PDF só pode ser gerado depois da aprovação.",
+            "Esta proposta está cancelada ou recusada — não é possível gerar o PDF.",
         )
     lote = proposta.get("lote")
     cliente = proposta.get("cliente")
