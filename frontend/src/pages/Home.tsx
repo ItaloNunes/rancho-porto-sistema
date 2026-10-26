@@ -115,7 +115,7 @@ function CondoCard({ condo }: { condo: CondominioResumo }) {
         <div>
           <h2 className="text-lg font-bold text-ink tracking-tight">{condo.nome}</h2>
           <p className="text-[13px] text-ink-soft mt-0.5">
-            {condo.segmento} · {condo.cidade}
+            {[condo.segmento, condo.cidade].filter(Boolean).join(" · ")}
           </p>
         </div>
 

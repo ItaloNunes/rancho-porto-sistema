@@ -57,7 +57,7 @@ export default function Login() {
         <div className="relative max-w-md">
           <p className="text-xs uppercase tracking-[0.18em] text-white/70 mb-3">Painel interno</p>
           <h2 className="text-3xl font-bold leading-tight text-balance">
-            Reservas, propostas e contratos do Porto Franco e do Rancho Texas.
+            Reservas, propostas e contratos dos empreendimentos Castel.
           </h2>
           <p className="mt-4 text-sm text-white/75">
             Acesso só para corretores e equipe Castel com login criado pelo administrador.

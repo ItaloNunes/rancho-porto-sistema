@@ -547,7 +547,7 @@ def _numero_proposta(proposta: dict) -> str:
 
 
 def _query_propostas(sb, corretor: dict, com_documentos: bool):
-    campos = "*, lote:lotes(*), cliente:clientes(*)"
+    campos = "*, lote:lotes(*, condominio:condominios(nome)), cliente:clientes(*)"
     if com_documentos:
         campos += ", documentos:documentos_proposta(*)"
     query = sb.table("propostas").select(campos).order("created_at", desc=True)
@@ -560,7 +560,9 @@ def _query_propostas(sb, corretor: dict, com_documentos: bool):
 def listar_propostas(corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
     try:
-        return _query_propostas(sb, corretor, com_documentos=True).execute().data
+        return _com_prazo_da_reserva(sb, _com_nome_do_empreendimento(
+            _query_propostas(sb, corretor, com_documentos=True).execute().data
+        ))
     except APIError as e:
         # documentos_proposta só existe depois que a migration 0015 rodar no
         # banco (ver supabase/migrations/0015_documentos_proposta.sql) — até
@@ -573,7 +575,49 @@ def listar_propostas(corretor: dict = Depends(get_current_corretor)):
         dados = _query_propostas(sb, corretor, com_documentos=False).execute().data
         for proposta in dados:
             proposta["documentos"] = []
-        return dados
+        return _com_prazo_da_reserva(sb, _com_nome_do_empreendimento(dados))
+
+
+def _com_nome_do_empreendimento(propostas: list[dict]) -> list[dict]:
+    """Nome do empreendimento junto de cada proposta (10/10): com 7
+    empreendimentos, "LOTE 05 - QUADRA B" sozinho na lista não diz de qual
+    deles é."""
+    for p in propostas:
+        lote = p.get("lote") or {}
+        p["condominio_nome"] = (lote.get("condominio") or {}).get("nome")
+    return propostas
+
+
+def _com_prazo_da_reserva(sb, propostas: list[dict]) -> list[dict]:
+    """Prazo e expiração visíveis pro corretor (26/10, caso real: rascunho
+    sem documentos expirou junto com a reserva depois de 72h e a corretora
+    só viu "não consigo acessar"). Rascunho sem documentos completos ganha
+    `reserva_expira_em`; proposta cancelada pelo prazo ganha `expirou_em`.
+    Nunca derruba a listagem: se a consulta extra falhar, segue sem os dois."""
+    try:
+        rascunhos = [p["id"] for p in propostas if p.get("status") == "rascunho" and not p.get("documentos_completos_em")]
+        if rascunhos:
+            for r in (
+                sb.table("reservas").select("proposta_id, expira_em, status")
+                .in_("proposta_id", rascunhos).in_("status", ["pendente", "em_atendimento", "aguardando_qualificacao"])
+                .execute().data
+            ) or []:
+                for p in propostas:
+                    if p["id"] == r["proposta_id"]:
+                        p["reserva_expira_em"] = r.get("expira_em")
+        canceladas = [p["id"] for p in propostas if p.get("status") == "cancelada"]
+        if canceladas:
+            for log in (
+                sb.table("logs_auditoria").select("entidade_id, created_at")
+                .eq("acao", "proposta_expirou").in_("entidade_id", canceladas)
+                .execute().data
+            ) or []:
+                for p in propostas:
+                    if p["id"] == log["entidade_id"]:
+                        p["expirou_em"] = log.get("created_at")
+    except Exception:  # noqa: BLE001
+        logger.warning("Não foi possível calcular prazo/expiração das propostas.", exc_info=True)
+    return propostas
 
 
 @router.post("/propostas", response_model=Proposta)

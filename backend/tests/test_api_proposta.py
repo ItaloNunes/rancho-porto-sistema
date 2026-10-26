@@ -565,3 +565,20 @@ def test_empreendimento_sem_modelo_nao_gera_contrato_nem_recibo():
     assert modelo_documentos("Rancho Texas") == "rancho_texas"
     for nome in ("Boulevard Residence", "Praia Mar", "Rota dos Ventos", "Riviera Residence Beach", "Veneza Residencial"):
         assert modelo_documentos(nome) is None
+
+
+def test_lista_mostra_prazo_do_rascunho_e_expiracao(cliente_api):
+    """26/10: rascunho sem documentos mostra quando a reserva vence; o que
+    expirou junto com a reserva vem marcado com a data da expiração."""
+    from app.routers.crm import _com_prazo_da_reserva
+    _api, sb = cliente_api
+    sb.banco["reservas"] = [{"id": "r1", "proposta_id": "p1", "status": "pendente", "expira_em": "2026-10-29T12:00:00+00:00"},
+                            {"id": "r2", "proposta_id": "p2", "status": "cancelada", "expira_em": "2026-10-20T12:00:00+00:00"}]
+    sb.banco["logs_auditoria"] = [{"acao": "proposta_expirou", "entidade_id": "p2", "created_at": "2026-10-20T12:05:00+00:00"}]
+    props = [{"id": "p1", "status": "rascunho", "documentos_completos_em": None},
+             {"id": "p2", "status": "cancelada"},
+             {"id": "p3", "status": "aprovada", "documentos_completos_em": "2026-10-01T00:00:00+00:00"}]
+    out = {p["id"]: p for p in _com_prazo_da_reserva(sb, props)}
+    assert out["p1"]["reserva_expira_em"] == "2026-10-29T12:00:00+00:00"
+    assert out["p2"]["expirou_em"] == "2026-10-20T12:05:00+00:00"
+    assert "reserva_expira_em" not in out["p3"] and "expirou_em" not in out["p3"]

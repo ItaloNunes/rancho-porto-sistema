@@ -145,7 +145,7 @@ export default function Condominio() {
             <div>
               <h1 className="text-2xl sm:text-[1.75rem] font-bold text-ink tracking-tight">{condo.nome}</h1>
               <p className="text-ink-soft text-sm mt-1">
-                {condo.segmento} · {condo.cidade}
+                {[condo.segmento, condo.cidade].filter(Boolean).join(" · ")}
                 {condo.base_precos_em &&
                   ` · base de preços: ${new Date(condo.base_precos_em).toLocaleDateString("pt-BR")}`}
               </p>

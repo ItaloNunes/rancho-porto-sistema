@@ -274,7 +274,10 @@ function TabelaFinanceiro({
               <td className="px-4 py-3 text-ink-soft whitespace-nowrap font-mono text-xs">
                 {formatarNumeroProposta(p.numero, p.versao)}
               </td>
-              <td className="px-4 py-3 text-ink">{p.lote ? p.lote.identificador : "—"}</td>
+              <td className="px-4 py-3 text-ink">
+                    {p.lote ? p.lote.identificador : "—"}
+                    {p.condominio_nome && <span className="block text-xs text-ink-soft">{p.condominio_nome}</span>}
+                  </td>
               <td className="px-4 py-3 text-ink">{p.cliente?.nome ?? "—"}</td>
               <td className="px-4 py-3 text-ink-soft">{formatMoney(p.valor_proposto)}</td>
               <td className="px-4 py-3 whitespace-nowrap">

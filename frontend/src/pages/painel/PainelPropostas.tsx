@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
-import { abrirAbaComCarregamento, api, formatMoney, formatarNumeroProposta, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
+import { abrirAbaComCarregamento, api, formatDateTime, formatMoney, formatarNumeroProposta, horasRestantes, mostrarErroNaAba, mostrarPdfNaAba } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import PropostaFormularioCompleto, { chaveRascunhoProposta } from "./PropostaFormularioCompleto";
-import { lerRascunho, quandoFoiSalvo } from "../../lib/rascunho";
+import PropostaFormularioCompleto, { chaveRascunhoProposta, dadosParaEdicao } from "./PropostaFormularioCompleto";
+import PropostaDadosLeitura from "./PropostaDadosLeitura";
+import { lerRascunho, quandoFoiSalvo, salvarRascunho } from "../../lib/rascunho";
 import type { RascunhoProposta } from "./PropostaFormularioCompleto";
 import PropostaDocumentos, { PrazoAnaliseBadge } from "./PropostaDocumentos";
 import { temAcessoAdmin } from "../../types";
+import type { PropostaDetalhe as PropostaLista } from "../../types";
 import { proximosStatusProposta } from "../../lib/transicoes";
 import type { LoteComCondominio, PropostaDetalhe, PropostaStatus } from "../../types";
 
@@ -33,6 +35,25 @@ export default function PainelPropostas() {
   const rascunho = criando ? null : lerRascunho<RascunhoProposta>(chaveRascunhoProposta());
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
   const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
+  const [verDadosDe, setVerDadosDe] = useState<string | null>(null);
+
+  /** Refazer uma proposta cancelada/expirada (26/10): os dados preenchidos
+   * voltam num rascunho novo, com o mesmo cliente e o mesmo lote se ele
+   * ainda estiver disponível — é só conferir, confirmar e anexar de novo. */
+  function refazer(p: PropostaLista) {
+    if (rascunho && !confirm("Já existe uma proposta em andamento salva neste navegador. Substituir pelos dados desta proposta?")) return;
+    const lote = lotes.find((l) => l.id === p.lote_id);
+    const loteLivre = lote && lote.status === "disponivel";
+    salvarRascunho<RascunhoProposta>(chaveRascunhoProposta(), {
+      dados: dadosParaEdicao(p),
+      loteId: loteLivre ? p.lote_id : "",
+      condominioSlug: loteLivre ? lote.condominio_slug : "",
+      passo: 0,
+      clienteIdCriado: p.cliente_id,
+    });
+    if (!loteLivre) alert("O lote desta proposta não está mais disponível — escolha outro lote na primeira etapa. Os demais dados já vêm preenchidos.");
+    setCriando("retomar");
+  }
 
   function recarregar() {
     setErro(null);
@@ -135,7 +156,17 @@ export default function PainelPropostas() {
                   <td className="px-4 py-3 text-ink-soft whitespace-nowrap font-mono text-xs">
                     {formatarNumeroProposta(p.numero, p.versao)}
                   </td>
-                  <td className="px-4 py-3 text-ink">{p.lote ? p.lote.identificador : "—"}</td>
+                  <td className="px-4 py-3 text-ink">
+                    {p.lote ? p.lote.identificador : "—"}
+                    {p.condominio_nome && <span className="block text-xs text-ink-soft">{p.condominio_nome}</span>}
+                    <AvisoPrazo proposta={p} />
+                    <div className="sm:hidden mt-1.5 flex flex-wrap gap-1.5">
+                      <button className="btn-row btn-row-neutral" onClick={() => setVerDadosDe(p.id)}>ver dados</button>
+                      {(p.status === "cancelada" || p.status === "recusada") && (
+                        <button className="btn-row btn-row-primary" onClick={() => refazer(p)}>refazer proposta</button>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-ink">{p.cliente?.nome ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-soft">{formatMoney(p.valor_proposto)}</td>
                   <td className="px-4 py-3">
@@ -158,6 +189,14 @@ export default function PainelPropostas() {
                     <PrazoAnaliseBadge completosEm={p.documentos_completos_em} />
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button className="btn-row btn-row-neutral mr-2" onClick={() => setVerDadosDe(p.id)}>
+                      ver dados
+                    </button>
+                    {(p.status === "cancelada" || p.status === "recusada") && (
+                      <button className="btn-row btn-row-neutral mr-2" onClick={() => refazer(p)}>
+                        refazer proposta
+                      </button>
+                    )}
                     <button
                       className="btn-row btn-row-primary"
                       disabled={gerandoPdf === p.id || !p.lote || !p.cliente || !STATUS_LIBERA_PDF.includes(p.status)}
@@ -193,6 +232,19 @@ export default function PainelPropostas() {
         </Modal>
       )}
 
+      {verDadosDe &&
+        (() => {
+          const proposta = propostas?.find((p) => p.id === verDadosDe);
+          if (!proposta) return null;
+          return (
+            <Modal onClose={() => setVerDadosDe(null)} labelledBy="proposta-dados-title">
+              <div className="p-6 sm:p-8">
+                <PropostaDadosLeitura proposta={proposta} />
+              </div>
+            </Modal>
+          );
+        })()}
+
       {verDocumentosDe &&
         (() => {
           const proposta = propostas?.find((p) => p.id === verDocumentosDe);
@@ -210,4 +262,38 @@ export default function PainelPropostas() {
         })()}
     </div>
   );
+}
+
+/** Prazo do rascunho e aviso de expiração (26/10). Fica debaixo do lote pra
+ * aparecer também no celular, sem precisar rolar a tabela pro lado. */
+function AvisoPrazo({ proposta }: { proposta: PropostaLista }) {
+  if (proposta.status === "cancelada" && proposta.expirou_em) {
+    return (
+      <span className="mt-1 block text-[11px] font-semibold text-rust bg-rust/10 rounded-sm px-2 py-0.5 whitespace-normal">
+        Expirou em {formatDateTime(proposta.expirou_em)}: a reserva venceu sem os documentos
+      </span>
+    );
+  }
+  if (proposta.status === "cancelada" || proposta.status === "recusada") {
+    return (
+      <span className="mt-1 block text-[11px] font-semibold text-rust">
+        {proposta.status === "cancelada" ? "Cancelada" : "Recusada"}
+      </span>
+    );
+  }
+  if (proposta.status === "rascunho" && proposta.reserva_expira_em) {
+    const h = horasRestantes(proposta.reserva_expira_em);
+    if (h === null) return null;
+    const critico = h <= 12;
+    return (
+      <span
+        className={`mt-1 block text-[11px] font-semibold rounded-sm px-2 py-0.5 whitespace-normal ${
+          critico ? "bg-rust/10 text-rust" : "bg-ochre/10 text-ochre"
+        }`}
+      >
+        {h <= 0 ? "Prazo vencido" : `Expira em ${h < 1 ? `${Math.round(h * 60)}min` : `${Math.round(h)}h`}`}: anexe os documentos
+      </span>
+    );
+  }
+  return null;
 }

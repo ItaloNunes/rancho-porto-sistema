@@ -193,6 +193,12 @@ export interface Proposta {
 
 export interface PropostaDetalhe extends Proposta {
   lote?: Lote | null;
+  /** Nome do empreendimento do lote (GET /crm/propostas, 10/10). */
+  condominio_nome?: string | null;
+  /** Rascunho sem documentos completos: quando a reserva vence e ele expira junto (26/10). */
+  reserva_expira_em?: string | null;
+  /** Proposta cancelada sozinha porque a reserva venceu sem os documentos (26/10). */
+  expirou_em?: string | null;
   cliente?: Cliente | null;
   documentos: DocumentoProposta[];
 }

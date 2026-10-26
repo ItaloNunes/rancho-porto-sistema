@@ -822,6 +822,14 @@ class Proposta(BaseModel):
 class PropostaDetalhe(Proposta):
     lote: Optional[Lote] = None
     cliente: Optional[Cliente] = None
+    condominio_nome: Optional[str] = None
+    # Prazo da reserva da proposta ainda em rascunho (26/10): quando vence
+    # sem os documentos completos, o rascunho expira junto (ver
+    # reservas._expirar_vencidas) -- o corretor precisa ver isso na lista.
+    reserva_expira_em: Optional[str] = None
+    # Quando a proposta foi cancelada sozinha por esse prazo (log
+    # 'proposta_expirou'); None = não expirou (ou foi cancelada à mão).
+    expirou_em: Optional[str] = None
     # Forward ref (classe "DocumentoProposta" só é definida mais abaixo,
     # depois de DocumentoTipo) — mesmo padrão já usado por
     # QualificacaoComRelacoes.documentos logo abaixo neste arquivo.
