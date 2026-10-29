@@ -528,10 +528,21 @@ def gerar_proposta_pdf(
             ("1ª parcela em", fmt_data(plano.primeira_parcela), 1),
             ("Dia de vencimento", plano.dia_vencimento or "-", 1),
         )
-        pdf.campo_grade(
-            ("Chave (entrega)", f"R$ {fmt_brl(plano.chave)}" if plano.chave else "Não há", 1),
-            ("Total conferido (entrada + parcelas + chave)", f"R$ {fmt_brl(plano.total_calculado)}", 2),
-        )
+        if plano.balao_qtd or plano.financiamento:
+            # Casas do Veneza (29/10): balões anuais + saldo por financiamento.
+            pdf.campo_grade(
+                ("Balões", f"{plano.balao_qtd or 0}x de R$ {fmt_brl(plano.balao_valor or 0)}" if plano.balao_qtd else "Não há", 1),
+                ("Financiamento bancário", f"R$ {fmt_brl(plano.financiamento)}" if plano.financiamento else "Não há", 1),
+                ("Chave (entrega)", f"R$ {fmt_brl(plano.chave)}" if plano.chave else "Não há", 1),
+            )
+            pdf.campo_grade(
+                ("Total conferido (entrada + parcelas + balões + financiamento)", f"R$ {fmt_brl(plano.total_calculado)}", 3),
+            )
+        else:
+            pdf.campo_grade(
+                ("Chave (entrega)", f"R$ {fmt_brl(plano.chave)}" if plano.chave else "Não há", 1),
+                ("Total conferido (entrada + parcelas + chave)", f"R$ {fmt_brl(plano.total_calculado)}", 2),
+            )
     elif a_vista is False:
         # proposta antiga (antes do formulário de 02/10): campos como vieram
         if fp.get("sinal") or fp.get("sinal_banco"):

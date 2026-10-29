@@ -431,6 +431,18 @@ function FormularioContrato({
           imobiliária, mantendo o texto jurídico exato. Confira os campos que não existem no sistema (ex.: local de
           nascimento do comprador) antes de assinar.
         </p>
+        {/veneza/i.test(proposta.condominio_nome ?? "") && (
+          <p className="text-xs text-amber-700 mt-2">
+            Veneza: a comissão vai nos itens 3.2.2 e 4, com o percentual calculado sobre o preço total. A fração
+            ideal fica em branco para completar à mão.
+          </p>
+        )}
+        {/riviera/i.test(proposta.condominio_nome ?? "") && (
+          <p className="text-xs text-amber-700 mt-2">
+            Riviera: o modelo não tem cláusula de comissão (o valor informado fica só no histórico). As confrontações
+            do lote (item V) ficam em branco para completar à mão.
+          </p>
+        )}
       </div>
       <label className="grid gap-1 text-sm">
         <span className="text-ink-soft">Comissão de corretagem (R$)</span>

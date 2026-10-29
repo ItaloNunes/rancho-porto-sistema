@@ -560,11 +560,16 @@ def test_financeiro_ve_empreendimento_oculto_marcado(cliente_api):
 
 
 def test_empreendimento_sem_modelo_nao_gera_contrato_nem_recibo():
-    from app.documentos_gerados import modelo_documentos
+    from app.documentos_gerados import modelo_documentos, modelo_recibo
     assert modelo_documentos("Porto Franco Residencial") == "porto_franco"
     assert modelo_documentos("Rancho Texas") == "rancho_texas"
-    for nome in ("Boulevard Residence", "Praia Mar", "Rota dos Ventos", "Riviera Residence Beach", "Veneza Residencial"):
-        assert modelo_documentos(nome) is None
+    # 29/10: Riviera e Veneza ganharam modelo de contrato, mas não de recibo
+    assert modelo_documentos("Riviera Residence Beach") == "riviera"
+    assert modelo_documentos("Veneza Residencial") == "veneza"
+    assert modelo_recibo("Riviera Residence Beach") is None and modelo_recibo("Veneza Residencial") is None
+    assert modelo_recibo("Porto Franco Residencial") == "porto_franco"
+    for nome in ("Boulevard Residence", "Praia Mar", "Rota dos Ventos"):
+        assert modelo_documentos(nome) is None and modelo_recibo(nome) is None
 
 
 def test_lista_mostra_prazo_do_rascunho_e_expiracao(cliente_api):
@@ -582,3 +587,72 @@ def test_lista_mostra_prazo_do_rascunho_e_expiracao(cliente_api):
     assert out["p1"]["reserva_expira_em"] == "2026-10-29T12:00:00+00:00"
     assert out["p2"]["expirou_em"] == "2026-10-20T12:05:00+00:00"
     assert "reserva_expira_em" not in out["p3"] and "expirou_em" not in out["p3"]
+
+
+# --------------------------------------------------------------------------
+# Veneza e Riviera (29/10): balões, financiamento, valor de tabela e modelos
+# --------------------------------------------------------------------------
+
+def test_proposta_grava_o_valor_de_tabela(cliente_api):
+    api, sb = cliente_api
+    assert api.post("/crm/propostas", json=payload()).status_code == 200
+    assert sb.banco["propostas"][0]["dados_qualificacao"]["forma_pagamento"]["valor_tabela"] == sb.banco["lotes"][0]["valor_total"]
+
+
+def test_proposta_com_baloes_e_financiamento(cliente_api):
+    api, sb = cliente_api
+    # 8.999 + 100 x 719,92 = 80.991 -> faltam 8.999: 3 balões de 2.000 + 2.999 de financiamento
+    r = api.post("/crm/propostas", json=payload(chave_valor=None, balao_qtd=3, balao_valor="2.000,00",
+                                                financiamento_valor="2.999"))
+    assert r.status_code == 200, r.text
+    gravada = sb.banco["propostas"][0]
+    fp = gravada["dados_qualificacao"]["forma_pagamento"]
+    assert fp["balao_valor"] == "2.000,00" and fp["financiamento_valor"] == "2.999,00"
+    assert gravada["condicoes_pagamento"] == ("Entrada R$ 8.999,00 + 100x de R$ 719,92 + 3 balões de R$ 2.000,00"
+                                              " + financiamento R$ 2.999,00")
+
+
+def test_proposta_com_balao_sem_valor_e_recusada(cliente_api):
+    api, sb = cliente_api
+    r = api.post("/crm/propostas", json=payload(balao_qtd=3))
+    assert r.status_code == 422 and "valor de cada balão" in r.text
+
+
+def _semear_veneza(sb, fp):
+    _semear_0003(sb, status="aprovada")
+    p = sb.banco["propostas"][0]
+    p["valor_proposto"] = fp["valor_proposto"]
+    p["dados_qualificacao"] = {**_dq_corrigido(), "forma_pagamento": fp}
+    p["lote"] = {**sb.banco["lotes"][0], "identificador": "CASA 31 - QUADRA 2", "lote_numero": 31, "quadra": "2",
+                 "tamanho_m2": 200, "area_construida_m2": 75.77, "valor_total": 343000.0,
+                 "condominio": {"nome": "Veneza Residencial"}}
+    p["cliente"] = sb.banco["clientes"][0]
+
+
+FP_VENEZA = {"a_vista": False, "renda": "9.000,00", "valor_proposto": 343000.0, "valor_tabela": 343000.0,
+             "sinal": "17.150,00", "sinal_forma": "unica", "sinal_meio": "pix", "sinal_vencimento": "2026-11-05",
+             "dividido_em_parcelas": 36, "valor_parcela": "1.429,17", "primeiro_mes": "2026-12-05",
+             "balao_qtd": 3, "balao_valor": "11.433,33", "financiamento_valor": "240.099,89", "confirmado": True}
+
+
+def test_contrato_do_veneza_sai_e_recibo_continua_bloqueado(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_veneza(sb, FP_VENEZA)
+    r = api.get("/crm/propostas/p3/contrato?comissao=17150&data=2026-10-29")
+    assert r.status_code == 200, r.text
+    import io
+    from pypdf import PdfReader
+    texto = " ".join(" ".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(r.content)).pages).split())
+    assert "CONTRATO Nº 0091" in texto and "240.099,89" in texto and "corresponde a 5% do valor total" in texto
+    r = api.get("/crm/propostas/p3/recibo?valor=1000&data=2026-10-29")
+    assert r.status_code == 422 and "recibo" in r.text
+
+
+def test_contrato_do_veneza_trava_chave(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_veneza(sb, {**FP_VENEZA, "financiamento_valor": "230.099,89", "chave_valor": "10.000,00"})
+    r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-29")
+    assert r.status_code == 422 and "chave" in r.text
+    assert not sb.banco["propostas"][0].get("numero_contrato")

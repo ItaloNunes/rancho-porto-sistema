@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import io
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -634,7 +635,10 @@ class Conversor:
                 elif campo is not None and campo.get("fase") == "instr":
                     continue
                 elif tag == qn("w:t"):
-                    txt = c.text or ""
+                    # NFC: o modelo do Veneza (29/10) tem acentos "soltos"
+                    # (a + acento combinante), que saíam como "a ̀" no PDF; e o
+                    # hífen U+2010 não existe na fonte e sumia ("considerando se").
+                    txt = unicodedata.normalize("NFC", c.text or "").replace("\u2010", "-").replace("\u2011", "-")
                     if rp.caixa_alta:
                         txt = txt.upper()
                     out.append(("txt", Pedaco(txt, e)))
@@ -652,7 +656,13 @@ class Conversor:
                 elif tag == qn("w:drawing"):
                     img = self._imagem_inline(c)
                     if img is not None:
-                        out.append(("img", Pedaco("", e, largura=img[1], imagem=img)))
+                        pos = self._posicao_ancorada(c, img[1])
+                        if pos is not None:
+                            # imagem flutuante (ex.: logo do cabeçalho do Veneza):
+                            # posição absoluta na página, não ocupa a linha
+                            out.append(("abs_img", (img, pos)))
+                        else:
+                            out.append(("img", Pedaco("", e, largura=img[1], imagem=img)))
         return out
 
     def _imagem_inline(self, drawing):
@@ -669,6 +679,42 @@ class Conversor:
         except Exception:
             return None
         return dados, int(ext.get("cx")) / 12700, int(ext.get("cy")) / 12700
+
+    def _posicao_ancorada(self, drawing, largura_img: float) -> Optional[tuple]:
+        """(x, y) absolutos na página de uma imagem <wp:anchor> posicionada em
+        relação à página/margem (alinhada ou com deslocamento). Âncora relativa
+        ao parágrafo/linha (ou sem âncora) -> None: segue como imagem inline."""
+        anc = drawing.find("{%s}anchor" % _NS_WP)
+        if anc is None:
+            return None
+        ph = anc.find("{%s}positionH" % _NS_WP)
+        pv = anc.find("{%s}positionV" % _NS_WP)
+        if ph is None or pv is None:
+            return None
+
+        def base(rel: Optional[str], horizontal: bool) -> Optional[tuple]:
+            if rel == "page":
+                return (0.0, self.pag_w) if horizontal else (0.0, self.pag_h)
+            if rel in ("margin", "column"):
+                return (self.m_esq, self.largura) if horizontal else (self.m_top, self.pag_h - self.m_top - self.m_bot)
+            return None
+
+        bh, bv = base(ph.get("relativeFrom"), True), base(pv.get("relativeFrom"), False)
+        if bh is None or bv is None:
+            return None
+        alin = ph.find("{%s}align" % _NS_WP)
+        off = ph.find("{%s}posOffset" % _NS_WP)
+        if alin is not None:
+            a = (alin.text or "").strip()
+            x = bh[0] + (bh[1] - largura_img) / 2 if a == "center" else bh[0] + bh[1] - largura_img if a == "right" else bh[0]
+        elif off is not None:
+            x = bh[0] + int(off.text) / 12700
+        else:
+            return None
+        off_v = pv.find("{%s}posOffset" % _NS_WP)
+        if off_v is None:
+            return None
+        return x, bv[0] + int(off_v.text) / 12700
 
     def _part_de(self, raiz):
         doc_part = self.doc.part
@@ -736,6 +782,7 @@ class Conversor:
         # Monta "caixas": palavras (lista de pedaços sem espaço), espaços, tabs, br, imagens
         caixas = []  # (tipo, conteudo)
         palavra: list = []
+        flutuantes: list = []  # imagens com posição absoluta na página
 
         def fecha():
             nonlocal palavra
@@ -781,6 +828,8 @@ class Conversor:
             elif tipo == "img":
                 fecha()
                 caixas.append(("palavra", [conteudo]))
+            elif tipo == "abs_img":
+                flutuantes.append(conteudo)
         fecha()
 
         linhas_out = []
@@ -789,8 +838,8 @@ class Conversor:
         n = len(caixas)
         if n == 0:
             h, base = self._altura_linha(pp, [e_marca])
-            linhas_out.append(Linha(h, lambda pdf, x, y: None, tem_conteudo=False))
-            return linhas_out
+            linhas_out.append(Linha(h, lambda pdf, x, y: None, tem_conteudo=bool(flutuantes)))
+            return self._com_flutuantes(linhas_out, flutuantes)
         while i < n:
             inicio = x_esq + (pp.primeira if primeira else 0.0)
             x = inicio
@@ -839,7 +888,23 @@ class Conversor:
             # pula espaços no começo da próxima linha
             while i < n and caixas[i][0] == "espaco" and not fim_forcado:
                 i += 1
-        return linhas_out
+        return self._com_flutuantes(linhas_out, flutuantes)
+
+    @staticmethod
+    def _com_flutuantes(linhas: list, flutuantes: list) -> list:
+        """Desenha as imagens flutuantes junto com a 1ª linha do parágrafo
+        (na mesma página), mas na posição absoluta delas."""
+        if not flutuantes or not linhas or not isinstance(linhas[0], Linha):
+            return linhas
+        original = linhas[0].desenhar
+
+        def desenhar(pdf, x, y, original=original, flutuantes=flutuantes):
+            for (dados, w, hh), (ax, ay) in flutuantes:
+                pdf.image(io.BytesIO(dados), x=ax, y=ay, w=w, h=hh)
+            original(pdf, x, y)
+
+        linhas[0] = Linha(linhas[0].altura, desenhar, tem_conteudo=True)
+        return linhas
 
     def _cortar_palavra(self, pedacos, disponivel, caixas, i):
         caber, resto, w = [], [], 0.0

@@ -239,6 +239,9 @@ export default function PropostaFormularioCompleto({
           dividido_em_parcelas: null,
           valor_parcela: null,
           chave_valor: null,
+          balao_qtd: null,
+          balao_valor: null,
+          financiamento_valor: null,
           confirmado: false,
           confirma_valor_fora_tabela: false,
         },
@@ -933,6 +936,9 @@ function mesmoPlano(a: QualificacaoDados["forma_pagamento"], b: QualificacaoDado
     (a.dividido_em_parcelas ?? null) === (b.dividido_em_parcelas ?? null) &&
     n(a.valor_parcela) === n(b.valor_parcela) &&
     n(a.chave_valor) === n(b.chave_valor) &&
+    (a.balao_qtd ?? null) === (b.balao_qtd ?? null) &&
+    n(a.balao_valor) === n(b.balao_valor) &&
+    n(a.financiamento_valor) === n(b.financiamento_valor) &&
     (a.primeiro_mes ?? "") === (b.primeiro_mes ?? "")
   );
 }
@@ -1038,7 +1044,9 @@ function Revisao({
               p.parcelaValor,
               `1ª em ${fmtData(fp.primeiro_mes)}, depois todo dia ${fp.vencimento ?? "-"}`,
             )}
-            {linhaValor("Chave", p.chave)}
+            {(p.balaoQtd || p.balaoValor) ? linhaValor(`Balões anuais: ${p.balaoQtd ?? 0} x`, p.balaoValor) : null}
+            {p.financiamento ? linhaValor("Financiamento bancário", p.financiamento) : null}
+            {(!(p.balaoQtd || p.financiamento) || p.chave) ? linhaValor("Chave", p.chave) : null}
           </>
         )}
       </section>

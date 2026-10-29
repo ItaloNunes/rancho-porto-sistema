@@ -135,23 +135,35 @@ def formatar_valor(valor: float) -> str:
 
 
 def modelo_documentos(condominio_nome: str) -> Optional[str]:
-    """Qual modelo de contrato/recibo serve pro empreendimento: só Porto
-    Franco e Rancho Texas têm modelo cadastrado. Os empreendimentos novos
-    (Boulevard, Praia Mar, Rota dos Ventos, Riviera, Veneza -- 10/10) ainda
-    não têm: antes caíam no do Porto Franco por engano (o padrão era "se não
-    é Rancho, é Porto Franco"), o que imprimiria a SPE errada."""
+    """Qual modelo de CONTRATO serve pro empreendimento. Porto Franco e
+    Rancho Texas desde o início; Riviera e Veneza com os modelos enviados em
+    29/10. Os outros empreendimentos novos (Boulevard, Praia Mar, Rota dos
+    Ventos) ainda não têm: antes caíam no do Porto Franco por engano (o
+    padrão era "se não é Rancho, é Porto Franco"), o que imprimiria a SPE
+    errada."""
     nome = (condominio_nome or "").lower()
     if "rancho" in nome:
         return "rancho_texas"
     if "porto franco" in nome:
         return "porto_franco"
+    if "riviera" in nome:
+        return "riviera"
+    if "veneza" in nome:
+        return "veneza"
     return None
 
 
-def _empreendimento_slug(condominio_nome: str) -> str:
+def modelo_recibo(condominio_nome: str) -> Optional[str]:
+    """Modelo de RECIBO: só Porto Franco e Rancho Texas têm (Riviera e
+    Veneza mandaram só o contrato)."""
     slug = modelo_documentos(condominio_nome)
+    return slug if slug in ("rancho_texas", "porto_franco") else None
+
+
+def _empreendimento_slug(condominio_nome: str) -> str:
+    slug = modelo_recibo(condominio_nome)
     if slug is None:
-        raise ValueError(f"Empreendimento sem modelo de contrato/recibo cadastrado: {condominio_nome!r}")
+        raise ValueError(f"Empreendimento sem modelo de recibo cadastrado: {condominio_nome!r}")
     return slug
 
 
@@ -949,6 +961,291 @@ def preencher_contrato_rancho_texas(
         # resto do bloco "B – COMPRADORA" no QUADRO RESUMO.
         _substituir_texto(doc.paragraphs[348], "XXXX", "")
         _substituir_texto(doc.paragraphs[349], "CPF: XXXX", "CPF: ")
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Riviera e Veneza (modelos enviados em 29/10)
+# ---------------------------------------------------------------------------
+
+def _nome_na_assinatura(doc, idx_linha: int, idx_cpf: int, nome: str) -> None:
+    """Nome do comprador entre o traço da assinatura e o "CPF:" -- mesmo
+    critério do Porto Franco (o modelo só traz "CPF:" e o contrato saía sem
+    dizer quem assina). Aqui não há linha vazia entre os dois, então cria
+    um parágrafo logo abaixo do traço, com a formatação do "CPF:"."""
+    linha, p_cpf = doc.paragraphs[idx_linha], doc.paragraphs[idx_cpf]
+    if "____" not in linha.text or not p_cpf.text.strip().startswith("CPF"):
+        raise ValueError("Bloco de assinatura do comprador não encontrado no modelo.")
+    novo = copy.deepcopy(p_cpf._p)
+    for r in novo.findall(qn("w:r")):
+        novo.remove(r)
+    linha._p.addnext(novo)
+    par = Paragraph(novo, linha._parent)
+    run = par.add_run(nome)
+    rpr = p_cpf.runs[0]._r.rPr if p_cpf.runs else None
+    if rpr is not None:
+        run._r.insert(0, copy.deepcopy(rpr))
+
+
+def _data_extenso(d: date) -> str:
+    return f"{d.day:02d} de {_MESES[d.month - 1].capitalize()} de {d.year}"
+
+
+def _percentual(parte: float, total: float) -> str:
+    """12500 / 299000 -> '4,18%'; 5% exato -> '5%'."""
+    if not total:
+        return "0%"
+    txt = f"{parte / total * 100:.2f}".rstrip("0").rstrip(".")
+    return txt.replace(".", ",") + "%"
+
+
+def problemas_modelo_contrato(slug: Optional[str], fp: dict, lote: dict) -> list[str]:
+    """O que o plano tem e o modelo não tem onde imprimir -- melhor travar do
+    que sair um contrato com parte do pagamento faltando."""
+    plano = ler_plano(fp)
+    if plano.a_vista:
+        return []
+    v = valores_contrato(fp, lote)
+    problemas: list[str] = []
+    if slug == "veneza" and v.chave:
+        problemas.append("O contrato do Veneza não tem campo de chave: passe o valor da chave para o financiamento ou para os balões.")
+    if slug not in ("veneza",) and (v.balao_qtd or v.financiamento):
+        problemas.append("O modelo de contrato deste empreendimento não tem balões nem financiamento bancário: ajuste a forma de pagamento.")
+    return problemas
+
+
+def preencher_contrato_riviera(
+    *,
+    proposta: dict,
+    lote: dict,
+    cliente: dict,
+    data_contrato: Optional[date] = None,
+) -> bytes:
+    """Contrato do Riviera Residence Beach (modelo de 29/10, EPF Construções):
+    mesma estrutura do Porto Franco (QUADRO RESUMO em tabela), preenchendo
+    só os campos em branco. O item V (confrontações) fica em branco -- o
+    Riviera não tem memorial cadastrado. O quadro antigo de exemplo
+    "VII. Forma de pagamento" (Entrada R$ 6.500,00 de 2015, parcelas de obra
+    e pós-obra) sai do contrato: fica só o VII em branco, preenchido com o
+    plano da proposta (combinado em 29/10)."""
+    data_contrato = data_contrato or date.today()
+    dq = proposta.get("dados_qualificacao") or {}
+    proponente = dq.get("proponente") or {}
+    endereco = dq.get("endereco_residencial") or {}
+    fp = dq.get("forma_pagamento") or {}
+    estado_civil = dq.get("estado_civil")
+
+    doc = docx.Document(str(_TEMPLATES_DIR / "contrato_riviera.docx"))
+    t = doc.tables[0]
+
+    # --- III. COMPRADOR ------------------------------------------------------
+    p = t.rows[4].cells[0].paragraphs
+    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
+    _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
+    _substituir_texto(
+        p[3], p[3].text, f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}   PROFISSÃO: {proponente.get('profissao') or '-'}"
+    )
+    _substituir_texto(
+        p[4], p[4].text,
+        f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}   "
+        f"LOCAL: {(proponente.get('naturalidade') or '').strip() or '-'}",
+    )
+    _substituir_texto(p[5], p[5].text, f"CPF: {cpf}   IDENTIDADE: {_identidade(proponente)}")
+    _substituir_texto(p[6], p[6].text, f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
+    _substituir_texto(p[7], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}")
+    _substituir_texto(
+        p[8], p[8].text,
+        f"BAIRRO: {endereco.get('bairro') or '-'}   MUNICÍPIO: {endereco.get('cidade') or '-'}   "
+        f"UF: {endereco.get('estado') or '-'}   CEP: {formatar_cep(endereco.get('cep'))}",
+    )
+
+    # --- V. OBJETIVO (lote, quadra e área; confrontações à mão) ---------------
+    area_fmt = formatar_valor(float(lote.get("tamanho_m2") or 0))
+    _substituir_texto(
+        t.rows[7].cells[0].paragraphs[1],
+        "LOTE Nº  QUADRA Nº, com área total de 200,00 m²",
+        f"LOTE Nº {lote.get('lote_numero', '-')} QUADRA Nº {lote.get('quadra', '-')}, com área total de {area_fmt} m²",
+    )
+
+    # --- VI. PREÇO -------------------------------------------------------------
+    valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    _substituir_texto(
+        t.rows[9].cells[0].paragraphs[1],
+        "R$ 170.000,00 (Cento e setenta mil reais)",
+        f"R$ {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)})",
+    )
+
+    # --- VII. FORMA DE PAGAMENTO (o quadro em branco) ---------------------------
+    pp = t.rows[11].cells[0].paragraphs
+    tp = _textos_pagamento(fp, lote, valor_total)
+    _substituir_texto(pp[3], "Entrada:", f"Entrada: {tp['entrada'] or '-'}{tp['entrada_compl_pf']}.")
+    if tp["a_vista"]:
+        _substituir_texto(pp[4], "Parcelas: ", "Parcelas: não há (pagamento à vista).")
+    elif tp["parcelas"]:
+        pc = tp["parcelas"]
+        texto = (
+            f"{pc['qtd']} ({_numero_extenso_feminino(pc['qtd'])}) parcelas mensais e sucessivas de "
+            f"R$ {formatar_valor(pc['valor'])} ({valor_por_extenso(pc['valor'])}) cada"
+        )
+        if pc["primeira"]:
+            texto += f", vencendo a primeira em {pc['primeira']} e as demais no mesmo dia dos meses subsequentes"
+        _substituir_texto(pp[4], "Parcelas: ", f"Parcelas: {texto}.")
+    if not tp["a_vista"] and tp["chave_valor"]:
+        # O modelo não tem linha de chave; a linha em branco logo abaixo das
+        # parcelas recebe o valor (mesma redação dos outros contratos).
+        chave = tp["chave_valor"]
+        alvo = pp[5]
+        if alvo.text.strip():
+            raise ValueError("Modelo do Riviera sem a linha em branco abaixo das parcelas.")
+        run = alvo.add_run(f"Chave: R$ {formatar_valor(chave)} ({valor_por_extenso(chave)}), a ser paga na entrega das chaves.")
+        rpr = pp[4].runs[-1]._r.rPr if pp[4].runs else None
+        if rpr is not None:
+            run._r.insert(0, copy.deepcopy(rpr))
+
+    # --- IX. PROPORÇÃO DA AQUISIÇÃO --------------------------------------------
+    preencher_proporcao(doc, compradores_proporcao(nome, dq))
+
+    # --- XII. LOCAL E DATA ------------------------------------------------------
+    _substituir_texto(
+        t.rows[20].cells[0].paragraphs[1],
+        "neste dia 22 de Fevereiro de 2024.",
+        f"neste dia {data_contrato.day} de {_MESES[data_contrato.month - 1].capitalize()} de {data_contrato.year}.",
+    )
+
+    # --- Título e assinatura -----------------------------------------------------
+    _substituir_texto(doc.paragraphs[0], "CONTRATO Nº 00/2024", titulo_contrato(proposta, data_contrato))
+    _substituir_texto(doc.paragraphs[316], "CPF: ", f"CPF: {cpf}")
+    _nome_na_assinatura(doc, 315, 316, nome)
+
+    # --- Quadro antigo de exemplo (2015) sai por último (muda os índices) -------
+    exemplo = [r for r in t.rows if "30/08/2015" in r.cells[0].text]
+    if len(exemplo) != 1:
+        raise ValueError("Quadro de exemplo de 2015 do modelo do Riviera não encontrado.")
+    t._tbl.remove(exemplo[0]._tr)
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def preencher_contrato_veneza(
+    *,
+    proposta: dict,
+    lote: dict,
+    cliente: dict,
+    valor_comissao: float,
+    data_contrato: Optional[date] = None,
+) -> bytes:
+    """Contrato do Veneza Residencial (modelo de 29/10, L R Construtora): o
+    QUADRO RESUMO é texto corrido (sem tabela). Preenche só os campos:
+
+    - 1.2 comprador (nome, nacionalidade, estado civil, CPF, RG, endereço).
+      O modelo não tem lugar para cônjuge: fica só o comprador.
+    - 2.1 casa/quadra, área privativa (área construída da casa) e terreno
+      (área do lote). A "fração ideal" fica em branco para completar à mão.
+    - 3.1 preço total = valor de tabela da proposta; A - bônus = desconto
+      dado (tabela - proposto, ou zero); C - preço do imóvel = valor
+      proposto; B entrada, D parcelas, E balões e 3.2.1 financiamento vêm do
+      plano da proposta.
+    - 3.2.2 e 4: comissão = valor informado pelo financeiro na emissão, com
+      o percentual calculado sobre o preço total.
+    - Data, número/versão do contrato (na linha em branco do topo) e o nome
+      e CPF do comprador na assinatura."""
+    data_contrato = data_contrato or date.today()
+    dq = proposta.get("dados_qualificacao") or {}
+    proponente = dq.get("proponente") or {}
+    endereco = dq.get("endereco_residencial") or {}
+    fp = dq.get("forma_pagamento") or {}
+    estado_civil = dq.get("estado_civil")
+    plano = ler_plano(fp)
+
+    doc = docx.Document(str(_TEMPLATES_DIR / "contrato_veneza.docx"))
+    ps = doc.paragraphs
+
+    def brl(v: float) -> str:
+        return f"R$ {formatar_valor(v)} ({valor_por_extenso(v)})"
+
+    # --- 1.2 COMPRADOR ------------------------------------------------------------
+    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
+    nacionalidade = (proponente.get("nacionalidade") or "").strip() or "-"
+    ec = ESTADO_CIVIL_LABEL.get(estado_civil, "-")
+    _substituir_texto(ps[6], ": , Brasileiro, Divorciado", f": {nome}, {nacionalidade}, {ec}")
+    _substituir_texto(ps[6], "inscrito no CPF sob nº, RG sob,", f"inscrito no CPF sob nº {cpf}, RG sob nº {_identidade(proponente)},")
+    rua = _endereco_completo(endereco)
+    bairro = endereco.get("bairro") or "-"
+    cidade_uf = "/".join(x for x in [endereco.get("cidade"), endereco.get("estado")] if x) or "-"
+    _substituir_texto(
+        ps[6],
+        "com endereço na Rua, nº  Centro, Mossoró/RN, CEP: doravante",
+        f"com endereço na {rua}, {bairro}, {cidade_uf}, CEP: {formatar_cep(endereco.get('cep'))}, doravante",
+    )
+
+    # --- 2.1 IMÓVEL -----------------------------------------------------------------
+    _substituir_texto(ps[9], "casa n.º XX da quadra XX", f"casa n.º {lote.get('lote_numero', '-')} da quadra {lote.get('quadra', '-')}")
+    area_casa = lote.get("area_construida_m2")
+    if area_casa:
+        _substituir_texto(ps[9], "área privativa de 67,00", f"área privativa de {formatar_valor(float(area_casa))}")
+    _substituir_texto(ps[9], "fração ideal de X", "fração ideal de ____________")
+    if lote.get("tamanho_m2"):
+        _substituir_texto(ps[9], "terreno de 200,00 m²", f"terreno de {formatar_valor(float(lote['tamanho_m2']))} m²")
+
+    # --- 03. PREÇO --------------------------------------------------------------------
+    proposto = float(proposta.get("valor_proposto") or lote.get("valor_total") or 0.0)
+    tabela = float(fp.get("valor_tabela") or lote.get("valor_total") or proposto)
+    bonus = max(0.0, round(tabela - proposto, 2))
+    preco_total = round(proposto + bonus, 2)
+    _substituir_texto(ps[12], "R$ 299.000,00 (Duzentos e noventa e nove mil reais)", brl(preco_total))
+    _substituir_texto(ps[13], "R$ XX (XXX)", brl(bonus))
+    v = valores_contrato(fp, lote)
+    if plano.a_vista:
+        _substituir_texto(ps[14], "R$ XXX (XXX)", f"{brl(proposto)}, pagamento à vista")
+        _substituir_texto(ps[15], "R$ XXX (XXXX)", brl(proposto))
+        _substituir_texto(ps[16], "36 (trinta e seis) parcelas de R$ XX (XXX)", "não há (pagamento à vista)")
+        _substituir_texto(ps[17], "3 (três) parcelas de R$ XX (XXXX)", "não há (pagamento à vista)")
+        _substituir_texto(ps[19], "R$ XXX  (XXX)", "não há (pagamento à vista)")
+    else:
+        _substituir_texto(ps[14], "R$ XXX (XXX)", brl(v.entrada or 0.0))
+        _substituir_texto(ps[15], "R$ XXX (XXXX)", brl(proposto))
+        if v.parcelas and v.parcela_valor:
+            _substituir_texto(
+                ps[16], "36 (trinta e seis) parcelas de R$ XX (XXX)",
+                f"{v.parcelas} ({_numero_extenso_feminino(v.parcelas)}) parcelas de {brl(v.parcela_valor)}",
+            )
+        else:
+            _substituir_texto(ps[16], "36 (trinta e seis) parcelas de R$ XX (XXX)", "não há")
+        if v.balao_qtd and v.balao_valor:
+            _substituir_texto(
+                ps[17], "3 (três) parcelas de R$ XX (XXXX)",
+                f"{v.balao_qtd} ({_numero_extenso_feminino(v.balao_qtd)}) parcelas de {brl(v.balao_valor)}",
+            )
+        else:
+            _substituir_texto(ps[17], "3 (três) parcelas de R$ XX (XXXX)", "não há")
+        _substituir_texto(ps[19], "R$ XXX  (XXX)", brl(v.financiamento) if v.financiamento else "não há")
+
+    # --- 3.2.2 e 4. COMISSÃO ------------------------------------------------------------
+    _substituir_texto(ps[23], "R$ 12.500,00 (doze mil e quinhentos reais)", brl(valor_comissao))
+    _substituir_texto(ps[26], "R$ 12.500,00 (doze mil e quinhentos reais)", brl(valor_comissao))
+    _substituir_texto(ps[26], "5% do valor total", f"{_percentual(valor_comissao, preco_total)} do valor total")
+
+    # --- Data, título e assinatura -------------------------------------------------------
+    _substituir_texto(ps[242], "05 de Dezembro de 2024", _data_extenso(data_contrato))
+    _substituir_texto(ps[248], "CPF: ", f"CPF: {cpf}")
+    _nome_na_assinatura(doc, 247, 248, nome)
+    topo = ps[0]
+    if topo.text.strip():
+        raise ValueError("Modelo do Veneza sem a linha em branco do topo para o número do contrato.")
+    run = topo.add_run(titulo_contrato(proposta, data_contrato))
+    # mesma fonte do título "INSTRUMENTO PARTICULAR..." logo abaixo
+    rpr_titulo = ps[1].runs[0]._r.rPr if ps[1].runs else None
+    if rpr_titulo is not None:
+        run._r.insert(0, copy.deepcopy(rpr_titulo))
+    run.bold = True
+    topo.alignment = ps[1].alignment
 
     buffer = io.BytesIO()
     doc.save(buffer)

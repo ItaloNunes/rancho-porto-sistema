@@ -73,12 +73,22 @@ export default function DetalheLote({
         {lote.area_construida_m2 ? <Field label="Área construída" value={formatArea(lote.area_construida_m2)} /> : null}
         {lote.detalhes ? <Field label="Características" value={lote.detalhes} span2={!lote.area_construida_m2} /> : null}
         <Field label="Entrada" value={formatMoney(lote.entrada)} />
-        <Field label="Na entrega" value={formatMoney(lote.entrega)} />
+        {lote.qtd_baloes || lote.financiamento ? (
+          <Field
+            label="Balões anuais"
+            value={lote.qtd_baloes ? `${formatMoney(lote.valor_balao)} × ${lote.qtd_baloes}` : "-"}
+          />
+        ) : (
+          <Field label="Na entrega" value={formatMoney(lote.entrega)} />
+        )}
         <Field
           label="Parcela mensal"
           value={`${formatMoney(lote.parcela_mensal)}${lote.qtd_parcelas ? ` × ${lote.qtd_parcelas}` : ""}`}
-          span2
+          span2={!(lote.qtd_baloes || lote.financiamento)}
         />
+        {lote.qtd_baloes || lote.financiamento ? (
+          <Field label="Financiamento bancário" value={formatMoney(lote.financiamento)} />
+        ) : null}
       </dl>
 
       {lote.status === "disponivel" && (

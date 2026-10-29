@@ -102,6 +102,11 @@ class Lote(BaseModel):
     # área construída, quando o imóvel é casa (Veneza).
     detalhes: Optional[str] = None
     area_construida_m2: Optional[float] = None
+    # Plano de tabela das casas do Veneza (29/10, migration 0031): balões
+    # anuais (quantidade e valor de cada) e o saldo por financiamento bancário.
+    qtd_baloes: Optional[int] = None
+    valor_balao: Optional[float] = None
+    financiamento: Optional[float] = None
 
 
 class CondominioDetalhe(CondominioResumo):
@@ -482,11 +487,18 @@ class FormaPagamentoDados(BaseModel):
     # Chave (parcela paga na entrega) -- vem do plano de tabela do lote.
     chave_valor: Optional[str] = None
     chave_vencimento: Optional[str] = None  # AAAA-MM-DD, opcional
+    # Casas do Veneza (29/10): balões anuais e saldo por financiamento bancário.
+    balao_qtd: Optional[int] = Field(default=None, ge=0, le=20)
+    balao_valor: Optional[str] = None
+    financiamento_valor: Optional[str] = None
+    # Valor de tabela do lote quando a proposta foi feita -- gravado pelo
+    # servidor; é a base do "bônus" (desconto) no contrato do Veneza.
+    valor_tabela: Optional[float] = None
     # Dupla confirmação do corretor (checkboxes da etapa de revisão).
     confirma_valor_fora_tabela: Optional[bool] = None
     confirmado: Optional[bool] = None
 
-    @field_validator("sinal", "valor_parcela", "intercaladas_valor", "chave_valor")
+    @field_validator("sinal", "valor_parcela", "intercaladas_valor", "chave_valor", "balao_valor", "financiamento_valor")
     @classmethod
     def _valida_valor_monetario(cls, v: Optional[str]) -> Optional[str]:
         return _parse_valor_monetario(v)

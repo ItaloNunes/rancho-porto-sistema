@@ -31,10 +31,14 @@ from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
 from ..documentos_gerados import (
     modelo_documentos,
+    modelo_recibo,
     identificacao_contrato,
     preencher_contrato_porto_franco,
     preencher_contrato_rancho_texas,
+    preencher_contrato_riviera,
+    preencher_contrato_veneza,
     preencher_recibo,
+    problemas_modelo_contrato,
 )
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
@@ -685,6 +689,9 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         if problemas:
             raise HTTPException(422, " ".join(problemas))
         fp_validado = normalizar_plano(fp_bruto)
+        # Valor de tabela na hora da proposta (29/10): base do "bônus" do
+        # contrato do Veneza -- não muda se a tabela for reajustada depois.
+        fp_validado["valor_tabela"] = lote[0].get("valor_total")
     cliente = sb.table("clientes").select("id, corretor_id").eq("id", payload.cliente_id).limit(1).execute().data
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado.")
@@ -907,6 +914,7 @@ def editar_dados_proposta(
         if problemas:
             raise HTTPException(422, "\n".join(problemas))
         fp = normalizar_plano(fp)
+    fp["valor_tabela"] = fp_antigo.get("valor_tabela") or lote.get("valor_total")
     dados["forma_pagamento"] = fp
     # cinto e suspensório: exatamente os números que o contrato vai imprimir
     problemas = conferir_contrato(fp, valor_proposto, lote)
@@ -919,7 +927,8 @@ def editar_dados_proposta(
         k for k in set(antes) | set(depois)
         if not (_vazio(antes.get(k)) and _vazio(depois.get(k))) and antes.get(k) != depois.get(k)
         # confirmações mudam sempre (quem corrigiu confirma de novo) -- não é "dado alterado"
-        and not k.startswith(("forma_pagamento.confirmado", "forma_pagamento.confirma_valor_fora_tabela"))
+        and not k.startswith(("forma_pagamento.confirmado", "forma_pagamento.confirma_valor_fora_tabela",
+                              "forma_pagamento.valor_tabela"))
     )
     valor_antes = existente.get("valor_proposto")
     if valor_antes != valor_proposto and "forma_pagamento.valor_proposto" not in alterados:
@@ -1329,7 +1338,7 @@ def gerar_recibo_proposta(
         raise HTTPException(409, "Cliente sem CPF cadastrado -- não é possível gerar o recibo sem isso.")
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
-    if modelo_documentos(condominio_nome) is None:
+    if modelo_recibo(condominio_nome) is None:
         raise HTTPException(
             422,
             f"O recibo do {condominio_nome or 'empreendimento'} ainda não está disponível: "
@@ -1478,13 +1487,38 @@ def gerar_contrato_proposta(
         )
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
-    if modelo_documentos(condominio_nome) is None:
+    modelo = modelo_documentos(condominio_nome)
+    if modelo is None:
         raise HTTPException(
             422,
             f"O contrato do {condominio_nome or 'empreendimento'} ainda não está disponível: "
             "falta cadastrar o modelo de contrato deste empreendimento.",
         )
-    if "rancho" in condominio_nome.lower():
+    problemas = problemas_modelo_contrato(modelo, fp_contrato, lote)
+    if problemas:
+        raise HTTPException(422, "O contrato não foi gerado: " + " ".join(problemas))
+    if modelo in ("riviera", "veneza"):
+        # Riviera (com item IX de proporção) e Veneza (sem lugar para cônjuge:
+        # sai só o comprador) -- modelos de 29/10.
+        dq_novo = proposta.get("dados_qualificacao") or {}
+        if modelo == "riviera" and dq_novo.get("tem_conjuge") is True:
+            problemas = problemas_conjuge(dq_novo)
+            if problemas:
+                raise HTTPException(
+                    422,
+                    "O contrato não foi gerado: " + " ".join(problemas)
+                    + " Use \"Corrigir dados\" na proposta pra completar.",
+                )
+        proposta["numero_contrato"] = _garantir_numero_contrato(sb, proposta)
+        if modelo == "riviera":
+            docx_bytes = preencher_contrato_riviera(
+                proposta=proposta, lote=lote, cliente=cliente, data_contrato=data_contrato
+            )
+        else:
+            docx_bytes = preencher_contrato_veneza(
+                proposta=proposta, lote=lote, cliente=cliente, valor_comissao=comissao, data_contrato=data_contrato
+            )
+    elif modelo == "rancho_texas":
         # O Rancho Texas qualifica o cônjuge/companheiro(a) como COMPRADORA:
         # sem os dados dele(a) o contrato sairia incompleto.
         problemas = problemas_conjuge(proposta.get("dados_qualificacao") or {})

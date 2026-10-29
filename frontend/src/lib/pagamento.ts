@@ -22,6 +22,7 @@ export const LIMITE_INFERIOR_TABELA = 0.5;
 export const LIMITE_SUPERIOR_TABELA = 1.5;
 export const MAX_PARCELAS_ENTRADA = 24;
 export const MAX_PARCELAS = 480;
+export const MAX_BALOES = 20;
 
 /** "R$ 8.999,00" / "8.999" / "8999,50" / "8999.50" -> número. Ponto seguido
  * de exatamente 3 dígitos é milhar (padrão brasileiro). Formatos aceitos —
@@ -158,6 +159,10 @@ export interface Plano {
   parcelas: number | null;
   parcelaValor: number | null;
   chave: number;
+  /** Casas do Veneza (29/10): balões anuais e financiamento bancário. */
+  balaoQtd: number | null;
+  balaoValor: number | null;
+  financiamento: number;
   total: number;
 }
 
@@ -167,10 +172,13 @@ export function lerPlano(fp: FormaPagamentoDados): Plano {
   const parcelas = fp.dividido_em_parcelas ?? null;
   const parcelaValor = lerValor(fp.valor_parcela);
   const chave = lerValor(fp.chave_valor) ?? 0;
+  const balaoQtd = fp.balao_qtd ? Number(fp.balao_qtd) : null;
+  const balaoValor = lerValor(fp.balao_valor);
+  const financiamento = lerValor(fp.financiamento_valor) ?? 0;
   const valorProposto = fp.valor_proposto ?? null;
   const total = fp.a_vista
     ? valorProposto ?? 0
-    : (entrada ?? 0) + (parcelas ?? 0) * (parcelaValor ?? 0) + chave;
+    : (entrada ?? 0) + (parcelas ?? 0) * (parcelaValor ?? 0) + chave + (balaoQtd ?? 0) * (balaoValor ?? 0) + financiamento;
   return {
     aVista: fp.a_vista,
     valorProposto,
@@ -181,6 +189,9 @@ export function lerPlano(fp: FormaPagamentoDados): Plano {
     parcelas,
     parcelaValor,
     chave,
+    balaoQtd,
+    balaoValor,
+    financiamento,
     total: Math.round(total * 100) / 100,
   };
 }
@@ -269,15 +280,32 @@ export function validarPlano(
     if (!dPrimeira) erros.push("Informe a data da 1ª parcela mensal (dia/mês/ano).");
     else if (dEntrada && dPrimeira < dEntrada) erros.push("A 1ª parcela mensal não pode vencer antes do pagamento da entrada.");
     if (invalido(fp.chave_valor)) erros.push(`Valor da chave inválido: ${FORMATO_VALOR}`);
+    if (fp.balao_qtd) {
+      const n = Number(fp.balao_qtd);
+      if (!Number.isInteger(n) || n < 1 || n > MAX_BALOES) erros.push(`Balões: informe a quantidade (de 1 a ${MAX_BALOES}).`);
+    }
+    if (invalido(fp.balao_valor)) erros.push(`Valor do balão inválido: ${FORMATO_VALOR}`);
+    else if ((p.balaoQtd ?? 0) > 0 && !(p.balaoValor && p.balaoValor > 0)) erros.push("Balões: informe o valor de cada balão.");
+    else if ((p.balaoValor ?? 0) > 0 && !((p.balaoQtd ?? 0) > 0)) erros.push("Balões: informe a quantidade de balões.");
+    if (invalido(fp.financiamento_valor)) erros.push(`Valor do financiamento inválido: ${FORMATO_VALOR}`);
     if (erros.length === 0 && Math.abs(p.total - vp) > tolerancia(p)) {
       erros.push(
-        `A soma não fecha: entrada R$ ${fmtBRL(p.entrada)} + ${p.parcelas} x R$ ${fmtBRL(p.parcelaValor)} + chave R$ ${fmtBRL(p.chave)} = R$ ${fmtBRL(p.total)}, mas o valor proposto é R$ ${fmtBRL(vp)} (diferença de R$ ${fmtBRL(Math.abs(p.total - vp))}).`,
+        `A soma não fecha: ${textoSoma(p)} = R$ ${fmtBRL(p.total)}, mas o valor proposto é R$ ${fmtBRL(vp)} (diferença de R$ ${fmtBRL(Math.abs(p.total - vp))}).`,
       );
     }
   }
   if (incluirConfirmacao && !fp.confirmado)
     erros.push("Falta a confirmação final: marque que conferiu todos os valores com o cliente.");
   return erros;
+}
+
+/** Mesmo texto de plano_pagamento._texto_soma no servidor. */
+export function textoSoma(p: Plano): string {
+  const partes = [`entrada R$ ${fmtBRL(p.entrada)}`, `${p.parcelas} x R$ ${fmtBRL(p.parcelaValor)}`];
+  if (p.balaoQtd || p.balaoValor) partes.push(`${p.balaoQtd ?? 0} balões x R$ ${fmtBRL(p.balaoValor ?? 0)}`);
+  if (p.financiamento) partes.push(`financiamento R$ ${fmtBRL(p.financiamento)}`);
+  if (p.chave || !(p.balaoQtd || p.financiamento)) partes.push(`chave R$ ${fmtBRL(p.chave)}`);
+  return partes.join(" + ");
 }
 
 export function textoMeio(m: string | null | undefined): string {
@@ -296,6 +324,8 @@ export function resumoPlano(fp: FormaPagamentoDados): string {
   const partes: string[] = [];
   if (p.entrada) partes.push(p.entradaParcelas > 1 ? `Entrada R$ ${fmtBRL(p.entrada)} em ${p.entradaParcelas}x` : `Entrada R$ ${fmtBRL(p.entrada)}`);
   if (p.parcelas && p.parcelaValor) partes.push(`${p.parcelas}x de R$ ${fmtBRL(p.parcelaValor)}`);
+  if (p.balaoQtd && p.balaoValor) partes.push(`${p.balaoQtd} balões de R$ ${fmtBRL(p.balaoValor)}`);
+  if (p.financiamento) partes.push(`financiamento R$ ${fmtBRL(p.financiamento)}`);
   if (p.chave) partes.push(`chave R$ ${fmtBRL(p.chave)}`);
   return partes.join(" + ") || "A combinar";
 }
@@ -321,6 +351,9 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
       chave_valor: null,
       chave_vencimento: null,
       intercaladas_valor: null,
+      balao_qtd: null,
+      balao_valor: null,
+      financiamento_valor: null,
     };
   }
   return { ...fp, avista_meio: null, avista_data: null };

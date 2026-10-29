@@ -11,6 +11,8 @@ Agora a proposta só é criada se o plano fechar:
 
     entrada + (nº de parcelas x valor da parcela) + chave = valor proposto
 
+(casas do Veneza, 29/10: + balões anuais + financiamento bancário)
+
 (no centavo), com entrada obrigatória (valor, forma
 -- pagamento único ou parcelada --, meio e data), datas de verdade (nada de
 ano "206") e confirmação explícita do corretor. A mesma regra roda no
@@ -45,6 +47,7 @@ LIMITE_INFERIOR_TABELA = 0.5
 LIMITE_SUPERIOR_TABELA = 1.5
 MAX_PARCELAS_ENTRADA = 24
 MAX_PARCELAS = 480
+MAX_BALOES = 20
 ANO_MIN, ANO_MAX = 2020, 2100
 
 
@@ -175,6 +178,11 @@ class Plano:
     # chave
     chave: Optional[float] = None
     chave_data: Optional[date] = None
+    # Casas do Veneza (tabela de 27/10): balões anuais e o saldo pago por
+    # financiamento bancário. Vazios em todos os outros empreendimentos.
+    balao_qtd: Optional[int] = None
+    balao_valor: Optional[float] = None
+    financiamento: Optional[float] = None
     # metadado
     estruturado: bool = False  # True = proposta feita no formulário novo (02/10)
     erros: list = field(default_factory=list)
@@ -187,10 +195,15 @@ class Plano:
         return dividir_em_parcelas(self.entrada, max(1, n))
 
     @property
+    def baloes_total(self) -> float:
+        return (self.balao_qtd or 0) * (self.balao_valor or 0.0)
+
+    @property
     def total_calculado(self) -> float:
         if self.a_vista:
             return self.valor_proposto or 0.0
-        return (self.entrada or 0.0) + (self.parcelas or 0) * (self.parcela_valor or 0.0) + (self.chave or 0.0)
+        return ((self.entrada or 0.0) + (self.parcelas or 0) * (self.parcela_valor or 0.0) + (self.chave or 0.0)
+                + self.baloes_total + (self.financiamento or 0.0))
 
 
 def ler_plano(fp: Optional[dict]) -> Plano:
@@ -206,6 +219,10 @@ def ler_plano(fp: Optional[dict]) -> Plano:
     except (TypeError, ValueError):
         n_entrada = 1
     primeira_txt = fp.get("primeiro_mes")
+    try:
+        balao_qtd = int(fp.get("balao_qtd")) if fp.get("balao_qtd") not in (None, "") else None
+    except (TypeError, ValueError):
+        balao_qtd = None
     return Plano(
         a_vista=fp.get("a_vista"),
         valor_proposto=valor(fp.get("valor_proposto")),
@@ -224,6 +241,9 @@ def ler_plano(fp: Optional[dict]) -> Plano:
         dia_vencimento=(str(fp.get("vencimento")).strip() if fp.get("vencimento") not in (None, "") else None),
         chave=valor(fp.get("chave_valor")),
         chave_data=data(fp.get("chave_vencimento")),
+        balao_qtd=balao_qtd,
+        balao_valor=valor(fp.get("balao_valor")),
+        financiamento=valor(fp.get("financiamento_valor")),
         estruturado=bool(fp.get("sinal_forma") or fp.get("avista_meio")),
     )
 
@@ -319,12 +339,13 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
             erros.append("A 1ª parcela mensal não pode vencer antes do pagamento da entrada.")
         if _invalido(fp, "chave_valor"):
             erros.append(f"Valor da chave inválido: {FORMATO_VALOR}")
+        erros += _erros_baloes_financiamento(fp, p)
         if not erros:
             total = p.total_calculado
             if abs(total - vp) > tolerancia(p):
                 erros.append(
-                    f"A soma não fecha: entrada R$ {fmt_brl(p.entrada)} + {p.parcelas} x R$ {fmt_brl(p.parcela_valor)}"
-                    f" + chave R$ {fmt_brl(p.chave or 0)} = R$ {fmt_brl(total)}, mas o valor proposto é "
+                    f"A soma não fecha: {_texto_soma(p.entrada, p.parcelas, p.parcela_valor, p.chave or 0, p.balao_qtd, p.balao_valor, p.financiamento)}"
+                    f" = R$ {fmt_brl(total)}, mas o valor proposto é "
                     f"R$ {fmt_brl(vp)} (diferença de R$ {fmt_brl(abs(total - vp))})."
                 )
 
@@ -333,13 +354,48 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
     return erros
 
 
+def _erros_baloes_financiamento(fp: dict, p: Plano) -> list[str]:
+    """Balões (quantidade e valor, os dois juntos) e financiamento -- só
+    aparecem no plano das casas do Veneza; vazios = não há."""
+    erros: list[str] = []
+    bruto_qtd = fp.get("balao_qtd")
+    if bruto_qtd not in (None, "", 0):
+        try:
+            qtd_ok = 1 <= int(bruto_qtd) <= MAX_BALOES
+        except (TypeError, ValueError):
+            qtd_ok = False
+        if not qtd_ok:
+            erros.append(f"Balões: informe a quantidade (de 1 a {MAX_BALOES}).")
+    if _invalido(fp, "balao_valor"):
+        erros.append(f"Valor do balão inválido: {FORMATO_VALOR}")
+    elif (p.balao_qtd or 0) > 0 and not (p.balao_valor and p.balao_valor > 0):
+        erros.append("Balões: informe o valor de cada balão.")
+    elif (p.balao_valor or 0) > 0 and not (p.balao_qtd or 0) > 0:
+        erros.append("Balões: informe a quantidade de balões.")
+    if _invalido(fp, "financiamento_valor"):
+        erros.append(f"Valor do financiamento inválido: {FORMATO_VALOR}")
+    return erros
+
+
+def _texto_soma(entrada, parcelas, parcela_valor, chave, balao_qtd, balao_valor, financiamento) -> str:
+    """'entrada R$ X + 36 x R$ Y [+ 3 balões x R$ Z] [+ financiamento R$ W] + chave R$ K'."""
+    partes = [f"entrada R$ {fmt_brl(entrada)}", f"{parcelas} x R$ {fmt_brl(parcela_valor)}"]
+    if balao_qtd or balao_valor:
+        partes.append(f"{balao_qtd or 0} balões x R$ {fmt_brl(balao_valor or 0)}")
+    if financiamento:
+        partes.append(f"financiamento R$ {fmt_brl(financiamento)}")
+    if chave or not (balao_qtd or financiamento):
+        partes.append(f"chave R$ {fmt_brl(chave or 0)}")
+    return " + ".join(partes)
+
+
 def normalizar(fp: dict) -> dict:
     """Grava os valores sempre no mesmo formato ('8.999,00', datas
     AAAA-MM-DD) e preenche os campos derivados (dia de vencimento, valor de
     cada parcela da entrada), pra PDF/contrato/listas lerem tudo igual."""
     out = dict(fp)
     p = ler_plano(fp)
-    for chave in ("sinal", "valor_parcela", "chave_valor", "renda"):
+    for chave in ("sinal", "valor_parcela", "chave_valor", "renda", "balao_valor", "financiamento_valor"):
         v = valor(fp.get(chave))
         if v is not None:
             out[chave] = fmt_brl(v)
@@ -356,7 +412,8 @@ def normalizar(fp: dict) -> dict:
         # à vista não tem entrada/parcelas -- limpa resto de digitação anterior
         for chave in ("sinal", "sinal_forma", "sinal_parcelas", "sinal_meio", "sinal_vencimento",
                       "sinal_valor_parcela", "dividido_em_parcelas", "valor_parcela", "vencimento",
-                      "primeiro_mes", "chave_valor", "chave_vencimento"):
+                      "primeiro_mes", "chave_valor", "chave_vencimento", "balao_qtd", "balao_valor",
+                      "financiamento_valor"):
             out[chave] = None
     elif p.entrada_forma == "parcelada" and p.entrada:
         out["sinal_valor_parcela"] = fmt_brl(p.entrada_valores[0])
@@ -382,6 +439,10 @@ def resumo(fp: Optional[dict]) -> str:
             partes.append(f"Entrada R$ {fmt_brl(p.entrada)}")
     if p.parcelas and p.parcela_valor:
         partes.append(f"{p.parcelas}x de R$ {fmt_brl(p.parcela_valor)}")
+    if p.balao_qtd and p.balao_valor:
+        partes.append(f"{p.balao_qtd} balões de R$ {fmt_brl(p.balao_valor)}")
+    if p.financiamento:
+        partes.append(f"financiamento R$ {fmt_brl(p.financiamento)}")
     if p.chave:
         partes.append(f"chave R$ {fmt_brl(p.chave)}")
     return " + ".join(partes) or "A combinar"
@@ -398,10 +459,14 @@ class ValoresContrato:
     chave: float
     primeira_parcela: Optional[date]
     primeira_parcela_texto: Optional[str]
+    balao_qtd: Optional[int] = None
+    balao_valor: Optional[float] = None
+    financiamento: float = 0.0
 
     @property
     def total(self) -> float:
-        return (self.entrada or 0.0) + (self.parcelas or 0) * (self.parcela_valor or 0.0) + (self.chave or 0.0)
+        return ((self.entrada or 0.0) + (self.parcelas or 0) * (self.parcela_valor or 0.0) + (self.chave or 0.0)
+                + (self.balao_qtd or 0) * (self.balao_valor or 0.0) + (self.financiamento or 0.0))
 
 
 def valores_contrato(fp: Optional[dict], lote: Optional[dict]) -> ValoresContrato:
@@ -424,6 +489,9 @@ def valores_contrato(fp: Optional[dict], lote: Optional[dict]) -> ValoresContrat
         chave=(p.chave or 0.0) if p.estruturado else (valor(lote.get("entrega")) or 0.0),
         primeira_parcela=p.primeira_parcela,
         primeira_parcela_texto=p.primeira_parcela_texto,
+        balao_qtd=p.balao_qtd if p.balao_valor else None,
+        balao_valor=p.balao_valor if p.balao_qtd else None,
+        financiamento=p.financiamento or 0.0,
     )
 
 
@@ -440,6 +508,10 @@ def resumo_contrato(fp: Optional[dict], lote: Optional[dict], valor_total: Optio
         partes.append(f"Entrada R$ {fmt_brl(v.entrada)}")
     if v.parcelas and v.parcela_valor:
         partes.append(f"{v.parcelas}x de R$ {fmt_brl(v.parcela_valor)}")
+    if v.balao_qtd and v.balao_valor:
+        partes.append(f"{v.balao_qtd} balões de R$ {fmt_brl(v.balao_valor)}")
+    if v.financiamento:
+        partes.append(f"financiamento R$ {fmt_brl(v.financiamento)}")
     if v.chave:
         partes.append(f"chave R$ {fmt_brl(v.chave)}")
     return " + ".join(partes) or "A combinar"
@@ -464,8 +536,9 @@ def conferir_contrato(fp: Optional[dict], valor_total: Optional[float], lote: Op
         problemas.append(f"A data da 1ª parcela (\"{v.primeira_parcela_texto}\") é inválida.")
     if not problemas and abs(v.total - valor_total) > 0.005:
         problemas.append(
-            f"A forma de pagamento não fecha: entrada R$ {fmt_brl(v.entrada)} + {v.parcelas} x "
-            f"R$ {fmt_brl(v.parcela_valor)} + chave R$ {fmt_brl(v.chave)} = R$ {fmt_brl(v.total)}, "
+            f"A forma de pagamento não fecha: "
+            f"{_texto_soma(v.entrada, v.parcelas, v.parcela_valor, v.chave, v.balao_qtd, v.balao_valor, v.financiamento)}"
+            f" = R$ {fmt_brl(v.total)}, "
             f"mas o preço da proposta é R$ {fmt_brl(valor_total)} (diferença de R$ {fmt_brl(abs(v.total - valor_total))})."
         )
     return problemas

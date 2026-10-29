@@ -191,7 +191,8 @@ def test_pdf_tem_o_conteudo(nome, gerar, trechos):
 
 
 def _tokens(texto: str) -> list[str]:
-    return re.findall(r"\w+|[^\w\s]", texto)
+    # hífen U+2010 (LibreOffice) = hífen comum (nosso PDF: a fonte não tem o U+2010)
+    return re.findall(r"\w+|[^\w\s]", texto.replace("\u2010", "-"))
 
 
 def _sem_numeros_de_pagina(tokens: list[str]) -> list[str]:
@@ -349,3 +350,141 @@ def test_pf_item_v_lote_de_esquina_com_linha_longa():
                                         memorial=m)
     t = texto_docx(b)
     assert "3,65m de frente com a Rua Porto Angra dos Reis + 7,88m com a rotatória da Rua Porto Angra dos Reis" in t
+
+
+# ------------------------------------------------------------------ Riviera e Veneza (29/10)
+from app.documentos_gerados import preencher_contrato_riviera, preencher_contrato_veneza, problemas_modelo_contrato  # noqa: E402
+
+LOTE_RIV = {"identificador": "LOTE 20 - QUADRA A", "lote_numero": 20, "quadra": "A", "tamanho_m2": 200.0,
+            "valor_total": 195000.0, "entrada": 9750.0, "entrega": None, "parcela_mensal": 1852.50, "qtd_parcelas": 100}
+LOTE_VEN = {"identificador": "CASA 31 - QUADRA 2", "lote_numero": 31, "quadra": "2", "tamanho_m2": 200.0,
+            "area_construida_m2": 75.77, "valor_total": 343000.0, "entrada": 17150.0, "entrega": None,
+            "parcela_mensal": 1429.17, "qtd_parcelas": 36, "qtd_baloes": 3, "valor_balao": 11433.33,
+            "financiamento": 240099.89}
+
+
+def fp_riviera():
+    return {**fp_unica({**LOTE_RIV, "entrega": 0.0}), "chave_valor": None}
+
+
+def fp_veneza(valor_proposto=343000.0, financiamento="240.099,89"):
+    return {"a_vista": False, "renda": "9.000,00", "valor_proposto": valor_proposto, "valor_tabela": 343000.0,
+            "sinal": "17.150,00", "sinal_forma": "unica", "sinal_meio": "pix", "sinal_vencimento": "2026-11-05",
+            "dividido_em_parcelas": 36, "valor_parcela": "1.429,17", "primeiro_mes": "2026-12-05", "vencimento": "5",
+            "balao_qtd": 3, "balao_valor": "11.433,33", "financiamento_valor": financiamento, "confirmado": True}
+
+
+def riv(fp, casado=False):
+    return preencher_contrato_riviera(proposta=proposta(fp, LOTE_RIV, casado), lote=LOTE_RIV, cliente=CLIENTE,
+                                      data_contrato=date(2026, 10, 29))
+
+
+def ven(fp, comissao=17150.0):
+    return preencher_contrato_veneza(proposta=proposta(fp, LOTE_VEN), lote=LOTE_VEN, cliente=CLIENTE,
+                                     valor_comissao=comissao, data_contrato=date(2026, 10, 29))
+
+
+def test_riviera_preenche_quadro_e_tira_o_exemplo_de_2015():
+    t = texto_docx(riv(fp_riviera()))
+    assert "CONTRATO Nº 0091 – VERSÃO 1" in t
+    assert "NOME: Maria Teste da Silva" in t and "CPF: 011.473.324-44" in t
+    assert "LOTE Nº 20 QUADRA Nº A, com área total de 200,00 m²" in t
+    assert "R$ 195.000,00 (cento e noventa e cinco mil reais)" in t
+    assert "Entrada: R$ 9.750,00 (nove mil setecentos e cinquenta reais), paga via PIX em 05/10/2026." in t
+    assert "Parcelas: 100 (cem) parcelas mensais e sucessivas de R$ 1.852,50" in t
+    assert "neste dia 29 de Outubro de 2026." in t
+    assert "30/08/2015" not in t and "Parcelas de Obra" not in t and "6.500,00" not in t
+    assert "170.000,00" not in t and "22 de Fevereiro" not in t
+    d = docx.Document(io.BytesIO(riv(fp_riviera())))
+    assert sum(1 for r in d.tables[0].rows if "VII. FORMA DE PAGAMENTO" in r.cells[0].text) == 1
+    assert tabela_proporcao(riv(fp_riviera()))[0] == ["Maria Teste da Silva", "100%"]
+    i = next(i for i, p in enumerate(d.paragraphs) if p.text.startswith("CPF: 011"))
+    assert d.paragraphs[i - 1].text == "Maria Teste da Silva" and "____" in d.paragraphs[i - 2].text
+
+
+def test_riviera_com_conjuge_50_50():
+    fp = fp_riviera()
+    b = preencher_contrato_riviera(proposta={**proposta(fp, LOTE_RIV, casado=True),
+                                             "dados_qualificacao": {**dq(fp, True), "tem_conjuge": True}},
+                                   lote=LOTE_RIV, cliente=CLIENTE, data_contrato=date(2026, 10, 29))
+    assert tabela_proporcao(b)[:2] == [["Maria Teste da Silva", "50%"], ["João Teste", "50%"]]
+
+
+def test_veneza_preenche_quadro_resumo():
+    t = texto_docx(ven(fp_veneza()))
+    assert "CONTRATO Nº 0091 – VERSÃO 1" in t
+    assert ("1.2 PROMITENTE COMPRADOR: Maria Teste da Silva, brasileira, Solteiro(a), inscrito no CPF sob nº "
+            "011.473.324-44, RG sob nº 123 SSP/RN, com endereço na Rua A, nº 10, Centro, Mossoró/RN, CEP: 59600-000, "
+            "doravante denominado simplesmente COMPRADOR.") in t
+    assert "Brasileiro, Divorciado" not in t
+    assert "casa n.º 31 da quadra 2" in t and "área privativa de 75,77 m²" in t and "fração ideal de ____________" in t
+    assert "3.1: DO PREÇO TOTAL DO IMÓVEL: R$ 343.000,00 (trezentos e quarenta e três mil reais)" in t
+    assert "A - BÔNUS: R$ 0,00 (zero reais)" in t
+    assert "B - ENTRADA: R$ 17.150,00 (dezessete mil cento e cinquenta reais)" in t
+    assert "C - PREÇO DO IMÓVEL: R$ 343.000,00" in t
+    assert "36 (trinta e seis) parcelas de R$ 1.429,17 (mil quatrocentos e vinte e nove reais e dezessete centavos)" in t
+    assert "3 (três) parcelas de R$ 11.433,33 (onze mil quatrocentos e trinta e três reais e trinta e três centavos)" in t
+    assert "3.2.1. Financiamento: R$ 240.099,89" in t
+    assert "Recurso Próprio: R$ 17.150,00 (dezessete mil cento e cinquenta reais)" in t
+    assert "CORRETAGEM: R$ 17.150,00 (dezessete mil cento e cinquenta reais) que corresponde a 5% do valor total" in t
+    assert "Mossoró/RN, 29 de Outubro de 2026" in t
+    assert "R$ XX" not in t and "XX da quadra" not in t and "(XXX" not in t and "12.500,00" not in t and "299.000,00" not in t and "05 de Dezembro" not in t
+
+
+def test_veneza_desconto_vira_bonus_e_percentual_da_comissao():
+    t = texto_docx(ven(fp_veneza(330000.0, "227.099,89"), comissao=12500.0))
+    assert "PREÇO TOTAL DO IMÓVEL: R$ 343.000,00" in t
+    assert "A - BÔNUS: R$ 13.000,00 (treze mil reais)" in t
+    assert "C - PREÇO DO IMÓVEL: R$ 330.000,00 (trezentos e trinta mil reais)" in t
+    assert "que corresponde a 3,64% do valor total" in t
+
+
+def test_veneza_a_vista():
+    fp = {"a_vista": True, "renda": "9.000,00", "valor_proposto": 343000.0, "avista_meio": "pix",
+          "avista_data": "2026-11-05", "confirmado": True}
+    t = texto_docx(ven(fp))
+    assert "D – PARCELAS: não há (pagamento à vista)" in t and "Financiamento: não há (pagamento à vista)" in t
+
+
+def test_modelo_sem_lugar_para_chave_ou_baloes_trava():
+    assert problemas_modelo_contrato("veneza", fp_veneza(), LOTE_VEN) == []
+    com_chave = {**fp_veneza(financiamento="230.099,89"), "chave_valor": "10.000,00"}
+    assert "chave" in problemas_modelo_contrato("veneza", com_chave, LOTE_VEN)[0]
+    assert "balões" in problemas_modelo_contrato("riviera", fp_veneza(), LOTE_VEN)[0]
+    assert problemas_modelo_contrato("riviera", fp_riviera(), LOTE_RIV) == []
+
+
+@pytest.mark.parametrize("gerar", [lambda: riv(fp_riviera()), lambda: ven(fp_veneza())])
+def test_riviera_veneza_viram_pdf(gerar):
+    pdf = docx_para_pdf(gerar())
+    assert pdf[:5] == b"%PDF-"
+    t = texto_pdf(pdf)
+    assert "Maria Teste da Silva" in t and "011.473.324-44" in t
+
+
+@pytest.mark.skipif(not shutil.which("soffice"), reason="LibreOffice não instalado")
+def test_riviera_pdf_tem_exatamente_o_texto_do_libreoffice():
+    test_pdf_tem_exatamente_o_texto_do_libreoffice(lambda: riv(fp_riviera()))
+
+
+@pytest.mark.skipif(not shutil.which("soffice"), reason="LibreOffice não instalado")
+def test_veneza_pdf_tem_exatamente_o_texto_do_libreoffice():
+    """O modelo do Veneza tem um acento a mais em "poderá" (cláusula de
+    revalidação) -- erro de digitação do próprio modelo, que não mexemos; cada
+    programa extrai esse caractere de um jeito, então essa palavra fica de fora
+    da comparação."""
+    import unicodedata as ud
+    b = ven(fp_veneza())
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "doc.docx"
+        src.write_bytes(b)
+        subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", tmp, str(src)],
+                       check=True, capture_output=True, timeout=180)
+        ref = (Path(tmp) / "doc.pdf").read_bytes()
+
+    def limpa(tokens):
+        return [t for t in tokens if not t.startswith("poder") and not all(ud.combining(ch) for ch in t)]
+
+    esperado = limpa(_sem_numeros_de_pagina(_tokens(texto_pdf(ref))))
+    obtido = limpa(_sem_numeros_de_pagina(_tokens(texto_pdf(docx_para_pdf(b)))))
+    assert obtido == esperado

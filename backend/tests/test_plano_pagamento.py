@@ -252,3 +252,23 @@ def test_conferir_contrato_casos_reais():
     assert conferir_contrato({"a_vista": True, "avista_meio": "pix", "avista_data": "2026-10-10"}, 80000.0, TABELA_PF) == []
     # formulário novo: chave do próprio plano
     assert conferir_contrato(normalizar(plano_ok()), 89990.0, TABELA_PF) == []
+
+
+# ------------------------------------------------------------------ Veneza (29/10)
+def test_plano_com_baloes_e_financiamento_fecha():
+    fp = plano_ok(valor_proposto=89990.0, chave_valor=None, balao_qtd=3, balao_valor="2.000,00", financiamento_valor="2.999,00")
+    assert validar(fp, 89990.0, 89990.0) == []
+    assert ler_plano(fp).total_calculado == pytest.approx(89990.0)
+    assert resumo(fp).endswith("3 balões de R$ 2.000,00 + financiamento R$ 2.999,00")
+    assert conferir_contrato(normalizar(fp), 89990.0, TABELA_PF) == []
+
+
+def test_plano_com_baloes_que_nao_fecha_mostra_a_soma_completa():
+    fp = plano_ok(chave_valor=None, balao_qtd=3, balao_valor="2.000,00", financiamento_valor="1.000,00")
+    erros = validar(fp, 89990.0, 89990.0)
+    assert any("3 balões x R$ 2.000,00 + financiamento R$ 1.000,00" in e for e in erros)
+
+
+def test_a_vista_limpa_baloes_e_financiamento():
+    fp = normalizar({"a_vista": True, "balao_qtd": 3, "balao_valor": "1.000,00", "financiamento_valor": "5.000,00"})
+    assert fp["balao_qtd"] is None and fp["balao_valor"] is None and fp["financiamento_valor"] is None

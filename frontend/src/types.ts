@@ -48,6 +48,10 @@ export interface Lote {
   detalhes?: string | null;
   /** Só para casas (Veneza): área construída, em m². */
   area_construida_m2?: number | null;
+  /** Plano de tabela do Veneza (29/10): balões anuais e saldo por financiamento bancário. */
+  qtd_baloes?: number | null;
+  valor_balao?: number | null;
+  financiamento?: number | null;
 }
 
 export interface QuadraZona {
@@ -434,6 +438,12 @@ export interface FormaPagamentoDados {
   sinal_vencimento?: string | null; // AAAA-MM-DD
   chave_valor?: string | null;
   chave_vencimento?: string | null; // AAAA-MM-DD
+  /** Casas do Veneza (29/10): balões anuais e saldo por financiamento bancário. */
+  balao_qtd?: number | null;
+  balao_valor?: string | null;
+  financiamento_valor?: string | null;
+  /** Valor de tabela quando a proposta foi feita (gravado pelo servidor). */
+  valor_tabela?: number | null;
   confirma_valor_fora_tabela?: boolean | null;
   confirmado?: boolean | null;
 }

@@ -378,13 +378,16 @@ function FormaPagamentoResumo({
   const parcelas = base.parcelas ?? (estruturado ? null : lote?.qtd_parcelas ?? null);
   const parcelaValor = base.parcelaValor ?? (estruturado ? null : lote?.parcela_mensal ?? null);
   const chave = estruturado ? lerValor(fp.chave_valor) ?? 0 : lote?.entrega ?? 0;
+  const baloes = (base.balaoQtd ?? 0) * (base.balaoValor ?? 0);
   const p = {
     ...base,
     entrada,
     parcelas,
     parcelaValor,
-    total: Math.round(((entrada ?? 0) + (parcelas ?? 0) * (parcelaValor ?? 0) + chave) * 100) / 100,
+    total:
+      Math.round(((entrada ?? 0) + (parcelas ?? 0) * (parcelaValor ?? 0) + chave + baloes + base.financiamento) * 100) / 100,
   };
+  const comBaloes = !!(base.balaoQtd || base.balaoValor || base.financiamento);
   const brl = (v: number | null | undefined) => (v != null ? `R$ ${fmtBRL(v)}` : null);
   const ext = (v: number | null | undefined) => (v != null && v > 0 ? valorPorExtenso(v) : undefined);
   if (fp.a_vista) {
@@ -413,7 +416,19 @@ function FormaPagamentoResumo({
         valor={p.parcelas && p.parcelaValor ? `${p.parcelas} x R$ ${fmtBRL(p.parcelaValor)}` : null}
         extra={fp.primeiro_mes ? `1ª em ${fmtData(fp.primeiro_mes)}` : undefined}
       />
-      <Linha rotulo="Chave" valor={brl(chave)} extra={estruturado ? undefined : "da tabela do lote (proposta antiga)"} />
+      {comBaloes && (
+        <>
+          <Linha
+            rotulo="Balões anuais"
+            valor={base.balaoQtd && base.balaoValor ? `${base.balaoQtd} x R$ ${fmtBRL(base.balaoValor)}` : null}
+            extra={ext(baloes)}
+          />
+          <Linha rotulo="Financiamento bancário" valor={base.financiamento ? brl(base.financiamento) : null} extra={ext(base.financiamento)} />
+        </>
+      )}
+      {(!comBaloes || chave > 0) && (
+        <Linha rotulo="Chave" valor={brl(chave)} extra={estruturado ? undefined : "da tabela do lote (proposta antiga)"} />
+      )}
       <Linha rotulo="Renda informada" valor={fp.renda ? `R$ ${fp.renda}` : null} />
       {estruturado && <Linha rotulo="Resumo" valor={resumoPlano({ ...fp, valor_proposto: valorProposto })} />}
       <p className={`text-xs font-semibold mt-1 ${fecha ? "text-sage" : "text-rust"}`}>

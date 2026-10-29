@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field } from "./qualificacaoCampos";
 import {
+  MAX_BALOES,
   MAX_PARCELAS_ENTRADA,
   MEIOS_PAGAMENTO,
   dividirEmParcelas,
@@ -26,6 +27,30 @@ function semConfirmacao(fp: FormaPagamentoDados): FormaPagamentoDados {
  * chave fecha a conta no centavo (o plano de tabela de alguns lotes tem
  * centavos de arredondamento: entrada + parcelas + entrega ≠ total). */
 export function planoDeTabela(lote: LoteComCondominio, fp: FormaPagamentoDados): FormaPagamentoDados {
+  if (temBaloesNaTabela(lote)) {
+    // Casas do Veneza (29/10): entrada + parcelas + balões anuais + saldo por
+    // financiamento bancário. O financiamento é o que sobra, no centavo.
+    const qtd = lote.qtd_baloes ?? 0;
+    const balao = lote.valor_balao ?? 0;
+    const fin =
+      lote.valor_total != null
+        ? Math.round(
+            (lote.valor_total - (lote.entrada ?? 0) - (lote.qtd_parcelas ?? 0) * (lote.parcela_mensal ?? 0) - qtd * balao) * 100,
+          ) / 100
+        : lote.financiamento ?? null;
+    return semConfirmacao({
+      ...fp,
+      valor_proposto: lote.valor_total ?? fp.valor_proposto ?? null,
+      sinal: lote.entrada != null ? fmtBRL(lote.entrada) : fp.sinal ?? null,
+      dividido_em_parcelas: lote.qtd_parcelas ?? fp.dividido_em_parcelas ?? null,
+      valor_parcela: lote.parcela_mensal != null ? fmtBRL(lote.parcela_mensal) : fp.valor_parcela ?? null,
+      balao_qtd: qtd || null,
+      balao_valor: qtd ? fmtBRL(balao) : null,
+      financiamento_valor: fin != null && fin > 0 ? fmtBRL(fin) : null,
+      chave_valor: null,
+      chave_vencimento: null,
+    });
+  }
   let chave = lote.entrega ?? null;
   if (lote.valor_total != null && lote.entrada != null && lote.qtd_parcelas != null && lote.parcela_mensal != null) {
     const resto = Math.round((lote.valor_total - lote.entrada - lote.qtd_parcelas * lote.parcela_mensal) * 100) / 100;
@@ -38,7 +63,15 @@ export function planoDeTabela(lote: LoteComCondominio, fp: FormaPagamentoDados):
     dividido_em_parcelas: lote.qtd_parcelas ?? fp.dividido_em_parcelas ?? null,
     valor_parcela: lote.parcela_mensal != null ? fmtBRL(lote.parcela_mensal) : fp.valor_parcela ?? null,
     chave_valor: chave != null ? fmtBRL(chave) : fp.chave_valor ?? null,
+    balao_qtd: null,
+    balao_valor: null,
+    financiamento_valor: null,
   });
+}
+
+/** O plano de tabela do lote tem balões / financiamento (casas do Veneza). */
+export function temBaloesNaTabela(lote: LoteComCondominio | null | undefined): boolean {
+  return !!lote && (!!lote.qtd_baloes || !!lote.financiamento);
 }
 
 /** Campo de dinheiro: aceita "8999", "8.999", "8.999,00"; ao sair do campo
@@ -213,6 +246,7 @@ export function ConferenciaPlano({
   if (fp.a_vista !== false) return null;
   const diff = p.total - vp;
   const fecha = Math.abs(diff) <= tolerancia(p);
+  const comBaloes = !!(p.balaoQtd || p.balaoValor || p.financiamento);
   const linhas: [string, string][] = [
     [
       p.entradaParcelas > 1
@@ -221,8 +255,14 @@ export function ConferenciaPlano({
       fmtBRL(p.entrada ?? 0),
     ],
     [`Parcelas mensais (${p.parcelas ?? 0} x R$ ${fmtBRL(p.parcelaValor ?? 0)})`, fmtBRL((p.parcelas ?? 0) * (p.parcelaValor ?? 0))],
-    ["Chave (entrega das chaves)", fmtBRL(p.chave)],
   ];
+  if (comBaloes) {
+    linhas.push([`Balões (${p.balaoQtd ?? 0} x R$ ${fmtBRL(p.balaoValor ?? 0)})`, fmtBRL((p.balaoQtd ?? 0) * (p.balaoValor ?? 0))]);
+    linhas.push(["Financiamento bancário", fmtBRL(p.financiamento)]);
+  }
+  if (!comBaloes || p.chave) linhas.push(["Chave (entrega das chaves)", fmtBRL(p.chave)]);
+  const partes = comBaloes ? (p.chave ? "entrada + parcelas + balões + financiamento + chave" : "entrada + parcelas + balões + financiamento") : "entrada + parcelas + chave";
+  const ajusteEm: "chave" | "financiamento" | "entrada" = p.chave > 0 ? "chave" : p.financiamento > 0 ? "financiamento" : "entrada";
   return (
     <div className={`rounded-lg border p-3 text-sm ${fecha ? "border-sage/40 bg-sage/10" : "border-rust/40 bg-rust/5"}`}>
       <table className="w-full tabular-nums">
@@ -234,7 +274,7 @@ export function ConferenciaPlano({
             </tr>
           ))}
           <tr className="border-t border-border">
-            <td className="pt-1 font-semibold text-ink">Total (entrada + parcelas + chave)</td>
+            <td className="pt-1 font-semibold text-ink">Total ({partes})</td>
             <td className="pt-1 text-right font-semibold text-ink">R$ {fmtBRL(p.total)}</td>
           </tr>
           <tr>
@@ -245,20 +285,22 @@ export function ConferenciaPlano({
       </table>
       <p className={`mt-2 text-xs font-semibold ${fecha ? "text-sage" : "text-rust"}`}>
         {fecha
-          ? "✓ A conta fecha: entrada + parcelas + chave = valor proposto."
-          : `✗ A conta não fecha: diferença de R$ ${fmtBRL(Math.abs(diff))} (${diff > 0 ? "sobrando" : "faltando"}). Ajuste a entrada, as parcelas ou a chave.`}
+          ? `✓ A conta fecha: ${partes} = valor proposto.`
+          : `✗ A conta não fecha: diferença de R$ ${fmtBRL(Math.abs(diff))} (${diff > 0 ? "sobrando" : "faltando"}). Ajuste ${comBaloes ? "a entrada, as parcelas, os balões ou o financiamento" : "a entrada, as parcelas ou a chave"}.`}
       </p>
       {!fecha && onAjustarCentavos && Math.abs(diff) <= 1 && (
         <button
           type="button"
           className="btn-row btn-row-primary mt-2"
           onClick={() => {
-            // a diferença de centavos vai pra chave (ou pra entrada, se não houver chave)
-            if (p.chave > 0) onAjustarCentavos({ ...fp, chave_valor: fmtBRL(Math.round((p.chave - diff) * 100) / 100) });
+            // a diferença de centavos vai pra chave (ou pro financiamento, ou pra entrada)
+            if (ajusteEm === "chave") onAjustarCentavos({ ...fp, chave_valor: fmtBRL(Math.round((p.chave - diff) * 100) / 100) });
+            else if (ajusteEm === "financiamento")
+              onAjustarCentavos({ ...fp, financiamento_valor: fmtBRL(Math.round((p.financiamento - diff) * 100) / 100) });
             else onAjustarCentavos({ ...fp, sinal: fmtBRL(Math.round(((p.entrada ?? 0) - diff) * 100) / 100) });
           }}
         >
-          ajustar os R$ {fmtBRL(Math.abs(diff))} de arredondamento {p.chave > 0 ? "na chave" : "na entrada"}
+          ajustar os R$ {fmtBRL(Math.abs(diff))} de arredondamento {ajusteEm === "chave" ? "na chave" : ajusteEm === "financiamento" ? "no financiamento" : "na entrada"}
         </button>
       )}
       {valorTabela != null && Math.abs(vp - valorTabela) > 1 && (
@@ -300,6 +342,10 @@ export default function FormaPagamentoEtapa({
   const valoresEntrada =
     fp.sinal_forma === "parcelada" && entrada && Number.isInteger(nEnt) && nEnt >= 2 ? dividirEmParcelas(entrada, nEnt) : [];
   const diaVenc = lerData(fp.primeiro_mes)?.getDate();
+  // Casas do Veneza: balões + financiamento no lugar da chave (o contrato
+  // do Veneza não tem chave). Aparece também se a proposta já tiver balões.
+  const comBaloes = temBaloesNaTabela(lote) || !!fp.balao_qtd || !!fp.balao_valor || !!fp.financiamento_valor;
+  const chaveAtual = lerValor(fp.chave_valor) ?? 0;
 
   return (
     <div className="grid gap-4">
@@ -443,7 +489,41 @@ export default function FormaPagamentoEtapa({
             />
           </Bloco>
 
-          <Bloco titulo="3. Chave (paga na entrega das chaves)">
+          {comBaloes && (
+            <>
+              <Bloco titulo="3. Balões anuais">
+                <div className="grid sm:grid-cols-2 gap-3 items-start">
+                  <Field label="Quantidade de balões">
+                    <input
+                      id="fp-baloes"
+                      className="input"
+                      type="number"
+                      min={0}
+                      max={MAX_BALOES}
+                      value={fp.balao_qtd ?? ""}
+                      onChange={(e) => set({ balao_qtd: e.target.value ? Number(e.target.value) : null })}
+                    />
+                    <span className="text-[11px] text-ink-soft">Um por ano; no mês do balão também vence a parcela.</span>
+                  </Field>
+                  <CampoDinheiro id="fp-balao-valor" label="Valor de cada balão" valor={fp.balao_valor} onChange={(v) => set({ balao_valor: v })} />
+                </div>
+              </Bloco>
+              <Bloco titulo="4. Financiamento bancário (saldo)">
+                <div className="grid sm:grid-cols-2 gap-3 items-start">
+                  <CampoDinheiro
+                    id="fp-financiamento"
+                    label="Valor financiado"
+                    valor={fp.financiamento_valor}
+                    onChange={(v) => set({ financiamento_valor: v })}
+                    ajuda="Saldo pago pelo banco (Caixa). Deixe 0,00 se não houver."
+                  />
+                </div>
+              </Bloco>
+            </>
+          )}
+
+          {(!comBaloes || chaveAtual > 0) && (
+          <Bloco titulo={`${comBaloes ? "5" : "3"}. Chave (paga na entrega das chaves)`}>
             {/* Sem campo de data (09/10): a chave é paga na entrega das
                 chaves, que não tem dia certo -- o contrato não traz data. */}
             <div className="grid sm:grid-cols-2 gap-3 items-start">
@@ -456,6 +536,7 @@ export default function FormaPagamentoEtapa({
               />
             </div>
           </Bloco>
+          )}
         </>
       )}
 
