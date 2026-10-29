@@ -31,7 +31,16 @@ from .plano_pagamento import (  # noqa: F401 -- normalizar_valor_br reexportado
     normalizar_valor_br,
 )
 
+from .texto_seguro import limpar_nome
+
 _TEMPLATES_DIR = Path(__file__).parent / "templates" / "contratos"
+
+
+def _nome_comprador(proponente: dict, cliente: dict) -> str:
+    """Nome do comprador para o contrato: o da qualificação, limpo (letra
+    estilizada, espaço invisível, espaços sobrando -- ver texto_seguro); se
+    ficar vazio, o do cadastro do cliente. Nunca sai em branco (29/10)."""
+    return limpar_nome((proponente or {}).get("nome")) or limpar_nome((cliente or {}).get("nome")) or "-"
 
 _MESES = [
     "janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -209,7 +218,7 @@ def preencher_recibo(
         corpo[8].text = f"({extenso}"
         corpo[9].text = ") do"
         corpo[10].text = " Sr(a). "
-        corpo[11].text = cliente_nome
+        corpo[11].text = limpar_nome(cliente_nome) or "-"
         corpo[12].text = ", inscrito(a) no"
         # tab esquisito do modelo original antes de "CPF N°" -- vira espaço
         # normal, sem mudar o texto/sentido.
@@ -227,7 +236,7 @@ def preencher_recibo(
         corpo[15].text = f"{valor_fmt} "
         corpo[17].text = extenso  # mesmo motivo do Porto Franco: sem espaço, o ")" do run 18 já vem colado
         corpo[19].text = " do(a) SR(A). "
-        corpo[20].text = cliente_nome
+        corpo[20].text = limpar_nome(cliente_nome) or "-"
         corpo[21].text = f", inscrito(a) no CPF N° {formatar_cpf_cnpj(cliente_cpf)}"
         corpo[24].text = lote_numero
 
@@ -523,7 +532,7 @@ def compradores_proporcao(nome_comprador: str, dq: dict, so_resposta_direta: boo
     Rancho Texas passa False pra seguir o mesmo critério da COMPRADORA."""
     dq = dq or {}
     conjuge = dq.get("conjuge") or {}
-    nome_conjuge = (conjuge.get("nome") or "").strip()
+    nome_conjuge = limpar_nome(conjuge.get("nome"))
     marcou = dq.get("tem_conjuge") is True if so_resposta_direta else tem_conjuge(dq)
     if marcou and nome_conjuge:
         return [(nome_comprador, "50%"), (nome_conjuge, "50%")]
@@ -596,7 +605,7 @@ def preencher_contrato_porto_franco(
 
     # --- III. COMPRADOR (QUADRO RESUMO) ----------------------------------
     p = t.rows[4].cells[0].paragraphs
-    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(p[3], "NACIONALIDADE: ", f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}")
@@ -790,14 +799,14 @@ def preencher_contrato_rancho_texas(
     endereco = dq.get("endereco_residencial") or {}
     fp = dq.get("forma_pagamento") or {}
     estado_civil = dq.get("estado_civil")
-    tem_compradora = tem_conjuge(dq) and bool(conjuge.get("nome"))
+    tem_compradora = tem_conjuge(dq) and bool(limpar_nome(conjuge.get("nome")))
 
     doc = docx.Document(str(_TEMPLATES_DIR / "contrato_rancho_texas.docx"))
     t = doc.tables[0]
 
     # --- III. COMPRADOR / COMPRADORA (QUADRO RESUMO) ----------------------
     p = t.rows[4].cells[0].paragraphs
-    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(
@@ -813,7 +822,7 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(p[6], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
 
     if tem_compradora:
-        nome_c = conjuge.get("nome") or "-"
+        nome_c = limpar_nome(conjuge.get("nome")) or "-"
         cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj"))
         _substituir_texto(p[8], "NOME: ", f"NOME: {nome_c}")
         _substituir_texto(
@@ -952,7 +961,7 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(doc.paragraphs[341], "XXXXX", nome)
     _substituir_texto(doc.paragraphs[342], "CPF: XXX", f"CPF: {cpf}")
     if tem_compradora:
-        _substituir_texto(doc.paragraphs[348], "XXXX", conjuge.get("nome") or "-")
+        _substituir_texto(doc.paragraphs[348], "XXXX", limpar_nome(conjuge.get("nome")) or "-")
         _substituir_texto(doc.paragraphs[349], "CPF: XXXX", f"CPF: {formatar_cpf_cnpj(conjuge.get('cpf_cnpj'))}")
     else:
         # Sem cônjuge: limpa os placeholders de exemplo do modelo em vez de
@@ -1043,7 +1052,7 @@ def preencher_contrato_riviera(
 
     # --- III. COMPRADOR ------------------------------------------------------
     p = t.rows[4].cells[0].paragraphs
-    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(
@@ -1170,7 +1179,7 @@ def preencher_contrato_veneza(
         return f"R$ {formatar_valor(v)} ({valor_por_extenso(v)})"
 
     # --- 1.2 COMPRADOR ------------------------------------------------------------
-    nome = proponente.get("nome") or cliente.get("nome") or "-"
+    nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     nacionalidade = (proponente.get("nacionalidade") or "").strip() or "-"
     ec = ESTADO_CIVIL_LABEL.get(estado_civil, "-")

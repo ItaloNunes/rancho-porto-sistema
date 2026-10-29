@@ -488,3 +488,43 @@ def test_veneza_pdf_tem_exatamente_o_texto_do_libreoffice():
     esperado = limpa(_sem_numeros_de_pagina(_tokens(texto_pdf(ref))))
     obtido = limpa(_sem_numeros_de_pagina(_tokens(texto_pdf(docx_para_pdf(b)))))
     assert obtido == esperado
+
+
+# ------------------------------------------------------------------ nome que sumia do contrato (29/10)
+NOME_ESTILIZADO = "\U0001d40c\U0001d41a\U0001d42b\U0001d422\U0001d41a ​Teste  da Silva "  # 𝐌𝐚𝐫𝐢𝐚 + zero-width + NBSP
+
+
+def test_limpar_nome():
+    from app.texto_seguro import limpar_nome
+    assert limpar_nome(NOME_ESTILIZADO) == "Maria Teste da Silva"
+    assert limpar_nome("﻿​  ") == ""
+    assert limpar_nome("José d'Ávila") == "José d'Ávila"
+
+
+@pytest.mark.parametrize("gerar_nome", ["pf", "rt", "riv", "ven"])
+def test_nome_estilizado_sai_no_contrato_e_na_assinatura(gerar_nome):
+    fp = {"pf": fp_unica(LOTE_PF), "rt": fp_unica(LOTE_RT), "riv": fp_riviera(), "ven": fp_veneza()}[gerar_nome]
+    lote = {"pf": LOTE_PF, "rt": LOTE_RT, "riv": LOTE_RIV, "ven": LOTE_VEN}[gerar_nome]
+    p = proposta(fp, lote)
+    p["dados_qualificacao"]["proponente"]["nome"] = NOME_ESTILIZADO
+    kw = dict(proposta=p, lote=lote, cliente=CLIENTE, data_contrato=date(2026, 10, 29))
+    b = {"pf": lambda: preencher_contrato_porto_franco(corretor=CORRETOR, valor_comissao=0, **kw),
+         "rt": lambda: preencher_contrato_rancho_texas(**kw),
+         "riv": lambda: preencher_contrato_riviera(**kw),
+         "ven": lambda: preencher_contrato_veneza(valor_comissao=0, **kw)}[gerar_nome]()
+    t = texto_pdf(docx_para_pdf(b))
+    assert t.count("Maria Teste da Silva") >= 2, gerar_nome  # quadro resumo + assinatura
+
+
+def test_nome_so_com_espacos_invisiveis_usa_o_do_cadastro():
+    p = proposta(fp_unica(LOTE_PF))
+    p["dados_qualificacao"]["proponente"]["nome"] = "​  "
+    b = preencher_contrato_porto_franco(proposta=p, lote=LOTE_PF, cliente={"nome": "Cliente Do Cadastro", "cpf": "01147332444"},
+                                        corretor=CORRETOR, valor_comissao=0, data_contrato=date(2026, 10, 2))
+    assert texto_docx(b).count("Cliente Do Cadastro") >= 2
+
+
+def test_pdf_nao_apaga_letra_estilizada_mesmo_sem_limpeza():
+    from app.texto_seguro import ajustar_para_cobertura, cobertura_padrao
+    assert ajustar_para_cobertura(NOME_ESTILIZADO, cobertura_padrao()).strip().startswith("Maria")
+    assert ajustar_para_cobertura("Nº 1, 200,00 m² – “ok”", cobertura_padrao()) == "Nº 1, 200,00 m² – “ok”"

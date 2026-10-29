@@ -44,6 +44,8 @@ from docx.oxml.ns import qn
 from fontTools.ttLib import TTFont
 from fpdf import FPDF
 
+from .texto_seguro import ajustar_para_cobertura, cobertura_padrao
+
 _FONTS_DIR = Path(__file__).parent / "assets" / "fonts"
 
 # família lógica -> prefixo do arquivo .ttf
@@ -635,10 +637,11 @@ class Conversor:
                 elif campo is not None and campo.get("fase") == "instr":
                     continue
                 elif tag == qn("w:t"):
-                    # NFC: o modelo do Veneza (29/10) tem acentos "soltos"
-                    # (a + acento combinante), que saíam como "a ̀" no PDF; e o
-                    # hífen U+2010 não existe na fonte e sumia ("considerando se").
-                    txt = unicodedata.normalize("NFC", c.text or "").replace("\u2010", "-").replace("\u2011", "-")
+                    # Caractere que a fonte não tem SUMIA do PDF sem aviso: acento
+                    # solto do modelo do Veneza ("a ̀"), hífen U+2010, e nome do
+                    # cliente em letra estilizada/espaço invisível (contrato do
+                    # lote 06 quadra 4, 29/10). Troca só esses (ver texto_seguro).
+                    txt = ajustar_para_cobertura(c.text or "", cobertura_padrao())
                     if rp.caixa_alta:
                         txt = txt.upper()
                     out.append(("txt", Pedaco(txt, e)))

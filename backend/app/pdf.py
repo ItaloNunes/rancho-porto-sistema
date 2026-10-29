@@ -16,6 +16,7 @@ from fpdf import FPDF
 
 from .cadastro_proposta import tem_conjuge
 from .plano_pagamento import MEIOS_PAGAMENTO, fmt_brl, fmt_data, ler_plano
+from .texto_seguro import ajustar_para_latin1
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,9 @@ class _CastelPDF(FPDF):
         latin-1 (ver _TROCAS_CARACTERES) e, pra qualquer outro que sobrar,
         substitui pelo "?" em vez de derrubar a geração inteira do PDF."""
         if not self.is_ttf_font and self.core_fonts_encoding:
+            # letra estilizada / espaço invisível (ex.: nome colado do
+            # WhatsApp) vira a letra simples em vez de "?" (29/10)
+            text = ajustar_para_latin1(text)
             for original, troca in _TROCAS_CARACTERES.items():
                 text = text.replace(original, troca)
             return text.encode(self.core_fonts_encoding, "replace").decode("latin-1")

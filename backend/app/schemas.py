@@ -5,6 +5,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from .plano_pagamento import normalizar_valor_br
+from .texto_seguro import limpar_nome
 
 LoteStatus = Literal["disponivel", "reservado", "vendido"]
 ReservaStatus = Literal[
@@ -425,6 +426,13 @@ class PessoaDados(BaseModel):
     # contratos (pedido de 03/10).
     naturalidade: Optional[str] = None
 
+    @field_validator("nome")
+    @classmethod
+    def _limpa_nome(cls, v: Optional[str]) -> Optional[str]:
+        # letra estilizada / espaço invisível colado do WhatsApp sumia do
+        # contrato (29/10) -- grava sempre o nome em letra normal
+        return (limpar_nome(v) or None) if v is not None else None
+
 
 _VALOR_INVALIDO_MSG = "Informe um valor numérico válido (ex.: 5000 ou 5000,00), sem letras ou símbolos."
 
@@ -569,6 +577,11 @@ class ClienteCreate(BaseModel):
     origem: Optional[str] = None
     corretor_id: Optional[str] = None
 
+    @field_validator("nome")
+    @classmethod
+    def _limpa_nome(cls, v: str) -> str:
+        return limpar_nome(v) or v
+
 
 class ClienteUpdate(BaseModel):
     """Todos os campos opcionais: só entra na atualização o que vier preenchido."""
@@ -580,6 +593,11 @@ class ClienteUpdate(BaseModel):
     observacoes: Optional[str] = None
     origem: Optional[str] = None
     corretor_id: Optional[str] = None
+
+    @field_validator("nome")
+    @classmethod
+    def _limpa_nome(cls, v: Optional[str]) -> Optional[str]:
+        return (limpar_nome(v) or v) if v is not None else None
 
 
 class Cliente(ClienteCreate):
