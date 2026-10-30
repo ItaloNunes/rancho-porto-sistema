@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   abrirAbaComCarregamento,
   api,
@@ -14,7 +14,8 @@ import { ESTADO_CIVIL_OPCOES } from "../../components/qualificacaoCampos";
 import { temConjuge } from "../../lib/cadastro";
 import PropostaDocumentos from "./PropostaDocumentos";
 import PropostaFormularioCompleto from "./PropostaFormularioCompleto";
-import type { EnderecoDados, PessoaDados, PropostaDetalhe, PropostaStatus, QualificacaoDados } from "../../types";
+import FormaPagamentoEtapa from "../../components/FormaPagamento";
+import type { EnderecoDados, FormaPagamentoDados, PessoaDados, PropostaDetalhe, PropostaStatus, QualificacaoDados } from "../../types";
 
 /** 'AAAA-MM-DD' ou 'DD/MM/AAAA' -> 'DD/MM/AAAA', qualquer ano (nascimento
  * inclusive — fmtData de pagamento.ts só aceita datas de pagamento). */
@@ -53,6 +54,12 @@ export default function PropostaFinanceiro({
   onGerarContrato: (p: PropostaDetalhe) => void;
 }) {
   const [editando, setEditando] = useState(false);
+  const [editandoPagamento, setEditandoPagamento] = useState(false);
+  const [fpEdicao, setFpEdicao] = useState<FormaPagamentoDados>({});
+  const [motivoPagamento, setMotivoPagamento] = useState("");
+  const [salvandoPagamento, setSalvandoPagamento] = useState(false);
+  const [erroPagamento, setErroPagamento] = useState<string | null>(null);
+  const painelPagamentoRef = useRef<HTMLDivElement>(null);
   const [conferencia, setConferencia] = useState<ConferenciaProposta | null>(null);
   const [historico, setHistorico] = useState<HistoricoContratos | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -98,6 +105,32 @@ export default function PropostaFinanceiro({
         />
       </div>
     );
+  }
+
+  function abrirEdicaoPagamento() {
+    const fp = ((proposta.dados_qualificacao ?? {}) as Partial<QualificacaoDados>).forma_pagamento ?? {};
+    setFpEdicao(fp);
+    setMotivoPagamento("");
+    setErroPagamento(null);
+    setEditandoPagamento(true);
+    setTimeout(() => painelPagamentoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  async function salvarEdicaoPagamento() {
+    setSalvandoPagamento(true);
+    setErroPagamento(null);
+    try {
+      const dq = { ...((proposta.dados_qualificacao ?? {}) as Partial<QualificacaoDados>) } as QualificacaoDados;
+      dq.forma_pagamento = fpEdicao;
+      await api.editarDadosProposta(proposta.id, dq, motivoPagamento || null);
+      setEditandoPagamento(false);
+      setSalvoAgora(true);
+      onAtualizado();
+    } catch (e) {
+      setErroPagamento(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSalvandoPagamento(false);
+    }
   }
 
   async function verPdfProposta() {
@@ -192,6 +225,15 @@ export default function PropostaFinanceiro({
             Corrigir dados
           </button>
         )}
+        {!encerrada && (
+          <button
+            id="financeiro-editar-pagamento"
+            className="btn btn-outline !py-2 !px-4 !text-sm"
+            onClick={editandoPagamento ? () => setEditandoPagamento(false) : abrirEdicaoPagamento}
+          >
+            {editandoPagamento ? "Cancelar edição de pagamento" : "Editar pagamento"}
+          </button>
+        )}
         <button className="btn btn-outline !py-2 !px-4 !text-sm" onClick={verPdfProposta} disabled={abrindoPdf}>
           {abrindoPdf ? "Abrindo..." : "Ver PDF da proposta"}
         </button>
@@ -221,6 +263,44 @@ export default function PropostaFinanceiro({
           </button>
         )}
       </div>
+
+      {editandoPagamento && (
+        <section ref={painelPagamentoRef} className="rounded-lg border border-border bg-surface p-4 grid gap-4">
+          <h3 className="text-sm font-bold text-ink">Editar forma de pagamento</h3>
+          <FormaPagamentoEtapa
+            fp={fpEdicao}
+            onChange={setFpEdicao}
+            lote={proposta.lote ?? null}
+          />
+          <div className="grid gap-2">
+            <label className="text-xs font-semibold text-ink-soft uppercase tracking-wide" htmlFor="fp-motivo">
+              Motivo da alteração (opcional)
+            </label>
+            <input
+              id="fp-motivo"
+              className="input text-sm"
+              placeholder="Ex.: cliente pediu mudança da data de vencimento"
+              value={motivoPagamento}
+              onChange={(e) => setMotivoPagamento(e.target.value)}
+            />
+          </div>
+          {erroPagamento && (
+            <p className="text-sm text-rust bg-rust/5 border border-rust/30 rounded-lg px-3 py-2">{erroPagamento}</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              className="btn btn-primary !py-2 !px-4 !text-sm disabled:opacity-40"
+              onClick={salvarEdicaoPagamento}
+              disabled={salvandoPagamento}
+            >
+              {salvandoPagamento ? "Salvando..." : "Salvar pagamento"}
+            </button>
+            <button className="btn btn-outline !py-2 !px-4 !text-sm" onClick={() => setEditandoPagamento(false)}>
+              Cancelar
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-3">
         <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Dados que vão para o contrato</h3>
