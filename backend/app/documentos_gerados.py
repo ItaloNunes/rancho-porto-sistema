@@ -620,7 +620,20 @@ def preencher_contrato_porto_franco(
     t = doc.tables[0]
 
     # --- III. COMPRADOR (QUADRO RESUMO) ----------------------------------
-    p = t.rows[4].cells[0].paragraphs
+    conjuge = dq.get("conjuge") or {}
+    nome_c = limpar_nome(conjuge.get("nome"))
+    com_conjuge = bool(tem_conjuge(dq) and nome_c)
+    celula_iii = t.rows[4].cells[0]
+    p = celula_iii.paragraphs
+    if com_conjuge:
+        # Cônjuge (pedido de 30/10): clona o bloco "A – COMPRADOR" (NOME..CEP)
+        # logo abaixo dele, como bloco B. Só quando a proposta tem cônjuge --
+        # sem cônjuge o contrato sai idêntico ao modelo.
+        ref = p[14]._p
+        for par in p[1:15]:
+            novo = copy.deepcopy(par._p)
+            ref.addnext(novo)
+            ref = novo
     nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
@@ -643,6 +656,29 @@ def preencher_contrato_porto_franco(
     _substituir_texto(p[12], " MUNICÍPIO: ", f" MUNICÍPIO: {endereco.get('cidade') or '-'}")
     _substituir_texto(p[13], " UF: ", f" UF: {endereco.get('estado') or '-'}")
     _substituir_texto(p[14], "CEP: ", f"CEP: {formatar_cep(endereco.get('cep'))}")
+
+    if com_conjuge:
+        q = celula_iii.paragraphs[15:29]
+        cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj"))
+        _substituir_texto(q[0], "A – COMPRADOR: ", "B – CÔNJUGE: ")
+        _substituir_texto(q[1], "NOME: ", f"NOME: {nome_c}")
+        _substituir_texto(q[2], "NACIONALIDADE: ", f"NACIONALIDADE: {conjuge.get('nacionalidade') or '-'}")
+        _substituir_texto(q[3], "PROFISSÃO: ", f"PROFISSÃO: {conjuge.get('profissao') or '-'}")
+        _substituir_texto(
+            q[4], "DATA DE NASCIMENTO: ", f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))}"
+        )
+        if (conjuge.get("naturalidade") or "").strip():
+            _substituir_texto(q[5], "LOCAL: ", f"LOCAL: {conjuge['naturalidade'].strip()}")
+        _substituir_texto(q[6], "CPF: ", f"CPF: {cpf_c}")
+        _substituir_texto(q[7], "IDENTIDADE: ", f"IDENTIDADE: {_identidade(conjuge)}")
+        _substituir_texto(q[8], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
+        _substituir_texto(
+            q[9], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}"
+        )
+        _substituir_texto(q[10], "BAIRRO: ", f"BAIRRO: {endereco.get('bairro') or '-'}")
+        _substituir_texto(q[11], " MUNICÍPIO: ", f" MUNICÍPIO: {endereco.get('cidade') or '-'}")
+        _substituir_texto(q[12], " UF: ", f" UF: {endereco.get('estado') or '-'}")
+        _substituir_texto(q[13], "CEP: ", f"CEP: {formatar_cep(endereco.get('cep'))}")
 
     # --- V. OBJETIVO (lote, quadra, área + confrontações do memorial) ------
     # Pedido de 09/10: área e confrontações exatamente como no MEMORIAL
@@ -771,6 +807,22 @@ def preencher_contrato_porto_franco(
     rpr_modelo = doc.paragraphs[314].runs[0]._r.rPr
     if rpr_modelo is not None:
         run_nome._r.insert(0, copy.deepcopy(rpr_modelo))
+
+    # --- Assinatura do cônjuge (pedido de 30/10) ---------------------------
+    # Duplica o bloco traço/nome/CPF/"COMPRADOR" (parágrafos 312-315) logo
+    # abaixo. Por último, pois a inserção desloca os índices dos parágrafos.
+    if com_conjuge:
+        pars = doc.paragraphs
+        ref = pars[315]._p
+        for par in (pars[311], *pars[312:316]):
+            novo = copy.deepcopy(par._p)
+            ref.addnext(novo)
+            ref = novo
+        pars = doc.paragraphs
+        # blocos: 311 (vazio) 312 traço, 313 nome, 314 CPF, 315 COMPRADOR,
+        # depois a cópia: 316 vazio, 317 traço, 318 nome, 319 CPF, 320 COMPRADOR
+        pars[318].runs[0].text = nome_c
+        _substituir_texto(pars[319], f"CPF: {cpf}", f"CPF: {formatar_cpf_cnpj(conjuge.get('cpf_cnpj'))}")
 
     buffer = io.BytesIO()
     doc.save(buffer)
