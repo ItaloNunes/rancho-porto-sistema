@@ -465,6 +465,8 @@ MeioPagamento = Literal["pix", "transferencia", "boleto", "cheque", "dinheiro"]
 
 
 class FormaPagamentoDados(BaseModel):
+    # 30/10: 1ª parcela fora do dia de vencimento -- de onde seguem as demais (AAAA-MM-DD).
+    demais_a_partir: Optional[str] = None
     a_vista: Optional[bool] = None
     renda: Optional[str] = None
     # gt=0: valor proposto zerado ou negativo é sempre erro de digitação, não

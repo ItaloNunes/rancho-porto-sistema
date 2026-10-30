@@ -338,6 +338,21 @@ def titulo_contrato(proposta: dict, data_contrato: Optional[date] = None) -> str
         raise ValueError("Contrato sem número: a numeração tem que ser atribuída antes de preencher o modelo.")
     return f"CONTRATO Nº {numero} – VERSÃO {versao}"
 
+def _demais_texto(fp: dict) -> str:
+    """Quando a 1ª parcela foi paga numa data fora do dia de vencimento
+    (30/10: 1ª em 29/10 e as demais todo dia 15 a partir de 15/12), o campo
+    opcional `demais_a_partir` (AAAA-MM-DD) diz de onde seguem as demais.
+    Sem ele, o texto de sempre."""
+    v = (fp or {}).get("demais_a_partir")
+    try:
+        d = date.fromisoformat(str(v)[:10]) if v else None
+    except ValueError:
+        d = None
+    if not d:
+        return "e as demais no mesmo dia dos meses subsequentes"
+    return f"e as demais todo dia {d.day}, a partir de {d.strftime('%d/%m/%Y')}"
+
+
 def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
     """Textos da forma de pagamento pros dois contratos, montados a partir
     do plano da proposta (app/plano_pagamento.py). Proposta antiga (sem o
@@ -378,10 +393,10 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
                 k = valores.count(valores[0])
                 parcelas_txt = (f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais, {k} ({_numero_extenso_feminino(k)}) "
                                 f"de {brl(valores[0])} e {n - k} ({_numero_extenso_feminino(n - k)}) de {brl(valores[-1])}")
-            compl_pf = (f", paga em {parcelas_txt}, via {meio}, vencendo a primeira em {data_txt} e as demais no "
-                        "mesmo dia dos meses subsequentes")
-            compl_rt = (f" sendo pago em {parcelas_txt}, via {meio}, a primeira para o dia {data_txt} e as demais "
-                        "no mesmo dia dos meses subsequentes")
+            compl_pf = (f", paga em {parcelas_txt}, via {meio}, vencendo a primeira em {data_txt} "
+                        f"{_demais_texto(fp)}")
+            compl_rt = (f" sendo pago em {parcelas_txt}, via {meio}, a primeira para o dia {data_txt} "
+                        f"{_demais_texto(fp)}")
         else:
             compl_pf = f", paga via {meio} em {data_txt}"
             compl_rt = f" sendo pago via {meio} para o dia {data_txt}"
@@ -392,7 +407,8 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
     if qtd and vparc:
         primeira = fmt_data(v.primeira_parcela) if v.primeira_parcela else (v.primeira_parcela_texto or None)
         dia = plano.dia_vencimento
-        out["parcelas"] = {"qtd": int(qtd), "valor": vparc, "primeira": primeira, "dia": dia}
+        out["parcelas"] = {"qtd": int(qtd), "valor": vparc, "primeira": primeira, "dia": dia,
+                           "demais": _demais_texto(fp)}
     else:
         out["parcelas"] = None
     out["chave_valor"] = v.chave
@@ -678,7 +694,7 @@ def preencher_contrato_porto_franco(
         if pc["primeira"] or pc["dia"]:
             texto_parcelas += (
                 f", vencendo a primeira em {pc['primeira'] or '-'} "
-                "e as demais no mesmo dia dos meses subsequentes"
+                f"{pc['demais']}"
             )
         _substituir_texto(pp[5], "Parcelas mensais", f"Parcelas mensais: {texto_parcelas}.")
 
@@ -1101,7 +1117,7 @@ def preencher_contrato_riviera(
             f"R$ {formatar_valor(pc['valor'])} ({valor_por_extenso(pc['valor'])}) cada"
         )
         if pc["primeira"]:
-            texto += f", vencendo a primeira em {pc['primeira']} e as demais no mesmo dia dos meses subsequentes"
+            texto += f", vencendo a primeira em {pc['primeira']} {pc['demais']}"
         _substituir_texto(pp[4], "Parcelas: ", f"Parcelas: {texto}.")
     if not tp["a_vista"] and tp["chave_valor"]:
         # O modelo não tem linha de chave; a linha em branco logo abaixo das
