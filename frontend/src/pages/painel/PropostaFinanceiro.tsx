@@ -270,7 +270,11 @@ export default function PropostaFinanceiro({
           <FormaPagamentoEtapa
             fp={fpEdicao}
             onChange={setFpEdicao}
-            lote={proposta.lote ?? null}
+            lote={
+              proposta.lote
+                ? { ...proposta.lote, condominio_nome: proposta.condominio_nome ?? "", condominio_slug: "" }
+                : null
+            }
           />
           <div className="grid gap-2">
             <label className="text-xs font-semibold text-ink-soft uppercase tracking-wide" htmlFor="fp-motivo">
