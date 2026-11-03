@@ -1588,6 +1588,25 @@ def gerar_contrato_proposta(
             "sha256": hashlib.sha256(pdf_bytes).hexdigest(),
         },
     )
+    # Ao gerar o contrato, marca o lote como vendido e a proposta como aceita
+    # (caso ainda não estejam) — pedido de 03/11 pelo financeiro.
+    status_atual = proposta.get("status") or ""
+    if status_atual != "aceita":
+        vendeu = (
+            sb.table("lotes")
+            .update({"status": "vendido"})
+            .eq("id", proposta["lote_id"])
+            .neq("status", "vendido")
+            .execute()
+            .data
+        )
+        if vendeu:
+            sb.table("propostas").update({"status": "aceita"}).eq("id", proposta_id).execute()
+            registrar_log(
+                sb, corretor, "mudou_status_proposta", "proposta", proposta_id,
+                f"Status da proposta {_numero_proposta(proposta)} mudado automaticamente para 'aceita' ao emitir o contrato.",
+                {"status_novo": "aceita"},
+            )
     nome_arquivo = (
         f"contrato-{numero_contrato.replace('/', '-')}-v{versao_contrato}-{lote.get('identificador', proposta_id)}.pdf"
     ).replace(" ", "-")
