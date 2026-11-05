@@ -412,7 +412,13 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float 
     else:
         out["parcelas"] = None
     chave_bruta = v.chave
-    out["chave_valor"] = max(0.0, round(chave_bruta - desconto, 2))
+    # Proposta sem chave (chave_valor nulo/ausente) -> chave_bruta é None:
+    # mantém None (o modelo esconde a linha da chave). Só aplica o desconto
+    # quando existe chave de fato -- senão `round(None - desconto)` quebrava.
+    if chave_bruta is None:
+        out["chave_valor"] = None
+    else:
+        out["chave_valor"] = max(0.0, round(chave_bruta - desconto, 2))
     return out
 
 
@@ -599,6 +605,7 @@ def preencher_contrato_porto_franco(
     valor_comissao: float,
     data_contrato: Optional[date] = None,
     memorial: Optional[dict] = None,
+    desconto: float = 0,
 ) -> bytes:
     """Preenche o modelo real do contrato do Porto Franco (alienação
     fiduciária) com os dados da proposta, do lote e da qualificação do
@@ -700,7 +707,7 @@ def preencher_contrato_porto_franco(
         )
 
     # --- VI. PREÇO --------------------------------------------------------
-    valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    valor_total = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2)
     p_preco = t.rows[9].cells[0].paragraphs[1]
     _substituir_texto(
         p_preco,
@@ -713,7 +720,7 @@ def preencher_contrato_porto_franco(
     # com a data da 1ª, chave) -- só preenchem os rótulos em branco do
     # modelo, o texto jurídico em volta não muda.
     pp = t.rows[11].cells[0].paragraphs
-    tp = _textos_pagamento(fp, lote, valor_total)
+    tp = _textos_pagamento(fp, lote, valor_total, desconto=desconto)
     if tp["entrada"]:
         _substituir_texto(
             pp[3],
@@ -836,6 +843,7 @@ def preencher_contrato_rancho_texas(
     lote: dict,
     cliente: dict,
     data_contrato: Optional[date] = None,
+    desconto: float = 0,
 ) -> bytes:
     """Preenche o modelo real do contrato do Rancho Texas (alienação
     fiduciária) com os dados da proposta, do lote e da qualificação do(s)
@@ -948,7 +956,7 @@ def preencher_contrato_rancho_texas(
         _substituir_texto(confrontacoes[idx], exemplo, em_branco)
 
     # --- VI. PREÇO ----------------------------------------------------------
-    valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    valor_total = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2)
     p_preco = t.rows[9].cells[0].paragraphs[1]
     _substituir_texto(
         p_preco,
@@ -968,7 +976,7 @@ def preencher_contrato_rancho_texas(
     # sem qualificação completa geravam contrato com a data 08/09/2026 e o
     # valor de exemplo ainda dentro do texto).
     pp = t.rows[11].cells[0].paragraphs
-    tp = _textos_pagamento(fp, lote, valor_total)
+    tp = _textos_pagamento(fp, lote, valor_total, desconto=desconto)
     sinal_modelo = "Sinal/Arras confirmatórias: R$ XX (XXX) sendo pago em boleto bancário para o dia 08/09/2026."
     arras_modelo = "R$ 20.175,40 (Vinte mil cento e setenta e cinco reais e quarenta centavos)"
     if tp["entrada"]:
