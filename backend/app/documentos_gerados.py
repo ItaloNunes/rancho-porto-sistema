@@ -31,7 +31,7 @@ from .plano_pagamento import (  # noqa: F401 -- normalizar_valor_br reexportado
     normalizar_valor_br,
 )
 
-from .texto_seguro import limpar_nome
+from .texto_seguro import limpar_nome, titulo_pt, limpar_nome_titulo
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates" / "contratos"
 
@@ -40,7 +40,7 @@ def _nome_comprador(proponente: dict, cliente: dict) -> str:
     """Nome do comprador para o contrato: o da qualificação, limpo (letra
     estilizada, espaço invisível, espaços sobrando -- ver texto_seguro); se
     ficar vazio, o do cadastro do cliente. Nunca sai em branco (29/10)."""
-    return limpar_nome((proponente or {}).get("nome")) or limpar_nome((cliente or {}).get("nome")) or "-"
+    return limpar_nome_titulo((proponente or {}).get("nome")) or limpar_nome_titulo((cliente or {}).get("nome")) or "-"
 
 _MESES = [
     "janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -218,7 +218,7 @@ def preencher_recibo(
         corpo[8].text = f"({extenso}"
         corpo[9].text = ") do"
         corpo[10].text = " Sr(a). "
-        corpo[11].text = limpar_nome(cliente_nome) or "-"
+        corpo[11].text = limpar_nome_titulo(cliente_nome) or "-"
         corpo[12].text = ", inscrito(a) no"
         # tab esquisito do modelo original antes de "CPF N°" -- vira espaço
         # normal, sem mudar o texto/sentido.
@@ -236,7 +236,7 @@ def preencher_recibo(
         corpo[15].text = f"{valor_fmt} "
         corpo[17].text = extenso  # mesmo motivo do Porto Franco: sem espaço, o ")" do run 18 já vem colado
         corpo[19].text = " do(a) SR(A). "
-        corpo[20].text = limpar_nome(cliente_nome) or "-"
+        corpo[20].text = limpar_nome_titulo(cliente_nome) or "-"
         corpo[21].text = f", inscrito(a) no CPF N° {formatar_cpf_cnpj(cliente_cpf)}"
         corpo[24].text = lote_numero
 
@@ -295,9 +295,9 @@ def _endereco_completo(endereco: dict) -> str:
     """'Rua X, nº 123 - complemento' -- o `_endereco_linha1` do pdf.py não
     inclui o número (o modelo em papel tem outro campo pra isso; aqui, no
     contrato, é tudo uma linha só: "ENDEREÇO RESIDENCIAL")."""
-    rua = endereco.get("rua")
+    rua = titulo_pt(endereco.get("rua") or "") or None
     numero = endereco.get("numero")
-    complemento = endereco.get("complemento")
+    complemento = titulo_pt(endereco.get("complemento") or "") or None
     partes = [rua]
     if numero:
         partes.append(f"nº {numero}")
@@ -353,7 +353,7 @@ def _demais_texto(fp: dict) -> str:
     return f"e as demais todo dia {d.day}, a partir de {d.strftime('%d/%m/%Y')}"
 
 
-def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
+def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float = 0) -> dict:
     """Textos da forma de pagamento pros dois contratos, montados a partir
     do plano da proposta (app/plano_pagamento.py). Proposta antiga (sem o
     plano estruturado do formulário de 02/10) continua caindo pros valores
@@ -411,7 +411,8 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float) -> dict:
                            "demais": _demais_texto(fp)}
     else:
         out["parcelas"] = None
-    out["chave_valor"] = v.chave
+    chave_bruta = v.chave
+    out["chave_valor"] = max(0.0, round(chave_bruta - desconto, 2))
     return out
 
 
@@ -548,7 +549,7 @@ def compradores_proporcao(nome_comprador: str, dq: dict, so_resposta_direta: boo
     Rancho Texas passa False pra seguir o mesmo critério da COMPRADORA."""
     dq = dq or {}
     conjuge = dq.get("conjuge") or {}
-    nome_conjuge = limpar_nome(conjuge.get("nome"))
+    nome_conjuge = limpar_nome_titulo(conjuge.get("nome"))
     marcou = dq.get("tem_conjuge") is True if so_resposta_direta else tem_conjuge(dq)
     if marcou and nome_conjuge:
         return [(nome_comprador, "50%"), (nome_conjuge, "50%")]
@@ -621,7 +622,7 @@ def preencher_contrato_porto_franco(
 
     # --- III. COMPRADOR (QUADRO RESUMO) ----------------------------------
     conjuge = dq.get("conjuge") or {}
-    nome_c = limpar_nome(conjuge.get("nome"))
+    nome_c = limpar_nome_titulo(conjuge.get("nome"))
     com_conjuge = bool(tem_conjuge(dq) and nome_c)
     celula_iii = t.rows[4].cells[0]
     p = celula_iii.paragraphs
@@ -637,23 +638,23 @@ def preencher_contrato_porto_franco(
     nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
-    _substituir_texto(p[3], "NACIONALIDADE: ", f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}")
-    _substituir_texto(p[4], "PROFISSÃO: ", f"PROFISSÃO: {proponente.get('profissao') or '-'}")
+    _substituir_texto(p[3], "NACIONALIDADE: ", f"NACIONALIDADE: {titulo_pt(proponente.get('nacionalidade') or '') or '-'}")
+    _substituir_texto(p[4], "PROFISSÃO: ", f"PROFISSÃO: {titulo_pt(proponente.get('profissao') or '') or '-'}")
     _substituir_texto(
         p[5], "DATA DE NASCIMENTO: ", f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}"
     )
     # "LOCAL" = naturalidade (cidade/UF de nascimento) -- coletada no
     # formulário desde 03/10; proposta antiga sem ela deixa em branco.
     if (proponente.get("naturalidade") or "").strip():
-        _substituir_texto(p[6], "LOCAL: ", f"LOCAL: {proponente['naturalidade'].strip()}")
+        _substituir_texto(p[6], "LOCAL: ", f"LOCAL: {titulo_pt(proponente['naturalidade'].strip())}")
     _substituir_texto(p[7], "CPF: ", f"CPF: {cpf}")
     _substituir_texto(p[8], "IDENTIDADE: ", f"IDENTIDADE: {_identidade(proponente)}")
     _substituir_texto(p[9], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
     _substituir_texto(
         p[10], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}"
     )
-    _substituir_texto(p[11], "BAIRRO: ", f"BAIRRO: {endereco.get('bairro') or '-'}")
-    _substituir_texto(p[12], " MUNICÍPIO: ", f" MUNICÍPIO: {endereco.get('cidade') or '-'}")
+    _substituir_texto(p[11], "BAIRRO: ", f"BAIRRO: {titulo_pt(endereco.get('bairro') or '') or '-'}")
+    _substituir_texto(p[12], " MUNICÍPIO: ", f" MUNICÍPIO: {titulo_pt(endereco.get('cidade') or '') or '-'}")
     _substituir_texto(p[13], " UF: ", f" UF: {endereco.get('estado') or '-'}")
     _substituir_texto(p[14], "CEP: ", f"CEP: {formatar_cep(endereco.get('cep'))}")
 
@@ -662,21 +663,21 @@ def preencher_contrato_porto_franco(
         cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj"))
         _substituir_texto(q[0], "A – COMPRADOR: ", "B – CÔNJUGE: ")
         _substituir_texto(q[1], "NOME: ", f"NOME: {nome_c}")
-        _substituir_texto(q[2], "NACIONALIDADE: ", f"NACIONALIDADE: {conjuge.get('nacionalidade') or '-'}")
-        _substituir_texto(q[3], "PROFISSÃO: ", f"PROFISSÃO: {conjuge.get('profissao') or '-'}")
+        _substituir_texto(q[2], "NACIONALIDADE: ", f"NACIONALIDADE: {titulo_pt(conjuge.get('nacionalidade') or '') or '-'}")
+        _substituir_texto(q[3], "PROFISSÃO: ", f"PROFISSÃO: {titulo_pt(conjuge.get('profissao') or '') or '-'}")
         _substituir_texto(
             q[4], "DATA DE NASCIMENTO: ", f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))}"
         )
         if (conjuge.get("naturalidade") or "").strip():
-            _substituir_texto(q[5], "LOCAL: ", f"LOCAL: {conjuge['naturalidade'].strip()}")
+            _substituir_texto(q[5], "LOCAL: ", f"LOCAL: {titulo_pt(conjuge['naturalidade'].strip())}")
         _substituir_texto(q[6], "CPF: ", f"CPF: {cpf_c}")
         _substituir_texto(q[7], "IDENTIDADE: ", f"IDENTIDADE: {_identidade(conjuge)}")
         _substituir_texto(q[8], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
         _substituir_texto(
             q[9], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}"
         )
-        _substituir_texto(q[10], "BAIRRO: ", f"BAIRRO: {endereco.get('bairro') or '-'}")
-        _substituir_texto(q[11], " MUNICÍPIO: ", f" MUNICÍPIO: {endereco.get('cidade') or '-'}")
+        _substituir_texto(q[10], "BAIRRO: ", f"BAIRRO: {titulo_pt(endereco.get('bairro') or '') or '-'}")
+        _substituir_texto(q[11], " MUNICÍPIO: ", f" MUNICÍPIO: {titulo_pt(endereco.get('cidade') or '') or '-'}")
         _substituir_texto(q[12], " UF: ", f" UF: {endereco.get('estado') or '-'}")
         _substituir_texto(q[13], "CEP: ", f"CEP: {formatar_cep(endereco.get('cep'))}")
 
@@ -867,7 +868,7 @@ def preencher_contrato_rancho_texas(
     endereco = dq.get("endereco_residencial") or {}
     fp = dq.get("forma_pagamento") or {}
     estado_civil = dq.get("estado_civil")
-    tem_compradora = tem_conjuge(dq) and bool(limpar_nome(conjuge.get("nome")))
+    tem_compradora = tem_conjuge(dq) and bool(limpar_nome_titulo(conjuge.get("nome")))
 
     doc = docx.Document(str(_TEMPLATES_DIR / "contrato_rancho_texas.docx"))
     t = doc.tables[0]
@@ -878,29 +879,29 @@ def preencher_contrato_rancho_texas(
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(
-        p[3], p[3].text, f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}   PROFISSÃO: {proponente.get('profissao') or '-'}"
+        p[3], p[3].text, f"NACIONALIDADE: {titulo_pt(proponente.get('nacionalidade') or '') or '-'}   PROFISSÃO: {titulo_pt(proponente.get('profissao') or '') or '-'}"
     )
     _substituir_texto(
         p[4],
         p[4].text,
         f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}   "
-        f"LOCAL: {(proponente.get('naturalidade') or '').strip() or '-'}",
+        f"LOCAL: {titulo_pt((proponente.get('naturalidade') or '').strip()) or '-'}",
     )
     _substituir_texto(p[5], p[5].text, f"CPF: {cpf}   IDENTIDADE: {_identidade(proponente)}")
     _substituir_texto(p[6], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
 
     if tem_compradora:
-        nome_c = limpar_nome(conjuge.get("nome")) or "-"
+        nome_c = limpar_nome_titulo(conjuge.get("nome")) or "-"
         cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj"))
         _substituir_texto(p[8], "NOME: ", f"NOME: {nome_c}")
         _substituir_texto(
             p[9],
             p[9].text,
-            f"NACIONALIDADE: {conjuge.get('nacionalidade') or '-'}   PROFISSÃO: {conjuge.get('profissao') or '-'}",
+            f"NACIONALIDADE: {titulo_pt(conjuge.get('nacionalidade') or '') or '-'}   PROFISSÃO: {titulo_pt(conjuge.get('profissao') or '') or '-'}",
         )
         _substituir_texto(
             p[10], p[10].text, f"DATA DE NASCIMENTO: {_fmt_data_livre(conjuge.get('data_nascimento'))}   "
-            f"LOCAL: {(conjuge.get('naturalidade') or '').strip() or '-'}"
+            f"LOCAL: {titulo_pt((conjuge.get('naturalidade') or '').strip()) or '-'}"
         )
         _substituir_texto(p[11], p[11].text, f"CPF: {cpf_c}   IDENTIDADE: {_identidade(conjuge)}")
         _substituir_texto(p[12], "ESTADO CIVIL: ", f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
@@ -912,7 +913,7 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(
         p[14],
         p[14].text,
-        f"BAIRRO: {endereco.get('bairro') or '-'}   MUNICÍPIO: {endereco.get('cidade') or '-'}   "
+        f"BAIRRO: {titulo_pt(endereco.get('bairro') or '') or '-'}   MUNICÍPIO: {titulo_pt(endereco.get('cidade') or '') or '-'}   "
         f"UF: {endereco.get('estado') or '-'}   CEP: {formatar_cep(endereco.get('cep'))}",
     )
 
@@ -1029,7 +1030,7 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(doc.paragraphs[341], "XXXXX", nome)
     _substituir_texto(doc.paragraphs[342], "CPF: XXX", f"CPF: {cpf}")
     if tem_compradora:
-        _substituir_texto(doc.paragraphs[348], "XXXX", limpar_nome(conjuge.get("nome")) or "-")
+        _substituir_texto(doc.paragraphs[348], "XXXX", limpar_nome_titulo(conjuge.get("nome")) or "-")
         _substituir_texto(doc.paragraphs[349], "CPF: XXXX", f"CPF: {formatar_cpf_cnpj(conjuge.get('cpf_cnpj'))}")
     else:
         # Sem cônjuge: limpa os placeholders de exemplo do modelo em vez de
@@ -1100,6 +1101,7 @@ def preencher_contrato_riviera(
     lote: dict,
     cliente: dict,
     data_contrato: Optional[date] = None,
+    desconto: float = 0,
 ) -> bytes:
     """Contrato do Riviera Residence Beach (modelo de 29/10, EPF Construções):
     mesma estrutura do Porto Franco (QUADRO RESUMO em tabela), preenchendo
@@ -1124,19 +1126,19 @@ def preencher_contrato_riviera(
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     _substituir_texto(p[2], "NOME: ", f"NOME: {nome}")
     _substituir_texto(
-        p[3], p[3].text, f"NACIONALIDADE: {proponente.get('nacionalidade') or '-'}   PROFISSÃO: {proponente.get('profissao') or '-'}"
+        p[3], p[3].text, f"NACIONALIDADE: {titulo_pt(proponente.get('nacionalidade') or '') or '-'}   PROFISSÃO: {titulo_pt(proponente.get('profissao') or '') or '-'}"
     )
     _substituir_texto(
         p[4], p[4].text,
         f"DATA DE NASCIMENTO: {_fmt_data_livre(proponente.get('data_nascimento'))}   "
-        f"LOCAL: {(proponente.get('naturalidade') or '').strip() or '-'}",
+        f"LOCAL: {titulo_pt((proponente.get('naturalidade') or '').strip()) or '-'}",
     )
     _substituir_texto(p[5], p[5].text, f"CPF: {cpf}   IDENTIDADE: {_identidade(proponente)}")
     _substituir_texto(p[6], p[6].text, f"ESTADO CIVIL: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}")
     _substituir_texto(p[7], "ENDEREÇO RESIDENCIAL: ", f"ENDEREÇO RESIDENCIAL: {_endereco_completo(endereco)}")
     _substituir_texto(
         p[8], p[8].text,
-        f"BAIRRO: {endereco.get('bairro') or '-'}   MUNICÍPIO: {endereco.get('cidade') or '-'}   "
+        f"BAIRRO: {titulo_pt(endereco.get('bairro') or '') or '-'}   MUNICÍPIO: {titulo_pt(endereco.get('cidade') or '') or '-'}   "
         f"UF: {endereco.get('estado') or '-'}   CEP: {formatar_cep(endereco.get('cep'))}",
     )
 
@@ -1149,7 +1151,8 @@ def preencher_contrato_riviera(
     )
 
     # --- VI. PREÇO -------------------------------------------------------------
-    valor_total = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    _vp_riv = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    valor_total = round(_vp_riv - desconto, 2)
     _substituir_texto(
         t.rows[9].cells[0].paragraphs[1],
         "R$ 170.000,00 (Cento e setenta mil reais)",
@@ -1158,7 +1161,7 @@ def preencher_contrato_riviera(
 
     # --- VII. FORMA DE PAGAMENTO (o quadro em branco) ---------------------------
     pp = t.rows[11].cells[0].paragraphs
-    tp = _textos_pagamento(fp, lote, valor_total)
+    tp = _textos_pagamento(fp, lote, valor_total, desconto=desconto)
     _substituir_texto(pp[3], "Entrada:", f"Entrada: {tp['entrada'] or '-'}{tp['entrada_compl_pf']}.")
     if tp["a_vista"]:
         _substituir_texto(pp[4], "Parcelas: ", "Parcelas: não há (pagamento à vista).")
@@ -1216,6 +1219,7 @@ def preencher_contrato_veneza(
     cliente: dict,
     valor_comissao: float,
     data_contrato: Optional[date] = None,
+    desconto: float = 0,
 ) -> bytes:
     """Contrato do Veneza Residencial (modelo de 29/10, L R Construtora): o
     QUADRO RESUMO é texto corrido (sem tabela). Preenche só os campos:
@@ -1249,13 +1253,14 @@ def preencher_contrato_veneza(
     # --- 1.2 COMPRADOR ------------------------------------------------------------
     nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
-    nacionalidade = (proponente.get("nacionalidade") or "").strip() or "-"
+    nacionalidade = titulo_pt((proponente.get("nacionalidade") or "").strip()) or "-"
     ec = ESTADO_CIVIL_LABEL.get(estado_civil, "-")
     _substituir_texto(ps[6], ": , Brasileiro, Divorciado", f": {nome}, {nacionalidade}, {ec}")
     _substituir_texto(ps[6], "inscrito no CPF sob nº, RG sob,", f"inscrito no CPF sob nº {cpf}, RG sob nº {_identidade(proponente)},")
     rua = _endereco_completo(endereco)
-    bairro = endereco.get("bairro") or "-"
-    cidade_uf = "/".join(x for x in [endereco.get("cidade"), endereco.get("estado")] if x) or "-"
+    bairro = titulo_pt(endereco.get("bairro") or "") or "-"
+    _cidade = titulo_pt(endereco.get("cidade") or "") or None
+    cidade_uf = "/".join(x for x in [_cidade, endereco.get("estado")] if x) or "-"
     _substituir_texto(
         ps[6],
         "com endereço na Rua, nº  Centro, Mossoró/RN, CEP: doravante",
@@ -1272,7 +1277,8 @@ def preencher_contrato_veneza(
         _substituir_texto(ps[9], "terreno de 200,00 m²", f"terreno de {formatar_valor(float(lote['tamanho_m2']))} m²")
 
     # --- 03. PREÇO --------------------------------------------------------------------
-    proposto = float(proposta.get("valor_proposto") or lote.get("valor_total") or 0.0)
+    _vp_ven = float(proposta.get("valor_proposto") or lote.get("valor_total") or 0.0)
+    proposto = round(_vp_ven - desconto, 2)
     tabela = float(fp.get("valor_tabela") or lote.get("valor_total") or proposto)
     bonus = max(0.0, round(tabela - proposto, 2))
     preco_total = round(proposto + bonus, 2)

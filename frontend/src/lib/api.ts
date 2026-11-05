@@ -581,6 +581,12 @@ export const api = {
     requestBlob(`/crm/propostas/${id}/recibo?valor=${valor}&data=${data}`),
   gerarContratoProposta: (id: string, comissao: number, data: string) =>
     requestBlob(`/crm/propostas/${id}/contrato?comissao=${comissao}&data=${data}`),
+  aplicarDesconto: (id: string, valor: number, motivo: string) =>
+    request<{ ok: boolean; desconto_especial: number }>(
+      `/crm/propostas/${id}/desconto`,
+      { method: "POST", body: JSON.stringify({ valor, motivo }) },
+      true,
+    ),
   // Financeiro (03/10): corrige os dados da proposta (comprador, cônjuge,
   // endereços, contatos, forma de pagamento) — mesmas conferências da
   // criação; sobe a versão da proposta (e do contrato).

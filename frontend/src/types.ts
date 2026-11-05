@@ -192,6 +192,9 @@ export interface Proposta {
    * só que contado a partir daqui) — some de volta pra null se um documento
    * obrigatório for removido depois. Ver PropostaDocumentos.tsx. */
   documentos_completos_em?: string | null;
+  /** Desconto especial aprovado pelo financeiro (padrão 0). */
+  desconto_especial?: number | null;
+  desconto_motivo?: string | null;
   created_at: string;
 }
 

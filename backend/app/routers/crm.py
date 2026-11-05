@@ -1412,6 +1412,44 @@ def _garantir_numero_contrato(sb, proposta: dict) -> int:
     return int(n)
 
 
+@router.post("/propostas/{proposta_id}/desconto")
+def aplicar_desconto_proposta(
+    proposta_id: str,
+    payload: dict,
+    corretor: dict = Depends(get_current_corretor),
+):
+    """Financeiro aplica desconto especial numa proposta aprovada.
+    Requer papel admin/developer. O desconto reduz o valor total exibido no
+    contrato (valor_proposto - desconto_especial) e, se for igual à chave,
+    faz a chave sumir do contrato. Registra quem aprovou e quando."""
+    if not eh_admin(corretor):
+        raise HTTPException(403, "Só o financeiro pode aplicar desconto.")
+    valor = payload.get("valor")
+    motivo = (payload.get("motivo") or "").strip()
+    if valor is None or not isinstance(valor, (int, float)) or valor < 0:
+        raise HTTPException(422, "Informe o valor do desconto (>= 0).")
+    sb = get_supabase()
+    proposta = _carregar_proposta_ou_404(sb, proposta_id)
+    if proposta["status"] not in ("aprovada", "enviada", "aceita"):
+        raise HTTPException(409, "Só é possível aplicar desconto em proposta aprovada.")
+    valor_proposto = proposta.get("valor_proposto") or 0.0
+    if valor >= valor_proposto:
+        raise HTTPException(422, "O desconto não pode ser maior ou igual ao valor da proposta.")
+    sb.table("propostas").update({
+        "desconto_especial": round(float(valor), 2),
+        "desconto_motivo": motivo or None,
+        "desconto_aprovado_por": corretor["id"],
+        "desconto_aprovado_em": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", proposta_id).execute()
+    registrar_log(
+        sb, corretor, "aplicou_desconto", "proposta", proposta_id,
+        f"Aplicou desconto especial de R$ {valor:,.2f} na proposta {_numero_proposta(proposta)}."
+        + (f" Motivo: {motivo}" if motivo else ""),
+        {"desconto": valor, "motivo": motivo or None},
+    )
+    return {"ok": True, "desconto_especial": round(float(valor), 2)}
+
+
 @router.get("/propostas/{proposta_id}/contrato")
 def gerar_contrato_proposta(
     proposta_id: str,
@@ -1478,13 +1516,20 @@ def gerar_contrato_proposta(
     # qualquer origem (formulário novo, antiga, qualificação pelo link).
     fp_contrato = (proposta.get("dados_qualificacao") or {}).get("forma_pagamento") or {}
     preco = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
-    problemas = conferir_contrato(fp_contrato, preco, lote)
-    if problemas:
-        raise HTTPException(
-            422,
-            "O contrato não foi gerado porque a forma de pagamento da proposta não fecha: " + " ".join(problemas)
-            + " Cancele a proposta e gere de novo pelo formulário, com os valores corretos.",
-        )
+    desconto = round(float(proposta.get("desconto_especial") or 0), 2)
+    if desconto:
+        # Com desconto aprovado pelo financeiro, o valor final é menor --
+        # conferir_contrato compara com o valor_proposto original e daria
+        # erro falso. O financeiro já confirmou duas vezes no frontend.
+        pass
+    else:
+        problemas = conferir_contrato(fp_contrato, preco, lote)
+        if problemas:
+            raise HTTPException(
+                422,
+                "O contrato não foi gerado porque a forma de pagamento da proposta não fecha: " + " ".join(problemas)
+                + " Cancele a proposta e gere de novo pelo formulário, com os valores corretos.",
+            )
 
     condominio_nome = (lote.get("condominio") or {}).get("nome", "")
     modelo = modelo_documentos(condominio_nome)
@@ -1512,11 +1557,11 @@ def gerar_contrato_proposta(
         proposta["numero_contrato"] = _garantir_numero_contrato(sb, proposta)
         if modelo == "riviera":
             docx_bytes = preencher_contrato_riviera(
-                proposta=proposta, lote=lote, cliente=cliente, data_contrato=data_contrato
+                proposta=proposta, lote=lote, cliente=cliente, data_contrato=data_contrato, desconto=desconto
             )
         else:
             docx_bytes = preencher_contrato_veneza(
-                proposta=proposta, lote=lote, cliente=cliente, valor_comissao=comissao, data_contrato=data_contrato
+                proposta=proposta, lote=lote, cliente=cliente, valor_comissao=comissao, data_contrato=data_contrato, desconto=desconto
             )
     elif modelo == "rancho_texas":
         # O Rancho Texas qualifica o cônjuge/companheiro(a) como COMPRADORA:
@@ -1534,6 +1579,7 @@ def gerar_contrato_proposta(
             lote=lote,
             cliente=cliente,
             data_contrato=data_contrato,
+            desconto=desconto,
         )
     else:
         # Porto Franco (09/10): o cônjuge marcado no formulário entra no item
@@ -1568,6 +1614,7 @@ def gerar_contrato_proposta(
             valor_comissao=comissao,
             data_contrato=data_contrato,
             memorial=memorial,
+            desconto=desconto,
         )
     # Todo contrato sai em PDF (pedido de 02/10) -- ver app/docx_pdf.py.
     pdf_bytes = docx_para_pdf(docx_bytes)

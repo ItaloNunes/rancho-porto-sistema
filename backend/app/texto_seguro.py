@@ -98,3 +98,47 @@ def limpar_nome(nome: Optional[str]) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = "".join(c for c in s if unicodedata.category(c) not in ("Cf", "Cc"))
     return re.sub(r"\s+", " ", s).strip()
+
+
+# Preposições e artigos que ficam em minúscula no meio de nomes/textos em PT-BR.
+_MINUSCULAS_PT = frozenset({
+    "da", "de", "do", "das", "dos",
+    "e", "a", "o", "as", "os",
+    "em", "com", "sem", "por", "para",
+    "num", "numa", "nos", "nas",
+    "ao", "aos", "à", "às",
+    "pelo", "pela", "pelos", "pelas",
+    "du", "del",
+})
+
+
+def titulo_pt(s: Optional[str]) -> str:
+    """Converte texto para caixa título com tratamento de preposições PT-BR.
+
+    Exemplos:
+        'JOÃO DA SILVA'  -> 'João da Silva'
+        'rua das flores' -> 'Rua das Flores'
+        'MOSSORÓ'        -> 'Mossoró'
+    A primeira palavra SEMPRE fica em maiúscula.
+    """
+    if not s:
+        return s or ""
+    palavras = s.split()
+    resultado = []
+    for i, p in enumerate(palavras):
+        low = p.lower()
+        if i == 0 or low not in _MINUSCULAS_PT:
+            # capitalize preserva acentos (apenas 1º char em maiúsculo)
+            resultado.append(low[0].upper() + low[1:] if low else p)
+        else:
+            resultado.append(low)
+    return " ".join(resultado)
+
+
+def limpar_nome_titulo(nome: Optional[str]) -> str:
+    """Igual a limpar_nome, mas entrega o resultado em caixa título (PT-BR).
+
+    Use nos contratos/documentos para normalizar o caso de nomes digitados
+    em CAIXA ALTA ou caixa baixa pelo operador.
+    """
+    return titulo_pt(limpar_nome(nome))

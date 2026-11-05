@@ -848,6 +848,11 @@ class Proposta(BaseModel):
     # routers/crm.py::_atualizar_documentos_completos_em). Some de volta pra
     # None se um documento obrigatório for removido depois.
     documentos_completos_em: Optional[datetime] = None
+    # Desconto especial aprovado pelo financeiro (padrão 0)
+    desconto_especial: float = 0
+    desconto_motivo: Optional[str] = None
+    desconto_aprovado_por: Optional[str] = None
+    desconto_aprovado_em: Optional[datetime] = None
     created_at: datetime
 
 

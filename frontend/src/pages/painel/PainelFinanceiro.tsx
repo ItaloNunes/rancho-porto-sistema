@@ -52,6 +52,7 @@ export default function PainelFinanceiro() {
   const [verDocumentosDe, setVerDocumentosDe] = useState<string | null>(null);
   const [reciboDe, setReciboDe] = useState<PropostaDetalhe | null>(null);
   const [contratoDe, setContratoDe] = useState<PropostaDetalhe | null>(null);
+  const [descontoDe, setDescontoDe] = useState<PropostaDetalhe | null>(null);
 
   const [atualizacao, setAtualizacao] = useState(0);
 
@@ -121,6 +122,11 @@ export default function PainelFinanceiro() {
     recarregar(); // histórico de contratos emitidos (número/versão)
   }
 
+  async function aplicarDesconto(p: PropostaDetalhe, valor: number, motivo: string) {
+    await api.aplicarDesconto(p.id, valor, motivo);
+    recarregar();
+  }
+
   return (
     <div className="grid gap-5">
       <div>
@@ -182,6 +188,16 @@ export default function PainelFinanceiro() {
                     <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setReciboDe(p)}>
                       gerar recibo
                     </button>
+                    {!p.desconto_especial && (
+                      <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setDescontoDe(p)}>
+                        desconto
+                      </button>
+                    )}
+                    {p.desconto_especial ? (
+                      <span className="btn-row mr-1.5 text-amber-700 cursor-default" title={`Desconto aplicado: ${formatMoney(p.desconto_especial)}${p.desconto_motivo ? " — " + p.desconto_motivo : ""}`}>
+                        desconto: {formatMoney(p.desconto_especial)}
+                      </span>
+                    ) : null}
                     <button className="btn-row btn-row-primary" onClick={() => setContratoDe(p)}>
                       gerar contrato
                     </button>
@@ -238,6 +254,16 @@ export default function PainelFinanceiro() {
       {contratoDe && (
         <Modal onClose={() => setContratoDe(null)} labelledBy="financeiro-contrato-title">
           <FormularioContrato proposta={contratoDe} onGerar={gerarContrato} onFechar={() => setContratoDe(null)} />
+        </Modal>
+      )}
+
+      {descontoDe && (
+        <Modal onClose={() => setDescontoDe(null)} labelledBy="financeiro-desconto-title">
+          <FormularioDesconto
+            proposta={descontoDe}
+            onAplicar={aplicarDesconto}
+            onFechar={() => setDescontoDe(null)}
+          />
         </Modal>
       )}
     </div>
@@ -472,5 +498,138 @@ function FormularioContrato({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Modal de desconto especial com dupla confirmação.
+ * Passo 1: financeiro informa valor e motivo.
+ * Passo 2: confirmação explícita antes de salvar. */
+function FormularioDesconto({
+  proposta,
+  onAplicar,
+  onFechar,
+}: {
+  proposta: PropostaDetalhe;
+  onAplicar: (p: PropostaDetalhe, valor: number, motivo: string) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const [passo, setPasso] = useState<1 | 2>(1);
+  const [valorStr, setValorStr] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [aplicando, setAplicando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const valorNum = Number(valorStr.replace(/\./g, "").replace(",", "."));
+  const valorValido = valorStr.trim() !== "" && !Number.isNaN(valorNum) && valorNum > 0;
+
+  const valorFinal =
+    valorValido
+      ? (proposta.valor_proposto ?? 0) - valorNum
+      : null;
+
+  async function confirmar() {
+    if (!valorValido) return;
+    setErro(null);
+    setAplicando(true);
+    try {
+      await onAplicar(proposta, valorNum, motivo);
+      onFechar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+      setPasso(1);
+    } finally {
+      setAplicando(false);
+    }
+  }
+
+  return (
+    <div className="p-6 sm:p-8 grid gap-4">
+      <div>
+        <h2 id="financeiro-desconto-title" className="text-lg font-bold text-ink">
+          Desconto especial
+        </h2>
+        <p className="text-xs text-ink-soft mt-1">
+          {proposta.cliente?.nome ?? "Cliente"} — lote {proposta.lote?.identificador ?? "—"} ·{" "}
+          valor original {formatMoney(proposta.valor_proposto)}.
+        </p>
+      </div>
+
+      {passo === 1 && (
+        <>
+          <label className="grid gap-1 text-sm">
+            <span className="text-ink-soft">Valor do desconto (R$)</span>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0.01"
+              inputMode="decimal"
+              autoFocus
+              value={valorStr}
+              onChange={(e) => setValorStr(e.target.value)}
+            />
+          </label>
+          {valorValido && valorFinal !== null && (
+            <p className="text-sm text-ink">
+              Novo valor do contrato:{" "}
+              <strong>{formatMoney(valorFinal)}</strong>
+            </p>
+          )}
+          <label className="grid gap-1 text-sm">
+            <span className="text-ink-soft">Motivo (opcional)</span>
+            <input
+              className="input"
+              type="text"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="ex.: negociação direta com cliente"
+            />
+          </label>
+          {erro && <p className="text-rust text-sm">{erro}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn btn-outline" onClick={onFechar}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!valorValido}
+              onClick={() => { setErro(null); setPasso(2); }}
+            >
+              Continuar
+            </button>
+          </div>
+        </>
+      )}
+
+      {passo === 2 && (
+        <>
+          <div className="rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 p-4 text-sm grid gap-1">
+            <p className="font-semibold text-amber-800 dark:text-amber-300">Confirme o desconto especial</p>
+            <p>
+              Desconto de <strong>{formatMoney(valorNum)}</strong> no contrato de{" "}
+              <strong>{proposta.cliente?.nome ?? "—"}</strong> — lote{" "}
+              <strong>{proposta.lote?.identificador ?? "—"}</strong>.
+            </p>
+            <p>
+              Novo valor do contrato: <strong>{formatMoney((proposta.valor_proposto ?? 0) - valorNum)}</strong>.
+            </p>
+            {motivo && <p className="text-ink-soft">Motivo: {motivo}</p>}
+            <p className="text-amber-700 dark:text-amber-400 mt-1 text-xs">
+              Esta ação fica registrada com seu nome e não pode ser desfeita pelo sistema.
+            </p>
+          </div>
+          {erro && <p className="text-rust text-sm">{erro}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn btn-outline" onClick={() => setPasso(1)} disabled={aplicando}>
+              Voltar
+            </button>
+            <button type="button" className="btn btn-primary" onClick={confirmar} disabled={aplicando}>
+              {aplicando ? "Aplicando..." : "Confirmar desconto"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
