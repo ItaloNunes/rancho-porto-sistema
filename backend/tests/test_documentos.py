@@ -413,7 +413,7 @@ def test_riviera_com_conjuge_50_50():
 def test_veneza_preenche_quadro_resumo():
     t = texto_docx(ven(fp_veneza()))
     assert "CONTRATO Nº 0091 – VERSÃO 1" in t
-    assert ("1.2 PROMITENTE COMPRADOR: Maria Teste da Silva, brasileira, Solteiro(a), inscrito no CPF sob nº "
+    assert ("1.2 PROMITENTE COMPRADOR: Maria Teste da Silva, Brasileira, Solteiro(a), inscrito no CPF sob nº "
             "011.473.324-44, RG sob nº 123 SSP/RN, com endereço na Rua A, nº 10, Centro, Mossoró/RN, CEP: 59600-000, "
             "doravante denominado simplesmente COMPRADOR.") in t
     assert "Brasileiro, Divorciado" not in t
@@ -521,7 +521,7 @@ def test_nome_so_com_espacos_invisiveis_usa_o_do_cadastro():
     p["dados_qualificacao"]["proponente"]["nome"] = "​  "
     b = preencher_contrato_porto_franco(proposta=p, lote=LOTE_PF, cliente={"nome": "Cliente Do Cadastro", "cpf": "01147332444"},
                                         corretor=CORRETOR, valor_comissao=0, data_contrato=date(2026, 10, 2))
-    assert texto_docx(b).count("Cliente Do Cadastro") >= 2
+    assert texto_docx(b).count("Cliente do Cadastro") >= 2
 
 
 def test_pdf_nao_apaga_letra_estilizada_mesmo_sem_limpeza():

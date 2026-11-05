@@ -111,27 +111,55 @@ _MINUSCULAS_PT = frozenset({
     "du", "del",
 })
 
+# Siglas das 27 unidades federativas: ficam SEMPRE em maiúscula no título,
+# senão "MOSSORO RN" virava "Mossoro Rn" (naturalidade/LOCAL no contrato).
+_UF_SIGLAS = frozenset({
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT",
+    "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
+    "RR", "SC", "SP", "SE", "TO",
+})
+
+
+def _titulo_token(tok: str, primeira: bool) -> str:
+    """Caixa título de um único token (sem espaços nem barra)."""
+    if not tok:
+        return tok
+    if tok.upper() in _UF_SIGLAS:
+        return tok.upper()  # sigla de estado: RN, SP, CE...
+    if len(tok) == 1 and tok.isalpha():
+        return tok.upper()  # letra isolada de designação: "Rua A", "Quadra B"
+    low = tok.lower()
+    if not primeira and low in _MINUSCULAS_PT:
+        return low  # preposição/artigo: da, de, do, e...
+    # capitalize preserva acentos (apenas 1º char em maiúsculo)
+    return low[0].upper() + low[1:]
+
 
 def titulo_pt(s: Optional[str]) -> str:
     """Converte texto para caixa título com tratamento de preposições PT-BR.
 
     Exemplos:
-        'JOÃO DA SILVA'  -> 'João da Silva'
-        'rua das flores' -> 'Rua das Flores'
-        'MOSSORÓ'        -> 'Mossoró'
+        'JOÃO DA SILVA'   -> 'João da Silva'
+        'rua das flores'  -> 'Rua das Flores'
+        'MOSSORÓ'         -> 'Mossoró'
+        'MOSSORO RN'      -> 'Mossoro RN'   (sigla de estado preservada)
+        'Mossoró/RN'      -> 'Mossoró/RN'   (trata "Cidade/UF")
+        'RUA A'           -> 'Rua A'        (letra de designação preservada)
     A primeira palavra SEMPRE fica em maiúscula.
     """
     if not s:
         return s or ""
-    palavras = s.split()
     resultado = []
-    for i, p in enumerate(palavras):
-        low = p.lower()
-        if i == 0 or low not in _MINUSCULAS_PT:
-            # capitalize preserva acentos (apenas 1º char em maiúsculo)
-            resultado.append(low[0].upper() + low[1:] if low else p)
+    for i, palavra in enumerate(s.split()):
+        if "/" in palavra:
+            # "Cidade/UF" (ou similar): caixa título em cada lado da barra
+            partes = palavra.split("/")
+            resultado.append("/".join(
+                _titulo_token(parte, primeira=(i == 0 and j == 0))
+                for j, parte in enumerate(partes)
+            ))
         else:
-            resultado.append(low)
+            resultado.append(_titulo_token(palavra, primeira=(i == 0)))
     return " ".join(resultado)
 
 
