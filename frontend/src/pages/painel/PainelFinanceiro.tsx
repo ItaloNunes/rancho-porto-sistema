@@ -397,7 +397,7 @@ function FormularioContrato({
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    const numero = Number(comissao.replace(",", "."));
+    const numero = Number(comissao.replace(/\./g, "").replace(",", "."));
     if (comissao.trim() === "" || Number.isNaN(numero) || numero < 0) {
       setErro("Informe o valor da comissão (pode ser 0, se não houver).");
       return;
