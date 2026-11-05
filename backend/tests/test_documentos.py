@@ -528,3 +528,48 @@ def test_pdf_nao_apaga_letra_estilizada_mesmo_sem_limpeza():
     from app.texto_seguro import ajustar_para_cobertura, cobertura_padrao
     assert ajustar_para_cobertura(NOME_ESTILIZADO, cobertura_padrao()).strip().startswith("Maria")
     assert ajustar_para_cobertura("Nº 1, 200,00 m² – “ok”", cobertura_padrao()) == "Nº 1, 200,00 m² – “ok”"
+
+
+# ----------------------------------------------------------------------------
+# Regressão (bug de 05/11/2026, proposta 0027): o crm.py passava
+# `desconto=desconto` para preencher_contrato_porto_franco e _rancho_texas,
+# mas essas funções não tinham o parâmetro -> TypeError em TODO contrato
+# Porto Franco/Rancho Texas. Além disso, _textos_pagamento fazia
+# round(chave - desconto) e quebrava quando a chave era nula. Estes testes
+# exercem exatamente o caminho que passou direto (as 4 funções recebendo
+# desconto, e a geração com chave nula).
+# ----------------------------------------------------------------------------
+
+def test_desconto_e_aceito_e_aplicado_nos_quatro_modelos():
+    desc = 5000.0
+    # Porto Franco: 89.990 - 5.000 = 84.990
+    assert "R$ 84.990,00" in texto_docx(pf(fp_unica(LOTE_PF), desconto=desc))
+    # Rancho Texas: 227.035,20 - 5.000 = 222.035,20
+    t_rt = texto_docx(preencher_contrato_rancho_texas(
+        proposta=proposta(fp_unica(LOTE_RT), LOTE_RT), lote=LOTE_RT, cliente=CLIENTE,
+        data_contrato=date(2026, 10, 2), desconto=desc))
+    assert "222.035,20" in t_rt
+    # Riviera: 195.000 - 5.000 = 190.000
+    assert "R$ 190.000,00" in texto_docx(preencher_contrato_riviera(
+        proposta=proposta(fp_riviera(), LOTE_RIV), lote=LOTE_RIV, cliente=CLIENTE,
+        data_contrato=date(2026, 10, 29), desconto=desc))
+    # Veneza: 343.000 - 5.000 = 338.000 (só não pode levantar e tem que abater)
+    assert "338.000,00" in texto_docx(preencher_contrato_veneza(
+        proposta=proposta(fp_veneza(), LOTE_VEN), lote=LOTE_VEN, cliente=CLIENTE,
+        valor_comissao=17150.0, data_contrato=date(2026, 10, 29), desconto=desc))
+
+
+def test_porto_franco_sem_chave_gera_com_chave_nao_ha():
+    # Proposta com chave_valor nulo (caso real da 0027): não pode quebrar e a
+    # linha da chave tem que sair como "não há".
+    fp = {**fp_unica(LOTE_PF), "chave_valor": None, "chave_vencimento": None}
+    t = texto_docx(pf(fp))
+    assert "Chave: não há." in t
+
+
+def test_rancho_texas_sem_chave_nao_quebra():
+    fp = {**fp_unica(LOTE_RT), "chave_valor": None, "chave_vencimento": None}
+    # Basta não levantar exceção (gera bytes do .docx).
+    assert preencher_contrato_rancho_texas(
+        proposta=proposta(fp, LOTE_RT), lote=LOTE_RT, cliente=CLIENTE,
+        data_contrato=date(2026, 10, 2))
