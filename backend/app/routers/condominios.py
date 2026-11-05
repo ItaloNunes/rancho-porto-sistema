@@ -257,7 +257,7 @@ def _pendencias_ativas(sb, lote_ids: list[str]) -> dict[str, tuple[str, str, str
         pendencia_por_lote[r["lote_id"]] = ("reserva", corretor_nome, r["created_at"])
     propostas_abertas = (
         sb.table("propostas")
-        .select("lote_id, created_at, corretor:corretores(nome)")
+        .select("lote_id, created_at, corretor:corretores!corretor_id(nome)")
         .in_("lote_id", lote_ids)
         .not_.in_("status", ["recusada", "cancelada"])
         .order("created_at")

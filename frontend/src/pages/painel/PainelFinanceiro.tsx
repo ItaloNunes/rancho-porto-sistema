@@ -423,8 +423,10 @@ function FormularioContrato({
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    const numero = Number(comissao.replace(/\./g, "").replace(",", "."));
-    if (comissao.trim() === "" || Number.isNaN(numero) || numero < 0) {
+    // Máscara de moeda: só dígitos, os 2 últimos são centavos (ver o input).
+    const soDigitos = comissao.replace(/\D/g, "");
+    const numero = soDigitos === "" ? NaN : parseInt(soDigitos, 10) / 100;
+    if (soDigitos === "" || Number.isNaN(numero) || numero < 0) {
       setErro("Informe o valor da comissão (pode ser 0, se não houver).");
       return;
     }
@@ -474,15 +476,18 @@ function FormularioContrato({
         <span className="text-ink-soft">Comissão de corretagem (R$)</span>
         <input
           className="input"
-          type="number"
-          step="0.01"
-          min="0"
-          inputMode="decimal"
+          type="text"
+          inputMode="numeric"
           autoFocus
+          placeholder="0,00"
           value={comissao}
-          onChange={(e) => setComissao(e.target.value)}
+          onChange={(e) => {
+            const centavos = parseInt(e.target.value.replace(/\D/g, "") || "0", 10);
+            setComissao((centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+          }}
           required
         />
+        <span className="text-xs text-ink-soft">Digite com os centavos — ex.: 369800 vira R$ 3.698,00.</span>
       </label>
       <label className="grid gap-1 text-sm">
         <span className="text-ink-soft">Data de celebração do contrato</span>
