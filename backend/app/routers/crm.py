@@ -1492,7 +1492,7 @@ def gerar_contrato_proposta(
     sb = get_supabase()
     proposta = (
         sb.table("propostas")
-        .select("*, lote:lotes(*, condominio:condominios(nome)), cliente:clientes(*), corretor:corretores(*)")
+        .select("*, lote:lotes(*, condominio:condominios(nome)), cliente:clientes(*), corretor:corretores!corretor_id(*)")
         .eq("id", proposta_id)
         .limit(1)
         .execute()
