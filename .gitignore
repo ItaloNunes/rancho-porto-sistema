@@ -15,3 +15,4 @@ frontend/dist/
 # sistema
 .DS_Store
 Thumbs.db
+Claude outputs/
