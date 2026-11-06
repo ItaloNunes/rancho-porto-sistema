@@ -169,6 +169,8 @@ class Plano:
     entrada_parcelas: int = 1
     entrada_meio: Optional[str] = None
     entrada_data: Optional[date] = None
+    entrada_avista: Optional[float] = None  # "mista": parte paga à vista agora
+    entrada_resto_primeira: Optional[date] = None  # "mista": 1ª parcela do saldo
     # parcelas mensais
     parcelas: Optional[int] = None
     parcela_valor: Optional[float] = None
@@ -215,7 +217,7 @@ def ler_plano(fp: Optional[dict]) -> Plano:
     except (TypeError, ValueError):
         parcelas = None
     try:
-        n_entrada = int(fp.get("sinal_parcelas") or 1) if fp.get("sinal_forma") == "parcelada" else 1
+        n_entrada = int(fp.get("sinal_parcelas") or 1) if fp.get("sinal_forma") in ("parcelada", "mista") else 1
     except (TypeError, ValueError):
         n_entrada = 1
     primeira_txt = fp.get("primeiro_mes")
@@ -234,6 +236,8 @@ def ler_plano(fp: Optional[dict]) -> Plano:
         entrada_parcelas=max(1, n_entrada),
         entrada_meio=fp.get("sinal_meio"),
         entrada_data=data(fp.get("sinal_vencimento")),
+        entrada_avista=valor(fp.get("sinal_avista")),
+        entrada_resto_primeira=data(fp.get("sinal_resto_primeira")),
         parcelas=parcelas,
         parcela_valor=valor(fp.get("valor_parcela")),
         primeira_parcela=data(primeira_txt),
@@ -309,8 +313,8 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
             erros.append("A entrada é obrigatória: informe o valor da entrada.")
         elif p.entrada >= vp:
             erros.append("A entrada não pode ser igual ou maior que o valor proposto -- se for tudo de uma vez, escolha \"À vista\".")
-        if p.entrada_forma not in ("unica", "parcelada"):
-            erros.append("Informe se a entrada será paga de uma vez ou parcelada.")
+        if p.entrada_forma not in ("unica", "parcelada", "mista"):
+            erros.append("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.")
         elif p.entrada_forma == "parcelada":
             n_bruto = fp.get("sinal_parcelas")
             try:
@@ -319,6 +323,22 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
                 n_ok = False
             if not n_ok:
                 erros.append(f"Entrada parcelada: informe em quantas vezes (de 2 a {MAX_PARCELAS_ENTRADA}).")
+        elif p.entrada_forma == "mista":
+            if _invalido(fp, "sinal_avista"):
+                erros.append(f"Valor pago à vista na entrada inválido: {FORMATO_VALOR}")
+            elif not p.entrada_avista or p.entrada_avista <= 0:
+                erros.append("Informe quanto o cliente paga à vista agora na entrada.")
+            elif p.entrada and p.entrada_avista >= p.entrada:
+                erros.append("O valor à vista não pode ser maior ou igual ao total da entrada -- se for tudo à vista, escolha \"de uma vez\".")
+            n_bruto = fp.get("sinal_parcelas")
+            try:
+                n_ok = 1 <= int(n_bruto) <= MAX_PARCELAS_ENTRADA
+            except (TypeError, ValueError):
+                n_ok = False
+            if not n_ok:
+                erros.append(f"Entrada com saldo parcelado: informe em quantas vezes (de 1 a {MAX_PARCELAS_ENTRADA}).")
+            if not p.entrada_resto_primeira:
+                erros.append("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).")
         if p.entrada_meio not in MEIOS_PAGAMENTO:
             erros.append("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).")
         if not p.entrada_data:
@@ -395,12 +415,12 @@ def normalizar(fp: dict) -> dict:
     cada parcela da entrada), pra PDF/contrato/listas lerem tudo igual."""
     out = dict(fp)
     p = ler_plano(fp)
-    for chave in ("sinal", "valor_parcela", "chave_valor", "renda", "balao_valor", "financiamento_valor"):
+    for chave in ("sinal", "sinal_avista", "valor_parcela", "chave_valor", "renda", "balao_valor", "financiamento_valor"):
         v = valor(fp.get(chave))
         if v is not None:
             out[chave] = fmt_brl(v)
     for chave, d in (("avista_data", p.avista_data), ("sinal_vencimento", p.entrada_data),
-                     ("primeiro_mes", p.primeira_parcela)):
+                     ("sinal_resto_primeira", p.entrada_resto_primeira), ("primeiro_mes", p.primeira_parcela)):
         if d:
             out[chave] = d.isoformat()
     # Chave não tem data (09/10): é paga na entrega das chaves, que não tem
@@ -410,13 +430,16 @@ def normalizar(fp: dict) -> dict:
         out["vencimento"] = str(p.primeira_parcela.day)
     if p.a_vista:
         # à vista não tem entrada/parcelas -- limpa resto de digitação anterior
-        for chave in ("sinal", "sinal_forma", "sinal_parcelas", "sinal_meio", "sinal_vencimento",
+        for chave in ("sinal", "sinal_avista", "sinal_resto_primeira", "sinal_forma", "sinal_parcelas", "sinal_meio", "sinal_vencimento",
                       "sinal_valor_parcela", "dividido_em_parcelas", "valor_parcela", "vencimento",
                       "primeiro_mes", "chave_valor", "chave_vencimento", "balao_qtd", "balao_valor",
                       "financiamento_valor"):
             out[chave] = None
     elif p.entrada_forma == "parcelada" and p.entrada:
         out["sinal_valor_parcela"] = fmt_brl(p.entrada_valores[0])
+    elif p.entrada_forma == "mista" and p.entrada and p.entrada_avista:
+        _resto = round(p.entrada - p.entrada_avista, 2)
+        out["sinal_valor_parcela"] = fmt_brl(dividir_em_parcelas(_resto, max(1, p.entrada_parcelas))[0])
     else:
         out["sinal_parcelas"] = 1 if p.entrada_forma == "unica" else out.get("sinal_parcelas")
         out["sinal_valor_parcela"] = None
@@ -433,7 +456,9 @@ def resumo(fp: Optional[dict]) -> str:
             (f" em {fmt_data(p.avista_data)}" if p.avista_data else "")
     partes = []
     if p.entrada:
-        if p.entrada_forma == "parcelada" and p.entrada_parcelas > 1:
+        if p.entrada_forma == "mista" and p.entrada_avista:
+            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} ({fmt_brl(p.entrada_avista)} à vista + {p.entrada_parcelas}x do saldo)")
+        elif p.entrada_forma == "parcelada" and p.entrada_parcelas > 1:
             partes.append(f"Entrada R$ {fmt_brl(p.entrada)} em {p.entrada_parcelas}x")
         else:
             partes.append(f"Entrada R$ {fmt_brl(p.entrada)}")
