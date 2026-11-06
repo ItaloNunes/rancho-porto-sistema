@@ -256,12 +256,21 @@ export function validarPlano(
     else if (!p.entrada || p.entrada <= 0) erros.push("A entrada é obrigatória: informe o valor da entrada.");
     else if (p.entrada >= vp)
       erros.push('A entrada não pode ser igual ou maior que o valor proposto — se for tudo de uma vez, escolha "À vista".');
-    if (fp.sinal_forma !== "unica" && fp.sinal_forma !== "parcelada")
-      erros.push("Informe se a entrada será paga de uma vez ou parcelada.");
+    if (fp.sinal_forma !== "unica" && fp.sinal_forma !== "parcelada" && fp.sinal_forma !== "mista")
+      erros.push("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.");
     else if (fp.sinal_forma === "parcelada") {
       const n = Number(fp.sinal_parcelas);
       if (!Number.isInteger(n) || n < 2 || n > MAX_PARCELAS_ENTRADA)
         erros.push(`Entrada parcelada: informe em quantas vezes (de 2 a ${MAX_PARCELAS_ENTRADA}).`);
+    } else if (fp.sinal_forma === "mista") {
+      const av = lerValor(fp.sinal_avista);
+      if (av == null || av <= 0) erros.push("Informe quanto o cliente paga à vista agora na entrada.");
+      else if (p.entrada && av >= p.entrada)
+        erros.push('O valor à vista não pode ser maior ou igual ao total da entrada — se for tudo à vista, escolha "de uma vez".');
+      const n = Number(fp.sinal_parcelas);
+      if (!Number.isInteger(n) || n < 1 || n > MAX_PARCELAS_ENTRADA)
+        erros.push(`Entrada com saldo parcelado: informe em quantas vezes (de 1 a ${MAX_PARCELAS_ENTRADA}).`);
+      if (!lerData(fp.sinal_resto_primeira)) erros.push("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).");
     }
     if (!fp.sinal_meio || !MEIOS_OK.has(fp.sinal_meio))
       erros.push("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).");

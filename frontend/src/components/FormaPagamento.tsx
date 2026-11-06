@@ -341,6 +341,13 @@ export default function FormaPagamentoEtapa({
   const nEnt = Number(fp.sinal_parcelas);
   const valoresEntrada =
     fp.sinal_forma === "parcelada" && entrada && Number.isInteger(nEnt) && nEnt >= 2 ? dividirEmParcelas(entrada, nEnt) : [];
+  // Modo "mista": parte à vista + saldo parcelado. O saldo (entrada - à vista)
+  // é dividido em nEnt parcelas, calculado ao vivo pra mostrar o valor de cada.
+  const avistaVal = lerValor(fp.sinal_avista);
+  const valoresSaldo =
+    fp.sinal_forma === "mista" && entrada && avistaVal != null && avistaVal > 0 && avistaVal < entrada && Number.isInteger(nEnt) && nEnt >= 1
+      ? dividirEmParcelas(entrada - avistaVal, nEnt)
+      : [];
   const diaVenc = lerData(fp.primeiro_mes)?.getDate();
   // Casas do Veneza: balões + financiamento no lugar da chave (o contrato
   // do Veneza não tem chave). Aparece também se a proposta já tiver balões.
@@ -407,13 +414,26 @@ export default function FormaPagamentoEtapa({
           <Bloco titulo="1. Entrada (sinal / arras) — obrigatória" destaque>
             <CampoDinheiro id="fp-entrada" label="Valor da entrada *" valor={fp.sinal} onChange={(v) => set({ sinal: v })} />
             <Field label="Como a entrada será paga? *">
-              <Opcoes<"unica" | "parcelada">
+              <Opcoes<"unica" | "parcelada" | "mista">
                 opcoes={[
                   { valor: "unica", label: "De uma vez" },
                   { valor: "parcelada", label: "Parcelada" },
+                  { valor: "mista", label: "Parte à vista + parcelar o resto" },
                 ]}
                 valor={fp.sinal_forma}
-                onChange={(v) => set({ sinal_forma: v, sinal_parcelas: v === "unica" ? 1 : fp.sinal_parcelas && fp.sinal_parcelas > 1 ? fp.sinal_parcelas : 2 })}
+                onChange={(v) =>
+                  set({
+                    sinal_forma: v,
+                    sinal_parcelas:
+                      v === "unica"
+                        ? 1
+                        : v === "mista"
+                          ? (fp.sinal_parcelas ?? 1)
+                          : fp.sinal_parcelas && fp.sinal_parcelas > 1
+                            ? fp.sinal_parcelas
+                            : 2,
+                  })
+                }
               />
             </Field>
             {fp.sinal_forma === "parcelada" && (
@@ -439,11 +459,49 @@ export default function FormaPagamentoEtapa({
                 )}
               </Field>
             )}
+            {fp.sinal_forma === "mista" && (
+              <div className="grid gap-3">
+                <CampoDinheiro
+                  id="fp-entrada-avista"
+                  label="Quanto paga à vista agora? *"
+                  valor={fp.sinal_avista}
+                  onChange={(v) => set({ sinal_avista: v })}
+                />
+                <Field label={`Parcelar o restante em quantas vezes? * (1 a ${MAX_PARCELAS_ENTRADA})`}>
+                  <input
+                    id="fp-entrada-saldo-parcelas"
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={MAX_PARCELAS_ENTRADA}
+                    value={fp.sinal_parcelas ?? ""}
+                    onChange={(e) => set({ sinal_parcelas: e.target.value ? Number(e.target.value) : null })}
+                  />
+                  {valoresSaldo.length > 0 && entrada && avistaVal != null && (
+                    <span className="text-[11px] text-ink-soft">
+                      Saldo de R$ {fmtBRL(entrada - avistaVal)} em {valoresSaldo.length}x de R$ {fmtBRL(valoresSaldo[0])}, uma por mês
+                    </span>
+                  )}
+                </Field>
+                <CampoData
+                  id="fp-entrada-saldo-data"
+                  label="Vencimento da 1ª parcela do saldo *"
+                  valor={fp.sinal_resto_primeira}
+                  onChange={(v) => set({ sinal_resto_primeira: v })}
+                />
+              </div>
+            )}
             <div className="grid sm:grid-cols-2 gap-3 items-start">
               <SeletorMeio id="fp-entrada-meio" label="Forma de pagamento da entrada *" valor={fp.sinal_meio} onChange={(v) => set({ sinal_meio: v })} />
               <CampoData
                 id="fp-entrada-data"
-                label={fp.sinal_forma === "parcelada" ? "Vencimento da 1ª parcela da entrada *" : "Data de pagamento da entrada *"}
+                label={
+                  fp.sinal_forma === "parcelada"
+                    ? "Vencimento da 1ª parcela da entrada *"
+                    : fp.sinal_forma === "mista"
+                      ? "Data do pagamento à vista *"
+                      : "Data de pagamento da entrada *"
+                }
                 valor={fp.sinal_vencimento}
                 onChange={(v) => set({ sinal_vencimento: v })}
               />
