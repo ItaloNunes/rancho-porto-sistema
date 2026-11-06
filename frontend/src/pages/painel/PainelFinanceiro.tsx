@@ -37,6 +37,75 @@ function StatusBadge({ status }: { status: PropostaStatus }) {
   );
 }
 
+// Badge de estado do contrato (mesmo padrão dos badges do sistema: fundo
+// tintado 10% + texto na cor semântica). Em andamento = primary (navy),
+// gerado = sage (verde).
+function EstadoBadge({ tipo }: { tipo: "andamento" | "gerado" }) {
+  const map = {
+    andamento: { txt: "Em andamento", cls: "bg-primary/10 text-primary" },
+    gerado: { txt: "Gerado", cls: "bg-sage/10 text-sage" },
+  } as const;
+  const { txt, cls } = map[tipo];
+  // Mesmo visual do .badge do sistema (inline-flex, rounded-sm, uppercase),
+  // montado com utilitários para controlar o ponto e não duplicar o ::before.
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase ${cls}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {txt}
+    </span>
+  );
+}
+
+type FiltroEstado = "analise" | "andamento" | "gerados" | "encerradas";
+
+// Filtro segmentado por estado — organiza a tela em vez da lista única.
+// Usa só os tokens do sistema (surface-alt, surface, primary, border).
+function FiltroContratos({
+  filtro,
+  setFiltro,
+  counts,
+}: {
+  filtro: FiltroEstado;
+  setFiltro: (f: FiltroEstado) => void;
+  counts: Record<FiltroEstado, number>;
+}) {
+  const abas: { key: FiltroEstado; label: string }[] = [
+    { key: "analise", label: "Em análise" },
+    { key: "andamento", label: "Em andamento" },
+    { key: "gerados", label: "Gerados" },
+    ...(counts.encerradas > 0 ? [{ key: "encerradas" as const, label: "Encerradas" }] : []),
+  ];
+  return (
+    <div className="flex flex-wrap gap-1 p-1 bg-surface-alt rounded-lg border border-border w-fit max-w-full">
+      {abas.map((a) => {
+        const ativo = filtro === a.key;
+        return (
+          <button
+            key={a.key}
+            type="button"
+            onClick={() => setFiltro(a.key)}
+            aria-pressed={ativo}
+            className={`px-3 py-1.5 rounded text-sm font-semibold inline-flex items-center gap-2 transition-colors ${
+              ativo ? "bg-surface text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            {a.label}
+            <span
+              className={`text-[11px] font-bold min-w-[20px] h-[18px] px-1.5 rounded-full inline-flex items-center justify-center tabular-nums ${
+                ativo ? "bg-primary text-white" : "bg-border text-ink-soft"
+              }`}
+            >
+              {counts[a.key]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Aba exclusiva do financeiro (admin/developer — ver RequireAuth adminOnly
  * em main.tsx e temAcessoAdmin em PainelLayout.tsx): só as propostas que já
  * têm todos os documentos obrigatórios anexados (documentos_completos_em
@@ -55,6 +124,7 @@ export default function PainelFinanceiro() {
   const [descontoDe, setDescontoDe] = useState<PropostaDetalhe | null>(null);
 
   const [atualizacao, setAtualizacao] = useState(0);
+  const [filtro, setFiltro] = useState<FiltroEstado>("analise");
 
   function recarregar() {
     setErro(null);
@@ -78,6 +148,36 @@ export default function PainelFinanceiro() {
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   const aprovadas = (propostas ?? []).filter((p) => STATUS_APROVADAS.includes(p.status)).sort(porMaisRecente);
   const encerradas = (propostas ?? []).filter((p) => STATUS_ENCERRADAS.includes(p.status)).sort(porMaisRecente);
+  // "Aprovadas" se divide pelo que importa pro financeiro: ainda sem contrato
+  // emitido (em andamento) vs. já com contrato gerado (tem numero_contrato).
+  const emAndamento = aprovadas.filter((p) => !numeroContrato(p.numero_contrato));
+  const gerados = aprovadas.filter((p) => numeroContrato(p.numero_contrato));
+
+  // Ações das propostas aprovadas (em andamento e geradas): recibo, desconto
+  // e gerar contrato — iguais às de antes, só reorganizadas por estado.
+  const acoesAprovada = (p: PropostaDetalhe) => (
+    <>
+      <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setReciboDe(p)}>
+        gerar recibo
+      </button>
+      {!p.desconto_especial && (
+        <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setDescontoDe(p)}>
+          desconto
+        </button>
+      )}
+      {p.desconto_especial ? (
+        <span
+          className="btn-row mr-1.5 text-amber-700 cursor-default"
+          title={`Desconto aplicado: ${formatMoney(p.desconto_especial)}${p.desconto_motivo ? " — " + p.desconto_motivo : ""}`}
+        >
+          desconto: {formatMoney(p.desconto_especial)}
+        </span>
+      ) : null}
+      <button className="btn-row btn-row-primary" onClick={() => setContratoDe(p)}>
+        gerar contrato
+      </button>
+    </>
+  );
 
   async function aprovar(p: PropostaDetalhe) {
     if (
@@ -132,9 +232,10 @@ export default function PainelFinanceiro() {
       <div>
         <h1 className="text-xl font-bold text-ink">Financeiro</h1>
         <p className="text-xs text-ink-soft mt-1">
-          No topo, as propostas com todos os documentos obrigatórios anexados aguardando aprovação. Clique em
-          “abrir” pra conferir a proposta com os documentos, corrigir qualquer dado e aprovar. Depois de aprovada,
-          a proposta desce pra “Aprovadas”, onde ficam o recibo e o contrato (numerado e com versão).
+          Use os filtros para separar as propostas por estado: <strong>em análise</strong> (aguardando aprovação),{" "}
+          <strong>em andamento</strong> (aprovada, contrato ainda não emitido) e <strong>gerados</strong> (contrato já
+          emitido, com número e versão). Clique em “abrir” para conferir a proposta, corrigir dados e aprovar; o recibo
+          e o contrato saem a partir de “em andamento”.
         </p>
       </div>
 
@@ -144,11 +245,19 @@ export default function PainelFinanceiro() {
         <p className="text-ink-soft text-sm">Carregando...</p>
       ) : (
         <>
-          <section className="grid gap-2">
-            <h2 className="text-sm font-bold text-ink">
-              Aguardando aprovação <span className="text-ink-soft font-normal">({filaAnalise.length})</span>
-            </h2>
-            {filaAnalise.length === 0 ? (
+          <FiltroContratos
+            filtro={filtro}
+            setFiltro={setFiltro}
+            counts={{
+              analise: filaAnalise.length,
+              andamento: emAndamento.length,
+              gerados: gerados.length,
+              encerradas: encerradas.length,
+            }}
+          />
+
+          {filtro === "analise" &&
+            (filaAnalise.length === 0 ? (
               <p className="text-ink-soft text-sm">Nenhuma proposta completa aguardando análise no momento.</p>
             ) : (
               <TabelaFinanceiro
@@ -170,58 +279,50 @@ export default function PainelFinanceiro() {
                 )}
                 onVerDocumentos={setVerDocumentosDe}
               />
-            )}
-          </section>
+            ))}
 
-          <section className="grid gap-2">
-            <h2 className="text-sm font-bold text-ink">
-              Aprovadas <span className="text-ink-soft font-normal">({aprovadas.length})</span>
-            </h2>
-            {aprovadas.length === 0 ? (
-              <p className="text-ink-soft text-sm">Nenhuma proposta aprovada ainda.</p>
+          {filtro === "andamento" &&
+            (emAndamento.length === 0 ? (
+              <p className="text-ink-soft text-sm">Nenhuma proposta aprovada aguardando emissão de contrato.</p>
             ) : (
               <TabelaFinanceiro
-                propostas={aprovadas}
-                colunaSituacao={(p) => <StatusBadge status={p.status} />}
-                acoes={(p) => (
-                  <>
-                    <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setReciboDe(p)}>
-                      gerar recibo
-                    </button>
-                    {!p.desconto_especial && (
-                      <button className="btn-row btn-row-neutral mr-1.5" onClick={() => setDescontoDe(p)}>
-                        desconto
-                      </button>
-                    )}
-                    {p.desconto_especial ? (
-                      <span className="btn-row mr-1.5 text-amber-700 cursor-default" title={`Desconto aplicado: ${formatMoney(p.desconto_especial)}${p.desconto_motivo ? " — " + p.desconto_motivo : ""}`}>
-                        desconto: {formatMoney(p.desconto_especial)}
-                      </span>
-                    ) : null}
-                    <button className="btn-row btn-row-primary" onClick={() => setContratoDe(p)}>
-                      gerar contrato
-                    </button>
-                  </>
-                )}
+                propostas={emAndamento}
+                colunaSituacao={() => <EstadoBadge tipo="andamento" />}
+                acoes={acoesAprovada}
                 onVerDocumentos={setVerDocumentosDe}
               />
-            )}
-          </section>
+            ))}
 
-          {encerradas.length > 0 && (
-            <section className="grid gap-2">
-              <h2 className="text-sm font-bold text-ink">
-                Histórico — recusadas e canceladas{" "}
-                <span className="text-ink-soft font-normal">({encerradas.length})</span>
-              </h2>
+          {filtro === "gerados" &&
+            (gerados.length === 0 ? (
+              <p className="text-ink-soft text-sm">Nenhum contrato emitido ainda.</p>
+            ) : (
+              <TabelaFinanceiro
+                propostas={gerados}
+                colunaSituacao={(p) => (
+                  <span className="inline-flex flex-col items-start gap-1">
+                    <EstadoBadge tipo="gerado" />
+                    <span className="text-[11px] text-ink-soft font-mono">
+                      Contrato Nº {numeroContrato(p.numero_contrato)}
+                    </span>
+                  </span>
+                )}
+                acoes={acoesAprovada}
+                onVerDocumentos={setVerDocumentosDe}
+              />
+            ))}
+
+          {filtro === "encerradas" &&
+            (encerradas.length === 0 ? (
+              <p className="text-ink-soft text-sm">Nenhuma proposta encerrada.</p>
+            ) : (
               <TabelaFinanceiro
                 propostas={encerradas}
                 colunaSituacao={(p) => <StatusBadge status={p.status} />}
                 acoes={() => null}
                 onVerDocumentos={setVerDocumentosDe}
               />
-            </section>
-          )}
+            ))}
         </>
       )}
 
