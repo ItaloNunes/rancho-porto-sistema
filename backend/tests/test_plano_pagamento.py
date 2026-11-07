@@ -116,7 +116,7 @@ def test_entrada_obrigatoria():
 def test_forma_meio_e_data_da_entrada_obrigatorios():
     erros = validar(plano_ok(sinal_forma=None, sinal_meio=None, sinal_vencimento=None), 89990.0, 89990.0)
     texto = " ".join(erros)
-    assert "de uma vez ou parcelada" in texto
+    assert "de uma vez, parcelada ou com parte à vista" in texto
     assert "como a entrada será paga" in texto
     assert "data de pagamento da entrada" in texto
 
