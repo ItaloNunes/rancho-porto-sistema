@@ -47,7 +47,7 @@ _SO_ADMIN_RESERVA = {"confirmada", "em_analise_financeira"}
 
 
 def _pode_mexer_na_reserva(corretor: dict, reserva: dict) -> bool:
-    return eh_admin(corretor) or reserva.get("corretor_id") in (None, corretor["id"])
+    return eh_admin(corretor) or reserva.get("corretor_id") == corretor["id"]
 
 
 def _expirar_vencidas(sb) -> int:
@@ -139,14 +139,19 @@ def reservar_lote(lote_id: str):
 def listar_reservas(corretor: dict = Depends(get_current_corretor)):
     """Painel interno: fila de pedidos de reserva para confirmar/cancelar.
 
-    Admin vê todas; um corretor comum vê só as que já são dele mais as ainda
-    sem corretor responsável (leads novos vindos do catálogo público, que
-    qualquer um pode assumir)."""
+    Admin/developer vê todas; um corretor comum vê SÓ as próprias. Leads sem
+    corretor responsável (corretor_id nulo) não aparecem pra ele — o contato
+    do cliente não pode vazar pra quem não está cuidando dele; cabe ao
+    admin/financeiro distribuir esses leads."""
     sb = get_supabase()
     _expirar_vencidas(sb)
     query = sb.table("reservas").select("*, lote:lotes(*), corretor:corretores(nome)").order("created_at", desc=True)
     if not eh_admin(corretor):
-        query = query.or_(f"corretor_id.is.null,corretor_id.eq.{corretor['id']}")
+        # Privacidade: cada corretor só enxerga as próprias reservas. Leads sem
+        # dono (corretor_id nulo) NÃO aparecem pra ele — o contato do cliente
+        # não pode vazar pra quem não está cuidando dele; o admin/financeiro
+        # distribui os leads sem dono. Admin/developer continua vendo tudo.
+        query = query.eq("corretor_id", corretor["id"])
     return query.execute().data
 
 

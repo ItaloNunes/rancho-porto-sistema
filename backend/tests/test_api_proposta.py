@@ -656,3 +656,44 @@ def test_contrato_do_veneza_trava_chave(cliente_api):
     r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-10-29")
     assert r.status_code == 422 and "chave" in r.text
     assert not sb.banco["propostas"][0].get("numero_contrato")
+
+
+# --------------------------------------------------------------------------
+# Privacidade entre corretores (07/11): cada corretor só mexe/enxerga o que é
+# dele. Leads sem dono (corretor_id nulo) NÃO aparecem pra corretor comum —
+# o contato do cliente não pode vazar pra quem não está cuidando dele.
+# --------------------------------------------------------------------------
+
+def test_corretor_so_mexe_na_propria_reserva():
+    from app.routers.reservas import _pode_mexer_na_reserva
+    corretor = {"id": "cor-1", "papel": "corretor"}
+    admin = {"id": "adm", "papel": "admin"}
+    dev = {"id": "dev", "papel": "developer"}
+    minha = {"id": "r1", "corretor_id": "cor-1"}
+    de_outro = {"id": "r2", "corretor_id": "cor-2"}
+    sem_dono = {"id": "r3", "corretor_id": None}
+    assert _pode_mexer_na_reserva(corretor, minha) is True
+    assert _pode_mexer_na_reserva(corretor, de_outro) is False
+    assert _pode_mexer_na_reserva(corretor, sem_dono) is False  # lead sem dono não é dele
+    for chefe in (admin, dev):
+        assert _pode_mexer_na_reserva(chefe, de_outro) is True
+        assert _pode_mexer_na_reserva(chefe, sem_dono) is True
+
+
+def test_listar_reservas_corretor_filtra_por_dono(cliente_api, monkeypatch):
+    """GET /reservas: corretor comum recebe filtro eq(corretor_id, ele) — some
+    reserva de outro corretor E lead sem dono. Admin não filtra."""
+    from app.routers import reservas as reservas_mod
+    monkeypatch.setattr(reservas_mod, "_expirar_vencidas", lambda sb: 0)
+    _api, sb = cliente_api  # contexto = corretor "cor-1"
+    reservas_mod.get_supabase = lambda: sb
+    sb.banco["reservas"] = [
+        {"id": "r1", "lote_id": "lote-1", "corretor_id": "cor-1", "nome": "Cliente do Cor-1", "contato": "111", "status": "pendente", "created_at": "2026-11-07T12:00:00+00:00"},
+        {"id": "r2", "lote_id": "lote-1", "corretor_id": "cor-2", "nome": "Cliente do Cor-2", "contato": "222", "status": "pendente", "created_at": "2026-11-07T12:00:00+00:00"},
+        {"id": "r3", "lote_id": "lote-1", "corretor_id": None, "nome": "Lead Sem Dono", "contato": "333", "status": "pendente", "created_at": "2026-11-07T12:00:00+00:00"},
+    ]
+    vistos = {r["id"] for r in _api.get("/reservas").json()}
+    assert vistos == {"r1"}
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    vistos_adm = {r["id"] for r in _api.get("/reservas").json()}
+    assert vistos_adm == {"r1", "r2", "r3"}
