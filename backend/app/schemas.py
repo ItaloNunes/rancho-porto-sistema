@@ -849,6 +849,11 @@ class Proposta(BaseModel):
     # None se um documento obrigatório for removido depois.
     documentos_completos_em: Optional[datetime] = None
     # Desconto especial aprovado pelo financeiro (padrão 0)
+    # Número do contrato emitido (None até o financeiro gerar o contrato).
+    # A tela de Financeiro usa ele pra separar "em andamento" (ainda sem
+    # contrato) de "gerados" (contrato já emitido) — por isso precisa sair
+    # também na listagem, não só no detalhe.
+    numero_contrato: Optional[int] = None
     desconto_especial: float = 0
     desconto_motivo: Optional[str] = None
     desconto_aprovado_por: Optional[str] = None
