@@ -24,12 +24,63 @@ const STATUS_LABEL: Record<PropostaStatus, string> = {
 
 // Corretor gera o PDF assim que preenche a proposta (10/10) -- só não gera
 // de proposta cancelada/recusada (ver _montar_pdf_proposta no backend).
+type FiltroProp = "rascunho" | "analise" | "aprovadas" | "encerradas";
+const GRUPOS_PROP: Record<FiltroProp, PropostaStatus[]> = {
+  rascunho: ["rascunho"],
+  analise: ["aguardando_aprovacao"],
+  aprovadas: ["aprovada", "enviada", "aceita"],
+  encerradas: ["recusada", "cancelada"],
+};
+const ABAS_PROP: { key: FiltroProp; label: string }[] = [
+  { key: "rascunho", label: "Rascunhos" },
+  { key: "analise", label: "Aguardando aprovação" },
+  { key: "aprovadas", label: "Aprovadas" },
+  { key: "encerradas", label: "Encerradas" },
+];
+
+function FiltroStatusPropostas({
+  filtro,
+  setFiltro,
+  counts,
+}: {
+  filtro: FiltroProp;
+  setFiltro: (f: FiltroProp) => void;
+  counts: Record<FiltroProp, number>;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {ABAS_PROP.map((a) => {
+        const ativo = filtro === a.key;
+        return (
+          <button
+            key={a.key}
+            onClick={() => setFiltro(a.key)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              ativo ? "bg-primary text-white" : "bg-surface-alt text-ink-soft hover:bg-surface-alt/70"
+            }`}
+          >
+            {a.label}
+            <span
+              className={`rounded-full px-2 text-xs font-semibold ${
+                ativo ? "bg-white/20 text-white" : "bg-border/60 text-ink-soft"
+              }`}
+            >
+              {counts[a.key]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const STATUS_LIBERA_PDF: PropostaStatus[] = ["rascunho", "aguardando_aprovacao", "aprovada", "enviada", "aceita"];
 
 export default function PainelPropostas() {
   const { perfil } = useAuth();
   const [propostas, setPropostas] = useState<PropostaDetalhe[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [filtroStatus, setFiltroStatus] = useState<FiltroProp>("aprovadas");
   const [criando, setCriando] = useState<false | "nova" | "retomar">(false);
   // Proposta que ficou pela metade (sessão caiu, janela fechou...) — 08/10.
   const rascunho = criando ? null : lerRascunho<RascunhoProposta>(chaveRascunhoProposta());
@@ -108,6 +159,15 @@ export default function PainelPropostas() {
     }
   }
 
+  const listaProp = propostas ?? [];
+  const contagem: Record<FiltroProp, number> = {
+    rascunho: listaProp.filter((p) => GRUPOS_PROP.rascunho.includes(p.status)).length,
+    analise: listaProp.filter((p) => GRUPOS_PROP.analise.includes(p.status)).length,
+    aprovadas: listaProp.filter((p) => GRUPOS_PROP.aprovadas.includes(p.status)).length,
+    encerradas: listaProp.filter((p) => GRUPOS_PROP.encerradas.includes(p.status)).length,
+  };
+  const visiveis = listaProp.filter((p) => GRUPOS_PROP[filtroStatus].includes(p.status));
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3">
@@ -137,7 +197,12 @@ export default function PainelPropostas() {
       ) : propostas.length === 0 ? (
         <p className="text-ink-soft text-sm">Nenhuma proposta ainda.</p>
       ) : (
-        <div className="card overflow-x-auto">
+        <>
+          <FiltroStatusPropostas filtro={filtroStatus} setFiltro={setFiltroStatus} counts={contagem} />
+          {visiveis.length === 0 ? (
+            <p className="text-ink-soft text-sm">Nenhuma proposta neste filtro.</p>
+          ) : (
+          <div className="card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
@@ -151,7 +216,7 @@ export default function PainelPropostas() {
               </tr>
             </thead>
             <tbody>
-              {propostas.map((p) => (
+              {visiveis.map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
                   <td className="px-4 py-3 text-ink-soft whitespace-nowrap font-mono text-xs">
                     {formatarNumeroProposta(p.numero, p.versao)}
@@ -216,7 +281,9 @@ export default function PainelPropostas() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+          )}
+        </>
       )}
 
       {criando && (
