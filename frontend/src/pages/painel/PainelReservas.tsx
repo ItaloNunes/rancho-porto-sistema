@@ -18,6 +18,56 @@ const STATUS_LABEL: Record<ReservaStatus, string> = {
   cancelada: "Cancelada",
 };
 
+type FiltroRes = "pendentes" | "analise" | "confirmadas" | "canceladas";
+const GRUPOS_RES: Record<FiltroRes, ReservaStatus[]> = {
+  pendentes: ["pendente", "em_atendimento", "aguardando_qualificacao"],
+  analise: ["em_analise_financeira"],
+  confirmadas: ["confirmada"],
+  canceladas: ["cancelada"],
+};
+const ABAS_RES: { key: FiltroRes; label: string }[] = [
+  { key: "pendentes", label: "Pendentes" },
+  { key: "analise", label: "Análise financeira" },
+  { key: "confirmadas", label: "Confirmadas" },
+  { key: "canceladas", label: "Canceladas" },
+];
+
+function FiltroStatusReservas({
+  filtro,
+  setFiltro,
+  counts,
+}: {
+  filtro: FiltroRes;
+  setFiltro: (f: FiltroRes) => void;
+  counts: Record<FiltroRes, number>;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {ABAS_RES.map((a) => {
+        const ativo = filtro === a.key;
+        return (
+          <button
+            key={a.key}
+            onClick={() => setFiltro(a.key)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              ativo ? "bg-primary text-white" : "bg-surface-alt text-ink-soft hover:bg-surface-alt/70"
+            }`}
+          >
+            {a.label}
+            <span
+              className={`rounded-full px-2 text-xs font-semibold ${
+                ativo ? "bg-white/20 text-white" : "bg-border/60 text-ink-soft"
+              }`}
+            >
+              {counts[a.key]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Trocar o status de um pedido mexe de verdade no estoque (ver
 // atualizar_status_reserva no backend): confirmar trava o lote com este
 // cliente, cancelar libera ele na hora pra qualquer corretor reservar de
@@ -63,6 +113,7 @@ export default function PainelReservas() {
   const location = useLocation();
   const navigate = useNavigate();
   const [reservas, setReservas] = useState<ReservaComLote[] | null>(null);
+  const [filtroStatus, setFiltroStatus] = useState<FiltroRes>("pendentes");
   const [lotes, setLotes] = useState<LoteComCondominio[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<ReservaComLote | "novo" | null>(null);
@@ -159,6 +210,15 @@ export default function PainelReservas() {
     }
   }
 
+  const listaRes = reservas ?? [];
+  const contagem: Record<FiltroRes, number> = {
+    pendentes: listaRes.filter((r) => GRUPOS_RES.pendentes.includes(r.status)).length,
+    analise: listaRes.filter((r) => GRUPOS_RES.analise.includes(r.status)).length,
+    confirmadas: listaRes.filter((r) => GRUPOS_RES.confirmadas.includes(r.status)).length,
+    canceladas: listaRes.filter((r) => GRUPOS_RES.canceladas.includes(r.status)).length,
+  };
+  const visiveis = listaRes.filter((r) => GRUPOS_RES[filtroStatus].includes(r.status));
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3">
@@ -181,7 +241,12 @@ export default function PainelReservas() {
       ) : reservas.length === 0 ? (
         <p className="text-ink-soft text-sm">Nenhum pedido de reserva no momento.</p>
       ) : (
-        <div className="card overflow-x-auto">
+        <>
+          <FiltroStatusReservas filtro={filtroStatus} setFiltro={setFiltroStatus} counts={contagem} />
+          {visiveis.length === 0 ? (
+            <p className="text-ink-soft text-sm">Nenhum pedido neste filtro.</p>
+          ) : (
+          <div className="card overflow-x-auto">
           <table className="w-full text-sm min-w-[980px]">
             <thead>
               <tr className="border-b border-border text-left text-ink-soft text-xs uppercase tracking-wide">
@@ -195,7 +260,7 @@ export default function PainelReservas() {
               </tr>
             </thead>
             <tbody>
-              {reservas.map((r) => (
+              {visiveis.map((r) => (
                 <tr key={r.id} className="border-b border-border last:border-0 hover:bg-surface-alt/60">
                   <td className="px-4 py-3 text-ink">{r.lote ? r.lote.identificador : "—"}</td>
                   <td className="px-4 py-3 text-ink">{r.nome || "—"}</td>
@@ -263,7 +328,9 @@ export default function PainelReservas() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+          )}
+        </>
       )}
 
       {editando && (
