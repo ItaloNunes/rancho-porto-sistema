@@ -489,11 +489,16 @@ class FormaPagamentoDados(BaseModel):
     avista_meio: Optional[MeioPagamento] = None
     avista_data: Optional[str] = None  # AAAA-MM-DD
     # Entrada (sinal/arras) -- obrigatória no parcelado.
-    sinal_forma: Optional[Literal["unica", "parcelada"]] = None
+    sinal_forma: Optional[Literal["unica", "parcelada", "mista"]] = None
     sinal_parcelas: Optional[int] = Field(default=None, ge=1, le=24)
     sinal_valor_parcela: Optional[str] = None  # calculado pelo servidor
     sinal_meio: Optional[MeioPagamento] = None
     sinal_vencimento: Optional[str] = None  # AAAA-MM-DD (pagamento único ou 1ª parcela da entrada)
+    # Entrada mista (parte à vista + resto parcelado, 07/11): quanto paga à
+    # vista agora e o vencimento da 1ª parcela do saldo. Sem estes campos
+    # o backend descartava o valor à vista e a entrada mista não fechava.
+    sinal_avista: Optional[str] = None
+    sinal_resto_primeira: Optional[str] = None  # AAAA-MM-DD
     # Chave (parcela paga na entrega) -- vem do plano de tabela do lote.
     chave_valor: Optional[str] = None
     chave_vencimento: Optional[str] = None  # AAAA-MM-DD, opcional
