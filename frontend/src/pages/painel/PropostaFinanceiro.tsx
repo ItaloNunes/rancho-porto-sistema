@@ -288,6 +288,19 @@ export default function PropostaFinanceiro({
               onChange={(e) => setMotivoPagamento(e.target.value)}
             />
           </div>
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              id="fp-fin-confirmado"
+              type="checkbox"
+              className="mt-0.5"
+              checked={!!fpEdicao.confirmado}
+              onChange={(e) => setFpEdicao({ ...fpEdicao, confirmado: e.target.checked })}
+            />
+            <span>
+              Conferi a correção: o valor proposto, a entrada (valor, forma, meio e data), as parcelas e a chave
+              acima estão corretos e combinados com o cliente.
+            </span>
+          </label>
           {erroPagamento && (
             <p className="text-sm text-rust bg-rust/5 border border-rust/30 rounded-lg px-3 py-2">{erroPagamento}</p>
           )}
