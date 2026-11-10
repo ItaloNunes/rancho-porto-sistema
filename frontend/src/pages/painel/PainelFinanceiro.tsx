@@ -525,18 +525,28 @@ function FormularioContrato({
   const [preenchido, setPreenchido] = useState(false);
   const reemissao = !!numeroContrato(proposta.numero_contrato);
 
-  // Reemissão (baixar o contrato de novo): pré-preenche com a comissão, o
-  // desconto e a data da ÚLTIMA emissão — assim não precisa redigitar tudo
-  // só pra ter o PDF em mãos.
+  // Pré-preenchimento:
+  //  • Reemissão ("baixar o contrato novamente"): usa a ÚLTIMA emissão (via
+  //    histórico) — comissão, desconto do corretor e data.
+  //  • 1ª emissão: se o pagamento já tem desconto_corretor_valor registrado
+  //    (preenchido em "Editar pagamento"), traz pré-pronto.
   useEffect(() => {
-    if (!reemissao) return;
+    const brl = (n: number) =>
+      n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Fallback (sempre): puxa do pagamento salvo
+    const fp = (proposta.dados_qualificacao as { forma_pagamento?: { desconto_corretor_valor?: string | null } } | undefined)
+      ?.forma_pagamento;
+    const dcTxt = fp?.desconto_corretor_valor ?? "";
+    if (dcTxt) setDescontoCorretor(dcTxt);
+    if (!reemissao) {
+      setPreenchido(true);
+      return;
+    }
     api
       .historicoContratos(proposta.id)
       .then((h) => {
         const ultima = h.emissoes[0];
         if (!ultima) return;
-        const brl = (n: number) =>
-          n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const bruta = typeof ultima.comissao_bruta === "number" ? ultima.comissao_bruta : (ultima.comissao ?? 0);
         const desc = typeof ultima.desconto_corretor === "number" ? ultima.desconto_corretor : 0;
         setComissao(brl(bruta));
@@ -545,7 +555,7 @@ function FormularioContrato({
       })
       .catch(() => {})
       .finally(() => setPreenchido(true));
-  }, [proposta.id, reemissao]);
+  }, [proposta.id, proposta.dados_qualificacao, reemissao]);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();

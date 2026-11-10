@@ -598,6 +598,16 @@ export default function FormaPagamentoEtapa({
         </>
       )}
 
+      <Bloco titulo="Desconto do corretor (opcional)">
+        <CampoDinheiro
+          id="fp-desconto-corretor"
+          label="Desconto que o corretor dá ao cliente — sai da comissão dele"
+          valor={fp.desconto_corretor_valor}
+          onChange={(v) => set({ desconto_corretor_valor: v })}
+          ajuda="Deixe em branco se não houver. Não muda o texto do contrato — só abate do valor do lote pro cliente e da comissão do corretor na hora de gerar."
+        />
+      </Bloco>
+
       <ConferenciaPlano fp={fp} valorTabela={lote?.valor_total} onAjustarCentavos={(novo) => onChange(semConfirmacao(novo))} />
 
       <Field label="Observações">

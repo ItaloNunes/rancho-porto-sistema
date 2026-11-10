@@ -499,6 +499,10 @@ class FormaPagamentoDados(BaseModel):
     # o backend descartava o valor à vista e a entrada mista não fechava.
     sinal_avista: Optional[str] = None
     sinal_resto_primeira: Optional[str] = None  # AAAA-MM-DD
+    # Desconto que o CORRETOR dá ao cliente SAINDO da própria comissão
+    # (10/11): registrado aqui no pagamento pra não se perder entre edições;
+    # ao gerar o contrato, vira o desconto_corretor passado no endpoint.
+    desconto_corretor_valor: Optional[str] = None
     # Chave (parcela paga na entrega) -- vem do plano de tabela do lote.
     chave_valor: Optional[str] = None
     chave_vencimento: Optional[str] = None  # AAAA-MM-DD, opcional
