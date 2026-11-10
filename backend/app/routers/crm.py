@@ -1454,6 +1454,7 @@ def aplicar_desconto_proposta(
 def gerar_contrato_proposta(
     proposta_id: str,
     comissao: float,
+    desconto_corretor: float = 0,
     data: Optional[str] = None,
     corretor: dict = Depends(get_current_corretor),
 ):
@@ -1481,6 +1482,16 @@ def gerar_contrato_proposta(
         raise HTTPException(403, "Só o financeiro pode gerar o contrato.")
     if comissao < 0:
         raise HTTPException(422, "O valor da comissão não pode ser negativo.")
+    if desconto_corretor < 0:
+        raise HTTPException(422, "O desconto dado pelo corretor não pode ser negativo.")
+    if desconto_corretor > comissao:
+        raise HTTPException(422, "O desconto dado pelo corretor não pode ser maior que a comissão dele.")
+    # Desconto que o corretor deu ao cliente SAINDO da própria comissão (09/11):
+    # no contrato entra a comissão líquida (o que ele recebe de fato); a bruta
+    # e o desconto ficam só no registro da emissão. O texto do contrato não muda.
+    comissao_bruta = round(comissao, 2)
+    desconto_corretor = round(desconto_corretor, 2)
+    comissao = round(comissao_bruta - desconto_corretor, 2)
 
     data_contrato = None
     if data:
@@ -1516,7 +1527,9 @@ def gerar_contrato_proposta(
     # qualquer origem (formulário novo, antiga, qualificação pelo link).
     fp_contrato = (proposta.get("dados_qualificacao") or {}).get("forma_pagamento") or {}
     preco = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
-    desconto = round(float(proposta.get("desconto_especial") or 0), 2)
+    # Desconto no valor do lote = o aprovado pelo financeiro + o que o corretor
+    # deu ao cliente (esse último absorvido pela comissão dele, não pela empresa).
+    desconto = round(float(proposta.get("desconto_especial") or 0) + desconto_corretor, 2)
     if desconto:
         # Com desconto aprovado pelo financeiro, o valor final é menor --
         # conferir_contrato compara com o valor_proposto original e daria
@@ -1631,6 +1644,8 @@ def gerar_contrato_proposta(
             "versao": versao_contrato,
             "data_contrato": (data_contrato or datetime.now(timezone.utc).date()).isoformat(),
             "comissao": comissao,
+            "comissao_bruta": comissao_bruta,
+            "desconto_corretor": desconto_corretor,
             "valor_proposto": proposta.get("valor_proposto"),
             "sha256": hashlib.sha256(pdf_bytes).hexdigest(),
         },
@@ -1721,6 +1736,8 @@ def historico_contratos(proposta_id: str, corretor: dict = Depends(get_current_c
             "versao": (l.get("detalhes") or {}).get("versao"),
             "data_contrato": (l.get("detalhes") or {}).get("data_contrato"),
             "comissao": (l.get("detalhes") or {}).get("comissao"),
+            "comissao_bruta": (l.get("detalhes") or {}).get("comissao_bruta", (l.get("detalhes") or {}).get("comissao")),
+            "desconto_corretor": (l.get("detalhes") or {}).get("desconto_corretor", 0),
         }
         for l in logs
     ]

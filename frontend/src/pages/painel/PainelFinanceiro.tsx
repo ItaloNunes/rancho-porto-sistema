@@ -174,7 +174,7 @@ export default function PainelFinanceiro() {
         </span>
       ) : null}
       <button className="btn-row btn-row-primary" onClick={() => setContratoDe(p)}>
-        gerar contrato
+        {numeroContrato(p.numero_contrato) ? "baixar contrato" : "gerar contrato"}
       </button>
     </>
   );
@@ -209,8 +209,8 @@ export default function PainelFinanceiro() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
-  async function gerarContrato(p: PropostaDetalhe, comissao: number, data: string) {
-    const blob = await api.gerarContratoProposta(p.id, comissao, data);
+  async function gerarContrato(p: PropostaDetalhe, comissao: number, data: string, descontoCorretor: number = 0) {
+    const blob = await api.gerarContratoProposta(p.id, comissao, data, descontoCorretor);
     const n = numeroContrato(p.numero_contrato);
     const nomeArquivo = `contrato-${n ? `${n}-` : ""}v${p.versao}-${p.lote?.identificador ?? p.id}.pdf`;
     const url = URL.createObjectURL(blob);
@@ -514,13 +514,38 @@ function FormularioContrato({
   onFechar,
 }: {
   proposta: PropostaDetalhe;
-  onGerar: (p: PropostaDetalhe, comissao: number, data: string) => Promise<void>;
+  onGerar: (p: PropostaDetalhe, comissao: number, data: string, descontoCorretor: number) => Promise<void>;
   onFechar: () => void;
 }) {
   const [comissao, setComissao] = useState("");
+  const [descontoCorretor, setDescontoCorretor] = useState("");
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [preenchido, setPreenchido] = useState(false);
+  const reemissao = !!numeroContrato(proposta.numero_contrato);
+
+  // Reemissão (baixar o contrato de novo): pré-preenche com a comissão, o
+  // desconto e a data da ÚLTIMA emissão — assim não precisa redigitar tudo
+  // só pra ter o PDF em mãos.
+  useEffect(() => {
+    if (!reemissao) return;
+    api
+      .historicoContratos(proposta.id)
+      .then((h) => {
+        const ultima = h.emissoes[0];
+        if (!ultima) return;
+        const brl = (n: number) =>
+          n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const bruta = typeof ultima.comissao_bruta === "number" ? ultima.comissao_bruta : (ultima.comissao ?? 0);
+        const desc = typeof ultima.desconto_corretor === "number" ? ultima.desconto_corretor : 0;
+        setComissao(brl(bruta));
+        if (desc > 0) setDescontoCorretor(brl(desc));
+        if (ultima.data_contrato) setData(ultima.data_contrato);
+      })
+      .catch(() => {})
+      .finally(() => setPreenchido(true));
+  }, [proposta.id, reemissao]);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -531,10 +556,20 @@ function FormularioContrato({
       setErro("Informe o valor da comissão (pode ser 0, se não houver).");
       return;
     }
+    const descDig = descontoCorretor.replace(/\D/g, "");
+    const desc = descDig === "" ? 0 : parseInt(descDig, 10) / 100;
+    if (Number.isNaN(desc) || desc < 0) {
+      setErro("Desconto da comissão inválido.");
+      return;
+    }
+    if (desc > numero) {
+      setErro("O desconto do corretor não pode ser maior que a comissão dele.");
+      return;
+    }
     setErro(null);
     setGerando(true);
     try {
-      await onGerar(proposta, numero, data);
+      await onGerar(proposta, numero, data, desc);
       onFechar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
@@ -547,7 +582,7 @@ function FormularioContrato({
     <form onSubmit={enviar} className="p-6 sm:p-8 grid gap-4">
       <div>
         <h2 id="financeiro-contrato-title" className="text-lg font-bold text-ink">
-          Gerar contrato
+          {reemissao ? "Baixar contrato novamente" : "Gerar contrato"}
         </h2>
         <p className="text-xs text-ink-soft mt-1">
           <span className="block font-mono text-ink mb-1">
@@ -588,7 +623,30 @@ function FormularioContrato({
           }}
           required
         />
-        <span className="text-xs text-ink-soft">Digite com os centavos — ex.: 369800 vira R$ 3.698,00.</span>
+        <span className="text-xs text-ink-soft">
+          Digite com os centavos — ex.: 369800 vira R$ 3.698,00.
+          {reemissao && preenchido && " Veio preenchido com a última emissão — ajuste se precisar."}
+        </span>
+      </label>
+      <label className="grid gap-1 text-sm">
+        <span className="text-ink-soft">Desconto que o corretor deu ao cliente (sai da comissão dele)</span>
+        <input
+          className="input"
+          type="text"
+          inputMode="numeric"
+          placeholder="0,00"
+          value={descontoCorretor}
+          onChange={(e) => {
+            const centavos = parseInt(e.target.value.replace(/\D/g, "") || "0", 10);
+            setDescontoCorretor(
+              centavos === 0 ? "" : (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            );
+          }}
+        />
+        <span className="text-xs text-ink-soft">
+          Deixe em branco se não houve. Esse valor sai da comissão do corretor e também abate do valor do lote pro cliente.
+          Fica registrado que foi o corretor quem deu — o texto do contrato não muda.
+        </span>
       </label>
       <label className="grid gap-1 text-sm">
         <span className="text-ink-soft">Data de celebração do contrato</span>
@@ -600,7 +658,7 @@ function FormularioContrato({
           Cancelar
         </button>
         <button type="submit" className="btn btn-primary" disabled={gerando}>
-          {gerando ? "Gerando..." : "Gerar contrato"}
+          {gerando ? (reemissao ? "Baixando..." : "Gerando...") : reemissao ? "Baixar contrato" : "Gerar contrato"}
         </button>
       </div>
     </form>

@@ -579,8 +579,11 @@ export const api = {
   // (não vêm salvos em lugar nenhum). Só financeiro (admin/developer).
   gerarReciboProposta: (id: string, valor: number, data: string) =>
     requestBlob(`/crm/propostas/${id}/recibo?valor=${valor}&data=${data}`),
-  gerarContratoProposta: (id: string, comissao: number, data: string) =>
-    requestBlob(`/crm/propostas/${id}/contrato?comissao=${comissao}&data=${data}`),
+  gerarContratoProposta: (id: string, comissao: number, data: string, descontoCorretor: number = 0) =>
+    requestBlob(
+      `/crm/propostas/${id}/contrato?comissao=${comissao}&data=${data}` +
+        (descontoCorretor > 0 ? `&desconto_corretor=${descontoCorretor}` : ""),
+    ),
   aplicarDesconto: (id: string, valor: number, motivo: string) =>
     request<{ ok: boolean; desconto_especial: number }>(
       `/crm/propostas/${id}/desconto`,
@@ -735,6 +738,12 @@ export interface EmissaoContrato {
   versao?: number | null;
   data_contrato?: string | null;
   comissao?: number | null;
+  /** Comissão bruta (antes de abater o que o corretor deu ao cliente da própria comissão).
+   * Emissões antigas (pré-10/11) não têm — nesses casos é igual à `comissao`. */
+  comissao_bruta?: number | null;
+  /** Valor que o corretor deu de desconto ao cliente SAINDO da própria comissão.
+   * 0 nas emissões antigas, ou quando o corretor não deu desconto. */
+  desconto_corretor?: number | null;
 }
 
 export interface HistoricoContratos {
