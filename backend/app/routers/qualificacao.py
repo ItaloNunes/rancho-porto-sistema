@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 from ..cadastro_proposta import problemas_cadastro, tem_conjuge
-from ..estoque import detentores, liberar_lote_se_livre
+from ..estoque import detentores, liberar_lote_se_livre, vender_lote
 from ..plano_pagamento import problemas_para_aprovar
 from ..database import get_supabase
 from ..documentos import BUCKET, caminho_no_bucket, excluir_do_storage_silenciosamente, validar_e_ler
@@ -297,6 +297,8 @@ def decidir_qualificacao(
         }
         criada = sb.table("propostas").insert(proposta).execute().data[0]
         sb.table("reservas").update({"status": "confirmada", "proposta_id": criada["id"]}).eq("id", q["reserva_id"]).execute()
+        # Proposta nasce 'aprovada' = venda (13/11): o lote sai como vendido.
+        vender_lote(sb, q["lote_id"], criada["id"])
     else:
         sb.table("reservas").update({"status": "cancelada"}).eq("id", q["reserva_id"]).execute()
         liberar_lote_se_livre(sb, q["lote_id"], exceto_reserva_id=q["reserva_id"])

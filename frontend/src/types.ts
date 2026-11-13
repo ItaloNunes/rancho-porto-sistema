@@ -289,6 +289,11 @@ export interface LoteComCondominio extends Lote {
   // última alteração" (ver PainelLotes.tsx).
   preco_pode_reverter?: boolean;
   preco_alterado_em?: string | null;
+  /** Quem segura o lote (reserva/proposta viva) — só vem para o financeiro. */
+  detentor?: string | null;
+  /** true = lote 'reservado' sem NENHUMA reserva/proposta viva por trás (ficou
+   * preso, ex.: conexão caiu no meio de uma reserva) — só para o financeiro. */
+  reserva_orfa?: boolean;
 }
 
 /** Uma linha do histórico de preço de um lote (ver migration 0025 e

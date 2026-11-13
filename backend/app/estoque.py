@@ -21,6 +21,11 @@ PROPOSTA_VIVAS = ("rascunho", "aguardando_aprovacao", "aprovada", "enviada", "ac
 # aprovada ou vendida): a reserva dela não expira sozinha.
 PROPOSTA_SEGURA_LOTE = ("aguardando_aprovacao", "aprovada", "enviada", "aceita")
 
+# Propostas que já são VENDA: desde 13/11 o lote conta como vendido assim que
+# o financeiro aprova a proposta (antes só virava 'vendido' ao gerar o
+# contrato ou marcar 'aceita', e lote já pago ficava "reservado").
+PROPOSTA_VENDA = ("aprovada", "enviada", "aceita")
+
 
 def detentores(sb, lote_id: str, exceto_reserva_id: Optional[str] = None,
                exceto_proposta_id: Optional[str] = None) -> list[str]:
@@ -82,3 +87,45 @@ def lote_em_empreendimento_ativo(sb, lote_id: str) -> bool:
         return True
     condo = sb.table("condominios").select("ativo").eq("id", lote[0]["condominio_id"]).limit(1).execute().data
     return not condo or condo[0].get("ativo") is not False
+
+
+def vender_lote(sb, lote_id: str, proposta_id: str) -> bool:
+    """Marca o lote como 'vendido' para esta proposta. Devolve False se ele já
+    está vendido por OUTRA proposta (venda dupla). Lote que já está
+    'vendido' por esta mesma proposta (ex.: aprovada -> aceita) conta como
+    sucesso. O UPDATE é condicional (neq 'vendido'): quem resolve a corrida
+    entre duas propostas é o Postgres, não uma leitura em Python."""
+    vendeu = sb.table("lotes").update({"status": "vendido"}).eq("id", lote_id).neq("status", "vendido").execute().data
+    if vendeu:
+        return True
+    outras = (
+        sb.table("propostas").select("id").eq("lote_id", lote_id)
+        .in_("status", list(PROPOSTA_VENDA)).neq("id", proposta_id).execute().data
+    ) or []
+    return not outras
+
+
+MSG_CONEXAO_FALHOU = (
+    "A conexão com o banco de dados falhou no meio da operação. O lote foi conferido e liberado se ficou "
+    "sem dono. Atualize a página e confira em Reservas/Propostas antes de tentar de novo."
+)
+
+
+def desfazer_trava_orfa(sb, lote_id: str, tentativas: int = 3) -> bool:
+    """Depois de uma falha no meio de "travar lote + gravar reserva/proposta"
+    (ex.: conexão com o banco caiu), confere o lote e devolve para
+    'disponivel' se ele ficou 'reservado' sem nenhuma reserva/proposta viva
+    por trás. Se a gravação chegou a acontecer (há detentor), não mexe.
+    Repete algumas vezes porque a mesma queda de conexão costuma derrubar a
+    primeira tentativa de desfazer (foi assim que o Lote 01 da Quadra 15 do
+    Porto Franco ficou preso em 12/11/2026). Devolve True se liberou."""
+    import time
+
+    for tentativa in range(1, tentativas + 1):
+        try:
+            return liberar_lote_se_livre(sb, lote_id)
+        except Exception:
+            if tentativa == tentativas:
+                return False
+            time.sleep(0.3 * tentativa)
+    return False
