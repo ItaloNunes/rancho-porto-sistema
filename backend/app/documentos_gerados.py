@@ -166,7 +166,7 @@ def modelo_recibo(condominio_nome: str) -> Optional[str]:
     """Modelo de RECIBO: só Porto Franco e Rancho Texas têm (Riviera e
     Veneza mandaram só o contrato)."""
     slug = modelo_documentos(condominio_nome)
-    return slug if slug in ("rancho_texas", "porto_franco") else None
+    return slug if slug in ("rancho_texas", "porto_franco", "riviera", "veneza") else None
 
 
 def _empreendimento_slug(condominio_nome: str) -> str:
@@ -231,7 +231,7 @@ def preencher_recibo(
         data_runs[1].text = dia
         data_runs[5].text = mes.capitalize()
         data_runs[6].text = f" de {ano}"
-    else:
+    elif slug == "rancho_texas":
         corpo = paragrafos[5].runs
         corpo[15].text = f"{valor_fmt} "
         corpo[17].text = extenso  # mesmo motivo do Porto Franco: sem espaço, o ")" do run 18 já vem colado
@@ -244,10 +244,55 @@ def preencher_recibo(
         data_runs[1].text = dia
         data_runs[5].text = mes
         data_runs[7].text = f"de {ano}"
+    elif slug == "riviera":
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[5],
+            "A EPF CONSTRUÇÕES EIRELI, inscrita no CNPJ 20.209.511/0001-25, "
+            "localizada à Rua Seis de Janeiro, 1837, Santo Antônio, Mossoró-RN, "
+            "CEP 59.611-070, representada neste ato conforme seus atos constitutivos, "
+            f"atesta o recebimento da quantia no valor de R$ {valor_fmt} "
+            f"({extenso}) do(a) Sr(a). "
+            f"{limpar_nome_titulo(cliente_nome) or '-'}, inscrito(a) no CPF N° "
+            f"{formatar_cpf_cnpj(cliente_cpf)}, referente à entrada da unidade do "
+            f"LOTE Nº {lote_numero} QUADRA Nº {lote_quadra or '-'}, do empreendimento "
+            "RIVIERA BEACH RESIDENCE.",
+        )
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[10], f"Mossoró-RN, {dia} de {mes} de {ano}."
+        )
+    elif slug == "veneza":
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[4],
+            "L.R CONSTRUTORA E INCORPORADORA LTDA EPP, inscrita no CNPJ 17.249.877/0001-13, "
+            "localizada à Rua Seis de Janeiro, 1837, Santo Antônio, Mossoró-RN, "
+            "CEP 59611-070, representada neste ato conforme seus atos constitutivos, "
+            f"atesta o recebimento da quantia no valor R$ {valor_fmt} "
+            f"({extenso}) do(a) Sr(a). "
+            f"{limpar_nome_titulo(cliente_nome) or '-'}, inscrito(a) no CPF N° "
+            f"{formatar_cpf_cnpj(cliente_cpf)}, referente à entrada da compra da "
+            f"unidade da QD {lote_quadra or '-'} LT {lote_numero} do empreendimento "
+            "VENEZA RESIDENCIAL.",
+        )
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[7], f"Mossoró-RN, {dia} de {mes} de {ano}."
+        )
 
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue(), slug
+
+
+def _substituir_paragrafo_mantendo_formato(paragrafo, novo_texto: str) -> None:
+    """Substitui todo o texto do parágrafo pelo novo_texto, mantendo a
+    formatação (fonte, tamanho, cor, negrito) do PRIMEIRO run. Perde formatação
+    variável em runs do meio do parágrafo — ok nos recibos de Riviera/Veneza,
+    que são um parágrafo único sem destaques internos."""
+    if not paragrafo.runs:
+        paragrafo.add_run(novo_texto)
+        return
+    paragrafo.runs[0].text = novo_texto
+    for r in paragrafo.runs[1:]:
+        r.text = ""
 
 
 def _para_float(texto: Optional[str]) -> Optional[float]:
@@ -788,15 +833,23 @@ def preencher_contrato_porto_franco(
         qualificacao_corretor += (
             f", dados bancários: {corretor['banco']}, Ag. {corretor['agencia']}, C/C {corretor['conta']}"
         )
-    _substituir_texto(
-        pp[17],
-        "fixada em R$  (), a ser paga diretamente ao CORRETOR/IMOBILIÁRIA "
-        "[QUALIFICAR: nome/razão social, CPF/CNPJ, CRECI e dados bancários], "
-        "mediante transferência bancária ou PIX para conta por este indicada",
-        f"fixada em R$ {formatar_valor(valor_comissao)} ({valor_por_extenso(valor_comissao)}), "
-        f"a ser paga diretamente ao CORRETOR/IMOBILIÁRIA {qualificacao_corretor}, "
-        "mediante transferência bancária ou PIX para conta por este indicada",
-    )
+    # Cláusula de comissão opcional (14/11): o modelo novo do Porto Franco
+    # (ajustado após o registro da incorporação) retirou a cláusula explícita
+    # de comissão. Se o texto não estiver no modelo, segue em frente — a
+    # comissão continua no histórico de emissões (quem, quanto, quando), e os
+    # relatórios internos usam o valor dali, não o texto do contrato.
+    try:
+        _substituir_texto(
+            pp[17],
+            "fixada em R$  (), a ser paga diretamente ao CORRETOR/IMOBILIÁRIA "
+            "[QUALIFICAR: nome/razão social, CPF/CNPJ, CRECI e dados bancários], "
+            "mediante transferência bancária ou PIX para conta por este indicada",
+            f"fixada em R$ {formatar_valor(valor_comissao)} ({valor_por_extenso(valor_comissao)}), "
+            f"a ser paga diretamente ao CORRETOR/IMOBILIÁRIA {qualificacao_corretor}, "
+            "mediante transferência bancária ou PIX para conta por este indicada",
+        )
+    except (IndexError, ValueError):
+        pass  # modelo sem cláusula de comissão (ex.: Porto Franco revisado 14/11)
 
     # --- XII. LOCAL E DATA DE CELEBRAÇÃO -----------------------------------
     p_data = t.rows[19].cells[0].paragraphs[1]
