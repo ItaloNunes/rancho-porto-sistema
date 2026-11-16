@@ -163,10 +163,19 @@ def modelo_documentos(condominio_nome: str) -> Optional[str]:
 
 
 def modelo_recibo(condominio_nome: str) -> Optional[str]:
-    """Modelo de RECIBO: só Porto Franco e Rancho Texas têm (Riviera e
-    Veneza mandaram só o contrato)."""
+    """Modelo de RECIBO instalado por empreendimento. Porto Franco, Rancho
+    Texas, Riviera e Veneza vêm pelo modelo_documentos (que também define o
+    modelo de contrato). Rota dos Ventos (16/11): o recibo já foi enviado
+    pela Castel, mas o contrato oficial ainda precisa de uma rodada de
+    mapeamento — enquanto isso, modelo_documentos continua None pra ele
+    (bloqueia contrato) e modelo_recibo reconhece por nome diretamente."""
     slug = modelo_documentos(condominio_nome)
-    return slug if slug in ("rancho_texas", "porto_franco", "riviera", "veneza") else None
+    if slug in ("rancho_texas", "porto_franco", "riviera", "veneza"):
+        return slug
+    nome = (condominio_nome or "").lower()
+    if "rota" in nome and "vento" in nome:
+        return "rota_ventos"
+    return None
 
 
 def _empreendimento_slug(condominio_nome: str) -> str:
@@ -244,6 +253,27 @@ def preencher_recibo(
         data_runs[1].text = dia
         data_runs[5].text = mes
         data_runs[7].text = f"de {ano}"
+    elif slug == "rota_ventos":
+        # Recibo do Rota dos Ventos (16/11): modelo tem destaque com o
+        # valor em negrito no parágrafo 6 e o corpo no 9; data no 12.
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[6], f"\tR$ {valor_fmt}"
+        )
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[9],
+            "LR CONSTUTORA E INCORPORADORA LTDA, inscrita no CNPJ 17.249.877/0001-13, "
+            "localizada na Rua Seis de Janeiro, 1837, - Santo Antônio, Mossoró-RN, "
+            "CEP 59611-070, representada neste ato conforme seus atos constitutivos, "
+            f"atesta o recebimento da quantia no valor de R$ {valor_fmt} "
+            f"({extenso}) do(a) Sr(a). "
+            f"{limpar_nome_titulo(cliente_nome) or '-'}, inscrito(a) no CPF N° "
+            f"{formatar_cpf_cnpj(cliente_cpf)}, referente ao pagamento da entrada de "
+            f"compra da unidade da QD {lote_quadra or '-'} LT {lote_numero} do "
+            "empreendimento ROTA DOS VENTOS.",
+        )
+        _substituir_paragrafo_mantendo_formato(
+            paragrafos[12], f"Mossoró-RN, {dia} de {mes} de {ano}."
+        )
     elif slug == "riviera":
         _substituir_paragrafo_mantendo_formato(
             paragrafos[5],
