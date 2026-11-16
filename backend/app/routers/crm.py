@@ -1499,7 +1499,7 @@ def gerar_contrato_proposta(
     # e o desconto ficam só no registro da emissão. O texto do contrato não muda.
     comissao_bruta = round(comissao, 2)
     desconto_corretor = round(desconto_corretor, 2)
-    comissao = round(comissao_bruta - desconto_corretor, 2)
+    comissao_digitada_liquida = False
 
     data_contrato = None
     if data:
@@ -1535,6 +1535,15 @@ def gerar_contrato_proposta(
     # qualquer origem (formulário novo, antiga, qualificação pelo link).
     fp_contrato = (proposta.get("dados_qualificacao") or {}).get("forma_pagamento") or {}
     preco = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
+    # Comissão digitada JÁ SEM o desconto do corretor (propostas 37 e 41,
+    # 16/11: digitaram 3.999,50 = 5% − 500 e o sistema abatia de novo,
+    # saindo 3.499,50). A comissão cheia é sempre 5% do valor proposto; se
+    # o que veio + o desconto dá exatamente 5%, o que veio já é a líquida.
+    cinco_por_cento = round(float(preco) * 0.05, 2)
+    if desconto_corretor > 0 and abs(comissao_bruta + desconto_corretor - cinco_por_cento) < 0.01:
+        comissao_bruta = cinco_por_cento
+        comissao_digitada_liquida = True
+    comissao = round(comissao_bruta - desconto_corretor, 2)
     # Desconto no valor do lote = o aprovado pelo financeiro + o que o corretor
     # deu ao cliente (esse último absorvido pela comissão dele, não pela empresa).
     desconto = round(float(proposta.get("desconto_especial") or 0) + desconto_corretor, 2)
@@ -1675,6 +1684,7 @@ def gerar_contrato_proposta(
             "comissao": comissao,
             "comissao_bruta": comissao_bruta,
             "desconto_corretor": desconto_corretor,
+            "comissao_digitada_liquida": comissao_digitada_liquida,
             "valor_proposto": proposta.get("valor_proposto"),
             "sha256": hashlib.sha256(pdf_bytes).hexdigest(),
         },

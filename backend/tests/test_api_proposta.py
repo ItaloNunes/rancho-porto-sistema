@@ -749,3 +749,34 @@ def test_contrato_do_rota_trava_chave(cliente_api):
     _semear_rota(sb, {**FP_ROTA_API, "chave_valor": "5.000,00", "dividido_em_parcelas": 57})
     r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-11-16")
     assert r.status_code == 422 and "chave" in r.text
+
+
+def test_comissao_digitada_ja_sem_desconto_nao_desconta_duas_vezes(cliente_api):
+    """Propostas 37/41 (16/11): digitaram a comissão já sem o desconto do
+    corretor e o sistema abatia de novo. Cheia ou líquida, sai a mesma."""
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_0003(sb)
+    assert api.put("/crm/propostas/p3/dados", json={"dados_qualificacao": _dq_corrigido()}).status_code == 200
+    assert api.patch("/crm/propostas/p3/status", json={"status": "aprovada"}).status_code == 200
+    prop = sb.banco["propostas"][0]
+    prop["lote"] = {**sb.banco["lotes"][0], "identificador": "Q10-L8", "quadra": "10", "lote_numero": "8",
+                    "tamanho_m2": 300, "condominio": {"nome": "Porto Franco"}}
+    prop["cliente"] = sb.banco["clientes"][0]
+    prop["corretor"] = {"nome": "Corretor", "cpf_cnpj": "52998224725", "creci": "123"}
+    sb.banco["lotes_memorial"] = [{"condominio_slug": "porto-franco", "quadra": "10", "lote_numero": 8,
+                                   "area_privativa": 300.0, "area_comum": 135.24, "area_real": 435.24,
+                                   "area_texto": "Área privativa: 300,00m²",
+                                   "confrontacoes": ["a", "b", "c", "d"]}]
+    cinco = round(prop["valor_proposto"] * 0.05, 2)
+    liquida = round(cinco - 500, 2)
+
+    def ultima():
+        return [l for l in sb.banco["logs_auditoria"] if l["acao"] == "gerou_contrato"][-1]["detalhes"]
+
+    for digitada in (cinco, liquida):  # cheia (certo) e já descontada (o erro de 16/11)
+        r = api.get(f"/crm/propostas/p3/contrato?comissao={digitada}&desconto_corretor=500&data=2026-11-16")
+        assert r.status_code == 200, r.text
+        d = ultima()
+        assert d["comissao"] == liquida and d["comissao_bruta"] == cinco, (digitada, d)
+    assert ultima()["comissao_digitada_liquida"] is True
