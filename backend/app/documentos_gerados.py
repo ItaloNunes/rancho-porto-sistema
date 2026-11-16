@@ -88,19 +88,29 @@ def _numero_extenso(n: int) -> str:
     if n == 0:
         return "zero"
     escalas = [(10**9, "bilhão", "bilhões"), (10**6, "milhão", "milhões"), (10**3, "mil", "mil")]
-    partes = []
+    partes: list[tuple[int, str]] = []  # (valor do grupo, texto)
     resto = n
     for valor_escala, singular, plural in escalas:
         grupo, resto = divmod(resto, valor_escala)
         if not grupo:
             continue
         if valor_escala == 10**3 and grupo == 1:
-            partes.append("mil")  # "mil", nunca "um mil"
+            partes.append((grupo, "mil"))  # "mil", nunca "um mil"
         else:
-            partes.append(f"{_grupo_extenso(grupo)} {singular if grupo == 1 else plural}")
+            partes.append((grupo, f"{_grupo_extenso(grupo)} {singular if grupo == 1 else plural}"))
     if resto:
-        partes.append(_grupo_extenso(resto))
-    return " ".join(p for p in partes if p)
+        partes.append((resto, _grupo_extenso(resto)))
+    textos = [t for _, t in partes]
+    # Regra do português (16/11): o último grupo entra com "e" quando é menor
+    # que cem ou é uma centena redonda -- "mil e um", "dois mil e dez",
+    # "um milhão e cem", "dois milhões e trezentos mil"; sem "e" nos demais
+    # ("mil novecentos e noventa", "duzentos mil duzentos e cinquenta").
+    # Antes saía "mil um reais" / "cento e quatro mil dez reais".
+    if len(partes) > 1:
+        ultimo = partes[-1][0]
+        if ultimo < 100 or ultimo % 100 == 0:
+            return " ".join(textos[:-1]) + " e " + textos[-1]
+    return " ".join(textos)
 
 
 def _numero_extenso_feminino(n: int) -> str:
@@ -263,7 +273,7 @@ def preencher_recibo(
         )
         _substituir_paragrafo_mantendo_formato(
             paragrafos[9],
-            "LR CONSTUTORA E INCORPORADORA LTDA, inscrita no CNPJ 17.249.877/0001-13, "
+            "LR CONSTRUTORA E INCORPORADORA LTDA, inscrita no CNPJ 17.249.877/0001-13, "
             "localizada na Rua Seis de Janeiro, 1837, - Santo Antônio, Mossoró-RN, "
             "CEP 59611-070, representada neste ato conforme seus atos constitutivos, "
             f"atesta o recebimento da quantia no valor de R$ {valor_fmt} "
@@ -1220,6 +1230,8 @@ def problemas_modelo_contrato(slug: Optional[str], fp: dict, lote: dict) -> list
     problemas: list[str] = []
     if slug == "veneza" and v.chave:
         problemas.append("O contrato do Veneza não tem campo de chave: passe o valor da chave para o financiamento ou para os balões.")
+    if slug == "rota_ventos" and v.chave:
+        problemas.append("O contrato do Rota dos Ventos não tem campo de chave: distribua o valor da chave na entrada ou nas parcelas.")
     if slug not in ("veneza",) and (v.balao_qtd or v.financiamento):
         problemas.append("O modelo de contrato deste empreendimento não tem balões nem financiamento bancário: ajuste a forma de pagamento.")
     return problemas
@@ -1465,6 +1477,22 @@ def preencher_contrato_veneza(
     return buffer.getvalue()
 
 
+def _trocar_texto_campo(paragrafo, novo: str) -> None:
+    """Troca o texto inteiro de um campo do QUADRO RESUMO (rótulo + valor de
+    exemplo) e tira a cor azul de "campo a preencher" do modelo -- no
+    contrato final o texto sai preto como o resto."""
+    atual = paragrafo.text
+    if atual:
+        _substituir_texto(paragrafo, atual, novo)
+    else:
+        paragrafo.add_run(novo)
+    for r in paragrafo.runs:
+        rpr = r._r.rPr
+        if rpr is not None:
+            for cor in rpr.findall(qn("w:color")):
+                rpr.remove(cor)
+
+
 def preencher_contrato_rota_ventos(
     *,
     proposta: dict,
@@ -1472,82 +1500,199 @@ def preencher_contrato_rota_ventos(
     cliente: dict,
     data_contrato: Optional[date] = None,
     desconto: float = 0,
+    memorial: Optional[dict] = None,
 ) -> bytes:
-    """Preenche o modelo oficial do contrato do Rota dos Ventos (LR
-    Construtora) com os dados da proposta. O modelo (enviado em 14/11) é
-    bem diferente dos demais: o QUADRO RESUMO só tem campos pra
-    identificação do lote (nº, quadra), descrição textual e preço -- NÃO
-    tem bloco pra qualificar o(s) comprador(es) no QUADRO RESUMO.
-    Preenche o essencial pra gerar e identificar: lote, quadra, valor total,
-    data e os dois blocos de assinatura do comprador (CPF). Dados adicionais
-    do comprador (endereço, estado civil, renda, cônjuge) ficam a cargo do
-    financeiro completar no .docx antes de imprimir -- igual ao fluxo de
-    hoje, já que esse contrato só começou a sair pelo sistema agora."""
+    """Contrato oficial do Rota dos Ventos (L.R Construtora, modelo de 14/11).
+
+    O modelo veio com dados de exemplo de outro negócio em todo o QUADRO
+    RESUMO -- nº 004/2024, a EPF Construções e o Sr. Einstein Preston no
+    bloco do COMPRADOR, lote 25 da quadra 05 com as confrontações dele,
+    entrada de R$ 5.000,00 em 20/03/2024 e 30 parcelas de R$ 1.000,00. A
+    primeira versão (16/11 cedo) só trocava lote, quadra, valor, data e CPF
+    e deixava o resto -- o contrato sairia com a EPF como compradora e o
+    pagamento de outro cliente. Agora TODO campo de exemplo é substituído:
+
+    - nº e versão do contrato (mesma numeração dos outros empreendimentos);
+    - 2. COMPRADOR: nome, nacionalidade, profissão, estado civil,
+      nascimento, CPF, RG, endereço, telefone e e-mail do formulário;
+      o bloco "2.1 REPRESENTANTE" (de pessoa jurídica) vira "2.1 CÔNJUGE"
+      quando há cônjuge, ou sai do contrato quando não há;
+    - 4. UNIDADE: lote, quadra, área; confrontações do memorial descritivo
+      quando cadastrado -- sem memorial (caso de hoje), as linhas de
+      confrontação ficam em branco para preencher à mão, como no Riviera;
+    - 5. PREÇO: valor total, entrada e parcelas do plano da proposta;
+    - data de celebração e as duas assinaturas do COMPRADOR (nome + CPF),
+      duplicadas para o cônjuge quando houver.
+    """
     data_contrato = data_contrato or date.today()
     dq = proposta.get("dados_qualificacao") or {}
     proponente = dq.get("proponente") or {}
+    endereco = dq.get("endereco_residencial") or {}
     fp = dq.get("forma_pagamento") or {}
+    estado_civil = dq.get("estado_civil")
+    conjuge = dq.get("conjuge") or {}
+    nome_c = limpar_nome_titulo(conjuge.get("nome"))
+    com_conjuge = bool(tem_conjuge(dq) and nome_c)
 
     doc = docx.Document(str(_TEMPLATES_DIR / "contrato_rota_ventos.docx"))
 
     nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
-    valor = round(
-        (proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2
-    )
-    extenso = valor_por_extenso(valor).upper()
+    cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj")) if com_conjuge else ""
+    valor = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2)
 
-    # --- 4. UNIDADE IMOBILIÁRIA (tabela 6): Lote + Quadra -------------------
+    def ou_traco(v) -> str:
+        return v if (v and str(v).strip()) else "-"
+
+    # --- Nº do contrato ------------------------------------------------------
+    numero, versao = identificacao_contrato(proposta, data_contrato)
+    if not numero:
+        raise ValueError("Contrato sem número: a numeração tem que ser atribuída antes de preencher o modelo.")
+    p_num = next(p for p in doc.paragraphs if "Contrato nº 004/2024" in p.text)
+    _substituir_texto(p_num, "Contrato nº 004/2024", f"Contrato nº {numero} – Versão {versao}")
+
+    # --- 2. COMPRADOR (tabela 2) --------------------------------------------
+    t2 = doc.tables[2]
+
+    def campo(r: int, c: int, texto: str) -> None:
+        _trocar_texto_campo(t2.rows[r].cells[c].paragraphs[0], texto)
+
+    nascimento = _fmt_data_livre(proponente.get("data_nascimento"))
+    natural = titulo_pt((proponente.get("naturalidade") or "").strip())
+    linha_pessoal = (
+        f"Nacionalidade: {ou_traco(titulo_pt(proponente.get('nacionalidade') or ''))}   "
+        f"Profissão: {ou_traco(titulo_pt(proponente.get('profissao') or ''))}   "
+        f"Estado civil: {ESTADO_CIVIL_LABEL.get(estado_civil, '-')}   "
+        f"Nascimento: {nascimento}" + (f", em {natural}" if natural else "")
+    )
+    telefone = dq.get("telefone_celular") or cliente.get("telefone")
+    email = proponente.get("email") or cliente.get("email")
+    campo(0, 0, f"Nome: {nome}")
+    campo(1, 0, linha_pessoal)
+    campo(2, 0, f"CPF: {cpf}")
+    campo(2, 3, f"Identidade: {_identidade(proponente)}")
+    campo(3, 0, f"Endereço: {_endereco_completo(endereco)}")
+    campo(4, 0, f"Bairro: {ou_traco(titulo_pt(endereco.get('bairro') or ''))}")
+    campo(4, 1, f"Município: {ou_traco(titulo_pt(endereco.get('cidade') or ''))}")
+    campo(4, 4, f"UF: {ou_traco(endereco.get('estado'))}")
+    campo(4, 7, f"CEP: {formatar_cep(endereco.get('cep'))}")
+    campo(5, 0, f"Telefone/celular: {ou_traco(telefone)}")
+    campo(6, 0, f"E-mail: {ou_traco(email)}")
+    if com_conjuge:
+        campo(7, 0, "2.1 CÔNJUGE:")
+        campo(8, 0, f"Nome: {nome_c}")
+        campo(9, 0, f"Nacionalidade: {ou_traco(titulo_pt(conjuge.get('nacionalidade') or ''))}")
+        campo(9, 3, f"Profissão: {ou_traco(titulo_pt(conjuge.get('profissao') or ''))}")
+        campo(10, 0, f"Data de nascimento: {_fmt_data_livre(conjuge.get('data_nascimento'))}")
+        campo(10, 3, f"Local: {ou_traco(titulo_pt((conjuge.get('naturalidade') or '').strip()))}")
+        campo(11, 0, f"CPF: {cpf_c}")
+        campo(11, 3, f"Cédula de identidade: {_identidade(conjuge)}")
+        campo(12, 0, f"Endereço: {_endereco_completo(endereco)}")
+        campo(13, 0, f"Bairro: {ou_traco(titulo_pt(endereco.get('bairro') or ''))}")
+        campo(13, 2, f"Município: {ou_traco(titulo_pt(endereco.get('cidade') or ''))}")
+        campo(13, 5, f"UF: {ou_traco(endereco.get('estado'))}")
+        campo(13, 6, f"CEP: {formatar_cep(endereco.get('cep'))}")
+        campo(14, 0, f"Telefone/celular: {ou_traco(conjuge.get('telefone'))}")
+        campo(15, 0, f"E-mail: {ou_traco(conjuge.get('email'))}")
+    else:
+        # Sem cônjuge: o bloco "2.1 REPRESENTANTE" (de empresa) sai inteiro.
+        for row in list(t2.rows)[7:]:
+            row._tr.getparent().remove(row._tr)
+
+    # --- 4. UNIDADE (tabela 6) ----------------------------------------------
     t6 = doc.tables[6]
-    _substituir_texto(
-        t6.rows[0].cells[0].paragraphs[0],
-        "Lote: 25",
-        f"Lote: {lote.get('lote_numero') or '-'}",
-    )
-    # A célula [0,1] às vezes é merge da [0,0] (depende do Word) -- tenta
-    # substituir mas tolera se o texto já foi trocado junto com [0,0].
-    try:
-        _substituir_texto(
-            t6.rows[0].cells[1].paragraphs[0],
-            "Quadra: 05",
-            f"Quadra: {lote.get('quadra') or '-'}",
-        )
-    except ValueError:
-        pass
+    _trocar_texto_campo(t6.rows[0].cells[0].paragraphs[0], f"Lote: {lote.get('lote_numero') or '-'}")
+    celula_quadra = t6.rows[0].cells[1]
+    if celula_quadra._tc is not t6.rows[0].cells[0]._tc:
+        _trocar_texto_campo(celula_quadra.paragraphs[0], f"Quadra: {lote.get('quadra') or '-'}")
+    ps_conf = t6.rows[1].cells[0].paragraphs
+    linhas_conf = list((memorial or {}).get("confrontacoes") or [])
+    for i, par in enumerate(ps_conf[1:5]):
+        _trocar_texto_campo(par, linhas_conf[i] if i < len(linhas_conf) else "")
+    area = (memorial or {}).get("area_privativa") or lote.get("tamanho_m2") or 0
+    _trocar_texto_campo(ps_conf[5], f"Área: {formatar_valor(float(area))}m²")
 
-    # --- 5. PREÇO (tabela 8): Valor total -----------------------------------
+    # --- 5. PREÇO E PAGAMENTO (tabela 8) -------------------------------------
     t8 = doc.tables[8]
-    _substituir_texto(
-        t8.rows[0].cells[1].paragraphs[0],
-        "R$ 35.000,00 (TRINTA E CINCO MIL REAIS)",
-        f"R$ {formatar_valor(valor)} ({extenso})",
-    )
+    _trocar_texto_campo(t8.rows[0].cells[1].paragraphs[0], f"R$ {formatar_valor(valor)} ({valor_por_extenso(valor).upper()})")
+    tp = _textos_pagamento(fp, lote, valor, desconto=desconto)
+    p_entrada, p_parcelas = t8.rows[1].cells[0].paragraphs[1], t8.rows[1].cells[0].paragraphs[2]
+    if tp["a_vista"]:
+        _trocar_texto_campo(p_entrada, f" 5.1.  Pagamento à vista: {tp['entrada']}{tp['entrada_compl_pf']}.")
+        _trocar_texto_campo(p_parcelas, "5.1.2 Parcelas Mensais: não há (pagamento à vista).")
+    else:
+        if tp["entrada"]:
+            _trocar_texto_campo(p_entrada, f" 5.1.  Entrada: {tp['entrada']}{tp['entrada_compl_pf']}.")
+        else:
+            _trocar_texto_campo(p_entrada, " 5.1.  Entrada: não há.")
+        pc = tp["parcelas"]
+        if pc:
+            texto = (
+                f"5.1.2 Parcelas Mensais: {pc['qtd']} ({_numero_extenso_feminino(pc['qtd'])}) parcelas mensais e "
+                f"consecutivas de R$ {formatar_valor(pc['valor'])} ({valor_por_extenso(pc['valor'])}) cada, "
+                f"através de boleto bancário"
+            )
+            if pc["primeira"] or pc["dia"]:
+                texto += f", vencendo-se a primeira em {pc['primeira'] or '-'} {pc['demais']}".rstrip()
+            _trocar_texto_campo(p_parcelas, texto + ".")
+        else:
+            _trocar_texto_campo(p_parcelas, "5.1.2 Parcelas Mensais: não há.")
 
-    # --- Data de celebração (parágrafos 32 e 338) --------------------------
-    data_br = (
-        f"{data_contrato.day:02d} de "
-        f"{_MESES[data_contrato.month - 1].capitalize()} de "
-        f"{data_contrato.year}"
-    )
-    # Datas aparecem em dois lugares (primeira página e fim). Olhamos por
-    # conteúdo pra não quebrar se o modelo for reeditado.
-    for i, p in enumerate(doc.paragraphs):
-        if "Mossoró, 01 de Março de 2024" in p.text:
-            _substituir_texto(p, "Mossoró, 01 de Março de 2024.", f"Mossoró, {data_br}.")
-
-    # --- Nome + CPF nos blocos de assinatura (dois) ------------------------
-    # O modelo tem "CPF:" solto em dois lugares de assinatura do COMPRADOR,
-    # um na primeira página e outro no fim. Colocamos o nome do comprador
-    # junto, na mesma linha ("{NOME}   CPF: {cpf}"), pra identificar quem
-    # assinou (o modelo original só pedia o CPF). Olhar pelo conteúdo evita
-    # hardcoding de índice.
-    nome_cpf = f"{nome}        CPF: {cpf}" if nome else f"CPF: {cpf}"
+    # --- Data de celebração (duas: fim do QUADRO RESUMO e fim do contrato) ---
+    data_br = f"{data_contrato.day:02d} de {_MESES[data_contrato.month - 1].capitalize()} de {data_contrato.year}."
     for par in doc.paragraphs:
-        t = par.text.strip()
-        if t in ("CPF:", "CPF:  ") or (
-            t.startswith("CPF:") and len(t) < 15 and not any(d.isdigit() for d in t)
-        ):
-            _substituir_texto(par, "CPF:", nome_cpf)
+        if "01 de Março de 2024." in par.text:
+            _substituir_texto(par, "01 de Março de 2024.", data_br)
+
+    # --- Assinaturas do COMPRADOR (duas) --------------------------------------
+    # Achadas pelo conteúdo: o parágrafo que é só "CPF:" (as testemunhas têm
+    # "CPF :" e "CPF ... CPF" na mesma linha e não entram). Nome vai numa
+    # linha própria acima do CPF, com a mesma formatação; com cônjuge, o bloco
+    # traço/nome/CPF/"COMPRADOR (A)" é duplicado logo abaixo.
+    blocos = [p for p in doc.paragraphs if p.text.strip() == "CPF:"]
+    if len(blocos) != 2:
+        raise ValueError(f"Modelo do Rota dos Ventos: esperava 2 assinaturas do comprador, achou {len(blocos)}.")
+    for p_cpf in blocos:
+        p_linha = Paragraph(p_cpf._p.getprevious(), p_cpf._parent)
+        p_comprador = Paragraph(p_cpf._p.getnext(), p_cpf._parent)
+        p_nome = Paragraph(copy.deepcopy(p_cpf._p), p_cpf._parent)
+        p_cpf._p.addprevious(p_nome._p)
+        _substituir_texto(p_nome, "CPF:", nome)
+        _substituir_texto(p_cpf, "CPF:", f"CPF: {cpf}")
+        if com_conjuge:
+            ref = p_comprador._p
+            espaco = copy.deepcopy(p_comprador._p)
+            for r in espaco.findall(qn("w:r")):
+                espaco.remove(r)
+            ref.addnext(espaco)
+            ref = espaco
+            novos = [copy.deepcopy(x._p) for x in (p_linha, p_nome, p_cpf, p_comprador)]
+            for n in novos:
+                ref.addnext(n)
+                ref = n
+            _substituir_texto(Paragraph(novos[1], p_cpf._parent), nome, nome_c)
+            _substituir_texto(Paragraph(novos[2], p_cpf._parent), f"CPF: {cpf}", f"CPF: {cpf_c}")
+            # Compensa as 5 linhas novas tirando linhas vazias DEPOIS das
+            # testemunhas (antes da quebra de página do modelo) -- sem isso
+            # sobrava uma página em branco. O espaço entre as assinaturas
+            # continua o do modelo.
+            p_test = ref.getnext()
+            while p_test is not None and not (
+                p_test.tag == qn("w:p") and "Testemunha" in "".join(p_test.itertext())
+            ):
+                p_test = p_test.getnext()
+            if p_test is not None and p_test.getnext() is not None:
+                # pula a linha "CPF ... CPF"; as linhas vazias até a quebra de
+                # página são só enchimento do modelo e podem sair todas
+                prox, sobra = p_test.getnext().getnext(), 99
+                while sobra and prox is not None and prox.tag == qn("w:p"):
+                    vazio = not "".join(prox.itertext()).strip()
+                    quebra = prox.find(".//" + qn("w:br")) is not None or prox.find(".//" + qn("w:sectPr")) is not None
+                    if not vazio or quebra:
+                        break
+                    seguinte = prox.getnext()
+                    prox.getparent().remove(prox)
+                    prox, sobra = seguinte, sobra - 1
 
     buffer = io.BytesIO()
     doc.save(buffer)

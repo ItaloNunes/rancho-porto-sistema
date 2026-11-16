@@ -585,3 +585,82 @@ def test_rancho_texas_sem_chave_nao_quebra():
     assert preencher_contrato_rancho_texas(
         proposta=proposta(fp, LOTE_RT), lote=LOTE_RT, cliente=CLIENTE,
         data_contrato=date(2026, 10, 2))
+
+
+# ------------------------------------------------------------------ Rota dos Ventos (16/11)
+LOTE_ROTA = {"identificador": "LOTE 27 - QUADRA 1", "lote_numero": 27, "quadra": "1", "tamanho_m2": 277.36,
+             "valor_total": 104010.0, "entrada": None, "entrega": None, "parcela_mensal": None, "qtd_parcelas": None}
+FP_ROTA = {"a_vista": False, "renda": "7.000,00", "valor_proposto": 104010.0, "sinal": "10.401,00", "sinal_forma": "unica",
+           "sinal_meio": "pix", "sinal_vencimento": "2026-11-20", "dividido_em_parcelas": 60, "valor_parcela": "1.560,15",
+           "primeiro_mes": "2026-12-10", "vencimento": "10", "confirmado": True}
+# dados do contrato de exemplo que veio no modelo (outro negócio): nada disso pode sair no contrato gerado
+SOBRAS_MODELO_ROTA = ["004/2024", "EPF", "EINSTEIN", "ADMJR", "Lote: 25", "Quadra: 05", "263,98", "35.000,00", "5.000,00",
+                      "1.000,00", "20/03/2024", "30/04/2024", "Março de 2024", "Projetada 05", "lote 26", "Insc. Estadual",
+                      "REPRESENTANTE", "Nome Fantasia", "3312-4885", "942.693.274-72", "20.209.511"]
+
+
+def rota(fp=FP_ROTA, casado=False, memorial=None):
+    from app.documentos_gerados import preencher_contrato_rota_ventos
+    return preencher_contrato_rota_ventos(proposta=proposta(fp, LOTE_ROTA, casado), lote=LOTE_ROTA, cliente=CLIENTE,
+                                          data_contrato=date(2026, 11, 16), memorial=memorial)
+
+
+@pytest.mark.parametrize("casado", [False, True])
+def test_rota_nao_sobra_nada_do_contrato_de_exemplo(casado):
+    t = texto_docx(rota(casado=casado))
+    assert [k for k in SOBRAS_MODELO_ROTA if k in t] == []
+
+
+def test_rota_preenche_quadro_resumo():
+    t = texto_docx(rota())
+    for trecho in ["Contrato nº 0091 – Versão 1", "Nome: Maria Teste da Silva", "CPF: 011.473.324-44", "Lote: 27",
+                   "Quadra: 1", "Área: 277,36m²", "R$ 104.010,00 (CENTO E QUATRO MIL E DEZ REAIS)",
+                   "Entrada: R$ 10.401,00 (dez mil quatrocentos e um reais), paga via PIX em 20/11/2026",
+                   "60 (sessenta) parcelas mensais e consecutivas de R$ 1.560,15", "vencendo-se a primeira em 10/12/2026",
+                   "16 de Novembro de 2026"]:
+        assert trecho in t, trecho
+    assert "CÔNJUGE" not in t
+
+
+def test_rota_com_conjuge_qualifica_e_assina():
+    b = rota(casado=True)
+    t = texto_docx(b)
+    assert "2.1 CÔNJUGE" in t and "Nome: João Teste" in t and "CPF: 529.982.247-25" in t
+    d = docx.Document(io.BytesIO(b))
+    ps = [p.text.strip() for p in d.paragraphs]
+    # duas assinaturas (fim do quadro resumo e fim do contrato), cada uma com comprador e cônjuge
+    assert ps.count("Maria Teste da Silva") == 2 and ps.count("João Teste") == 2
+    assert ps.count("CPF: 011.473.324-44") == 2 and ps.count("CPF: 529.982.247-25") == 2
+
+
+def test_rota_confrontacoes_do_memorial_quando_houver():
+    mem = {"area_privativa": 277.36, "confrontacoes": ["Frente: 13,87m com a Rua A", "Fundo: 13,87m com o lote 28",
+                                                         "Direita: 20,00m com a Rua B", "Esquerda: 20,00m com o lote 26"]}
+    t = texto_docx(rota(memorial=mem))
+    assert "Frente: 13,87m com a Rua A" in t and "Esquerda: 20,00m com o lote 26" in t
+
+
+def test_rota_a_vista():
+    fp = {"a_vista": True, "renda": "10.000,00", "valor_proposto": 104010.0, "avista_meio": "transferencia",
+          "avista_data": "2026-11-20", "confirmado": True}
+    t = texto_docx(rota(fp=fp))
+    assert "Pagamento à vista: R$ 104.010,00" in t and "Parcelas Mensais: não há (pagamento à vista)" in t
+
+
+def test_rota_trava_chave():
+    from app.documentos_gerados import problemas_modelo_contrato
+    fp = {**FP_ROTA, "chave_valor": "5.000,00"}
+    assert any("chave" in p for p in problemas_modelo_contrato("rota_ventos", fp, LOTE_ROTA))
+
+
+# ------------------------------------------------------------------ extenso (16/11)
+@pytest.mark.parametrize("valor,esperado", [
+    (1001, "mil e um reais"), (1100, "mil e cem reais"), (2010, "dois mil e dez reais"),
+    (104010, "cento e quatro mil e dez reais"), (1000100, "um milhão e cem reais"),
+    (2300000, "dois milhões e trezentos mil reais"), (1000000, "um milhão de reais"),
+    (89990, "oitenta e nove mil novecentos e noventa reais"), (200250, "duzentos mil duzentos e cinquenta reais"),
+    (227035.2, "duzentos e vinte e sete mil e trinta e cinco reais e vinte centavos"),
+])
+def test_extenso_com_e_entre_grupos(valor, esperado):
+    from app.documentos_gerados import valor_por_extenso
+    assert valor_por_extenso(valor) == esperado

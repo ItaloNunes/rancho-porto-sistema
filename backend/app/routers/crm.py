@@ -1585,12 +1585,17 @@ def gerar_contrato_proposta(
                 proposta=proposta, lote=lote, cliente=cliente, valor_comissao=comissao, data_contrato=data_contrato, desconto=desconto
             )
     elif modelo == "rota_ventos":
-        # Rota dos Ventos (16/11): modelo oficial da LR Construtora. O
-        # QUADRO RESUMO não tem bloco pra qualificar o(s) comprador(es);
-        # o sistema preenche lote, quadra, valor, data e CPFs das
-        # assinaturas -- o financeiro completa os demais dados do
-        # comprador no .docx antes da assinatura, igual ao fluxo manual
-        # usado até agora pra esse empreendimento.
+        # Rota dos Ventos (16/11): modelo oficial da L.R Construtora. Todo
+        # campo de exemplo do QUADRO RESUMO é substituído (comprador, cônjuge,
+        # lote, preço, pagamento, data, assinaturas). Confrontações vêm do
+        # memorial descritivo quando ele for cadastrado (lotes_memorial).
+        problemas = problemas_cadastro(proposta.get("dados_qualificacao") or {})
+        if problemas:
+            raise HTTPException(
+                422,
+                "O contrato não foi gerado: " + " ".join(problemas)
+                + " Use \"Corrigir dados\" na proposta pra completar.",
+            )
         proposta["numero_contrato"] = _garantir_numero_contrato(sb, proposta)
         docx_bytes = preencher_contrato_rota_ventos(
             proposta=proposta,
@@ -1598,6 +1603,7 @@ def gerar_contrato_proposta(
             cliente=cliente,
             data_contrato=data_contrato,
             desconto=desconto,
+            memorial=_memorial_do_lote(sb, "rota-dos-ventos", lote),
         )
     elif modelo == "rancho_texas":
         # O Rancho Texas qualifica o cônjuge/companheiro(a) como COMPRADORA:

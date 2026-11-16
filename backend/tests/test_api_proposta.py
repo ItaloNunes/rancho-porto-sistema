@@ -699,3 +699,44 @@ def test_listar_reservas_corretor_filtra_por_dono(cliente_api, monkeypatch):
     app.dependency_overrides[get_current_corretor] = lambda: ADMIN
     vistos_adm = {r["id"] for r in _api.get("/reservas").json()}
     assert vistos_adm == {"r1", "r2", "r3"}
+
+
+FP_ROTA_API = {"a_vista": False, "renda": "7.000,00", "valor_proposto": 104010.0, "valor_tabela": 104010.0,
+               "sinal": "10.401,00", "sinal_forma": "unica", "sinal_meio": "pix", "sinal_vencimento": "2026-11-20",
+               "dividido_em_parcelas": 60, "valor_parcela": "1.560,15", "primeiro_mes": "2026-12-10", "confirmado": True}
+
+
+def _semear_rota(sb, fp):
+    _semear_0003(sb, status="aprovada")
+    p = sb.banco["propostas"][0]
+    p["valor_proposto"] = fp["valor_proposto"]
+    p["dados_qualificacao"] = {**_dq_corrigido(), "forma_pagamento": fp}
+    p["lote"] = {**sb.banco["lotes"][0], "identificador": "LOTE 27 - QUADRA 1", "lote_numero": 27, "quadra": "1",
+                 "tamanho_m2": 277.36, "valor_total": 104010.0, "entrada": None, "parcela_mensal": None,
+                 "qtd_parcelas": None, "entrega": None, "condominio": {"nome": "Rota dos Ventos"}}
+    p["cliente"] = sb.banco["clientes"][0]
+
+
+def test_contrato_e_recibo_do_rota_dos_ventos(cliente_api):
+    """16/11: o contrato do Rota sai em PDF sem nenhum dado do contrato de exemplo do modelo."""
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_rota(sb, FP_ROTA_API)
+    r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-11-16")
+    assert r.status_code == 200, r.text
+    import io
+    from pypdf import PdfReader
+    texto = " ".join(" ".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(r.content)).pages).split())
+    assert "Contrato nº 0091" in texto and "Lote: 27" in texto and "104.010,00" in texto
+    for sobra in ("004/2024", "EPF CONSTRU", "EINSTEIN", "35.000,00", "20/03/2024"):
+        assert sobra not in texto, sobra
+    r = api.get("/crm/propostas/p3/recibo?valor=10401&data=2026-11-16")
+    assert r.status_code == 200, r.text
+
+
+def test_contrato_do_rota_trava_chave(cliente_api):
+    api, sb = cliente_api
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    _semear_rota(sb, {**FP_ROTA_API, "chave_valor": "5.000,00", "dividido_em_parcelas": 57})
+    r = api.get("/crm/propostas/p3/contrato?comissao=0&data=2026-11-16")
+    assert r.status_code == 422 and "chave" in r.text
