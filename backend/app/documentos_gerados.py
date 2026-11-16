@@ -159,6 +159,8 @@ def modelo_documentos(condominio_nome: str) -> Optional[str]:
         return "riviera"
     if "veneza" in nome:
         return "veneza"
+    if "rota" in nome and "vento" in nome:
+        return "rota_ventos"
     return None
 
 
@@ -1454,6 +1456,95 @@ def preencher_contrato_veneza(
         run._r.insert(0, copy.deepcopy(rpr_titulo))
     run.bold = True
     topo.alignment = ps[1].alignment
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def preencher_contrato_rota_ventos(
+    *,
+    proposta: dict,
+    lote: dict,
+    cliente: dict,
+    data_contrato: Optional[date] = None,
+    desconto: float = 0,
+) -> bytes:
+    """Preenche o modelo oficial do contrato do Rota dos Ventos (LR
+    Construtora) com os dados da proposta. O modelo (enviado em 14/11) é
+    bem diferente dos demais: o QUADRO RESUMO só tem campos pra
+    identificação do lote (nº, quadra), descrição textual e preço -- NÃO
+    tem bloco pra qualificar o(s) comprador(es) no QUADRO RESUMO.
+    Preenche o essencial pra gerar e identificar: lote, quadra, valor total,
+    data e os dois blocos de assinatura do comprador (CPF). Dados adicionais
+    do comprador (endereço, estado civil, renda, cônjuge) ficam a cargo do
+    financeiro completar no .docx antes de imprimir -- igual ao fluxo de
+    hoje, já que esse contrato só começou a sair pelo sistema agora."""
+    data_contrato = data_contrato or date.today()
+    dq = proposta.get("dados_qualificacao") or {}
+    proponente = dq.get("proponente") or {}
+    fp = dq.get("forma_pagamento") or {}
+
+    doc = docx.Document(str(_TEMPLATES_DIR / "contrato_rota_ventos.docx"))
+
+    nome = _nome_comprador(proponente, cliente)
+    cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
+    valor = round(
+        (proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2
+    )
+    extenso = valor_por_extenso(valor).upper()
+
+    # --- 4. UNIDADE IMOBILIÁRIA (tabela 6): Lote + Quadra -------------------
+    t6 = doc.tables[6]
+    _substituir_texto(
+        t6.rows[0].cells[0].paragraphs[0],
+        "Lote: 25",
+        f"Lote: {lote.get('lote_numero') or '-'}",
+    )
+    # A célula [0,1] às vezes é merge da [0,0] (depende do Word) -- tenta
+    # substituir mas tolera se o texto já foi trocado junto com [0,0].
+    try:
+        _substituir_texto(
+            t6.rows[0].cells[1].paragraphs[0],
+            "Quadra: 05",
+            f"Quadra: {lote.get('quadra') or '-'}",
+        )
+    except ValueError:
+        pass
+
+    # --- 5. PREÇO (tabela 8): Valor total -----------------------------------
+    t8 = doc.tables[8]
+    _substituir_texto(
+        t8.rows[0].cells[1].paragraphs[0],
+        "R$ 35.000,00 (TRINTA E CINCO MIL REAIS)",
+        f"R$ {formatar_valor(valor)} ({extenso})",
+    )
+
+    # --- Data de celebração (parágrafos 32 e 338) --------------------------
+    data_br = (
+        f"{data_contrato.day:02d} de "
+        f"{_MESES[data_contrato.month - 1].capitalize()} de "
+        f"{data_contrato.year}"
+    )
+    # Datas aparecem em dois lugares (primeira página e fim). Olhamos por
+    # conteúdo pra não quebrar se o modelo for reeditado.
+    for i, p in enumerate(doc.paragraphs):
+        if "Mossoró, 01 de Março de 2024" in p.text:
+            _substituir_texto(p, "Mossoró, 01 de Março de 2024.", f"Mossoró, {data_br}.")
+
+    # --- Nome + CPF nos blocos de assinatura (dois) ------------------------
+    # O modelo tem "CPF:" solto em dois lugares de assinatura do COMPRADOR,
+    # um na primeira página e outro no fim. Colocamos o nome do comprador
+    # junto, na mesma linha ("{NOME}   CPF: {cpf}"), pra identificar quem
+    # assinou (o modelo original só pedia o CPF). Olhar pelo conteúdo evita
+    # hardcoding de índice.
+    nome_cpf = f"{nome}        CPF: {cpf}" if nome else f"CPF: {cpf}"
+    for par in doc.paragraphs:
+        t = par.text.strip()
+        if t in ("CPF:", "CPF:  ") or (
+            t.startswith("CPF:") and len(t) < 15 and not any(d.isdigit() for d in t)
+        ):
+            _substituir_texto(par, "CPF:", nome_cpf)
 
     buffer = io.BytesIO()
     doc.save(buffer)

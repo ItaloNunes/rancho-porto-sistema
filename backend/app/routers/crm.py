@@ -36,6 +36,7 @@ from ..documentos_gerados import (
     preencher_contrato_porto_franco,
     preencher_contrato_rancho_texas,
     preencher_contrato_riviera,
+    preencher_contrato_rota_ventos,
     preencher_contrato_veneza,
     preencher_recibo,
     problemas_modelo_contrato,
@@ -1583,6 +1584,21 @@ def gerar_contrato_proposta(
             docx_bytes = preencher_contrato_veneza(
                 proposta=proposta, lote=lote, cliente=cliente, valor_comissao=comissao, data_contrato=data_contrato, desconto=desconto
             )
+    elif modelo == "rota_ventos":
+        # Rota dos Ventos (16/11): modelo oficial da LR Construtora. O
+        # QUADRO RESUMO não tem bloco pra qualificar o(s) comprador(es);
+        # o sistema preenche lote, quadra, valor, data e CPFs das
+        # assinaturas -- o financeiro completa os demais dados do
+        # comprador no .docx antes da assinatura, igual ao fluxo manual
+        # usado até agora pra esse empreendimento.
+        proposta["numero_contrato"] = _garantir_numero_contrato(sb, proposta)
+        docx_bytes = preencher_contrato_rota_ventos(
+            proposta=proposta,
+            lote=lote,
+            cliente=cliente,
+            data_contrato=data_contrato,
+            desconto=desconto,
+        )
     elif modelo == "rancho_texas":
         # O Rancho Texas qualifica o cônjuge/companheiro(a) como COMPRADORA:
         # sem os dados dele(a) o contrato sairia incompleto.
