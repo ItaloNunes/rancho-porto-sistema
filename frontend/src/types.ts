@@ -444,6 +444,9 @@ export interface FormaPagamentoDados {
   sinal_valor_parcela?: string | null; // calculado pelo servidor
   sinal_avista?: string | null; // "mista": parte paga à vista agora
   sinal_resto_primeira?: string | null;
+  /** Valor de cada parcela da entrada digitado à mão (parcelada: todas;
+   * mista: as do saldo). Vazio = partes iguais. */
+  sinal_valores?: (string | null)[] | null;
 /** Desconto que o corretor dá ao cliente saindo da própria comissão (10/11). */
   desconto_corretor_valor?: string | null; // "mista": AAAA-MM-DD da 1ª parcela do saldo
   sinal_meio?: MeioPagamento | null;

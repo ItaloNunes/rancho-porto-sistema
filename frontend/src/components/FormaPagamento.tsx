@@ -11,6 +11,7 @@ import {
   lerData,
   lerPlano,
   lerValor,
+  textoCurtoParcelas,
   textoMeio,
   tolerancia,
   valorPorExtenso,
@@ -77,6 +78,80 @@ export function temBaloesNaTabela(lote: LoteComCondominio | null | undefined): b
 /** Campo de dinheiro: aceita "8999", "8.999", "8.999,00"; ao sair do campo
  * vira "8.999,00", e mostra o valor por extenso embaixo pra pegar dígito a
  * mais/a menos na hora (ex.: 89,99 x 89.990,00). */
+/** Valor de cada parcela da entrada: partes iguais (padrão) ou digitado à
+ * mão, uma por uma (16/11 -- ex.: 2x de 4.000,00 e 1x de 3.670,00). */
+function ParcelasEntrada({
+  total,
+  n,
+  valores,
+  onChange,
+}: {
+  total: number | null;
+  n: number;
+  valores: (string | null)[] | null | undefined;
+  onChange: (v: (string | null)[] | null) => void;
+}) {
+  if (!total || !Number.isInteger(n) || n < 1) return null;
+  const iguais = dividirEmParcelas(total, n);
+  const editando = !!valores && valores.length > 0;
+  if (!editando) {
+    return (
+      <div className="grid gap-1.5">
+        <span className="text-[11px] text-ink-soft">{textoCurtoParcelas(iguais)}, uma por mês</span>
+        {n > 1 && (
+          <button
+            type="button"
+            id="fp-entrada-editar-parcelas"
+            className="btn-row btn-row-neutral justify-self-start"
+            onClick={() => onChange(iguais.map(fmtBRL))}
+          >
+            editar o valor de cada parcela
+          </button>
+        )}
+      </div>
+    );
+  }
+  const lista = Array.from({ length: n }, (_, i) => valores?.[i] ?? "");
+  const nums = lista.map((v) => lerValor(v ?? ""));
+  const soma = Math.round(nums.reduce<number>((t, v) => t + (v ?? 0), 0) * 100) / 100;
+  const dif = Math.round((total - soma) * 100) / 100;
+  const somaOutras = Math.round(nums.slice(0, -1).reduce<number>((t, v) => t + (v ?? 0), 0) * 100) / 100;
+  const ultimaPeloQueFalta = Math.round((total - somaOutras) * 100) / 100;
+  return (
+    <div className="grid gap-2 rounded-lg border border-border p-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {lista.map((v, i) => (
+          <CampoDinheiro
+            key={i}
+            id={`fp-entrada-parcela-${i + 1}`}
+            label={`${i + 1}ª parcela`}
+            valor={v}
+            onChange={(novo) => onChange(lista.map((x, j) => (j === i ? novo : x)))}
+          />
+        ))}
+      </div>
+      <p className={`text-xs ${Math.abs(dif) <= 0.005 ? "text-ink-soft" : "text-rust font-semibold"}`}>
+        Soma: R$ {fmtBRL(soma)} de R$ {fmtBRL(total)}
+        {Math.abs(dif) > 0.005 && (dif > 0 ? ` — faltam R$ ${fmtBRL(dif)}` : ` — passou R$ ${fmtBRL(-dif)}`)}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {n > 1 && Math.abs(dif) > 0.005 && ultimaPeloQueFalta > 0 && (
+          <button
+            type="button"
+            className="btn-row btn-row-neutral"
+            onClick={() => onChange(lista.map((x, j) => (j === n - 1 ? fmtBRL(ultimaPeloQueFalta) : x)))}
+          >
+            última parcela = R$ {fmtBRL(ultimaPeloQueFalta)} (o que falta)
+          </button>
+        )}
+        <button type="button" className="btn-row btn-row-neutral" onClick={() => onChange(null)}>
+          voltar para parcelas iguais
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CampoDinheiro({
   id,
   label,
@@ -249,9 +324,11 @@ export function ConferenciaPlano({
   const comBaloes = !!(p.balaoQtd || p.balaoValor || p.financiamento);
   const linhas: [string, string][] = [
     [
-      p.entradaParcelas > 1
-        ? `Entrada (${p.entradaParcelas}x de R$ ${fmtBRL(p.entradaValores[0])})`
-        : "Entrada (pagamento único)",
+      fp.sinal_forma === "mista" && p.saldoValores.length
+        ? `Entrada (R$ ${fmtBRL(lerValor(fp.sinal_avista) ?? 0)} à vista + ${textoCurtoParcelas(p.saldoValores)})`
+        : p.entradaParcelas > 1
+          ? `Entrada (${textoCurtoParcelas(p.entradaValores)})`
+          : "Entrada (pagamento único)",
       fmtBRL(p.entrada ?? 0),
     ],
     [`Parcelas mensais (${p.parcelas ?? 0} x R$ ${fmtBRL(p.parcelaValor ?? 0)})`, fmtBRL((p.parcelas ?? 0) * (p.parcelaValor ?? 0))],
@@ -349,6 +426,15 @@ export default function FormaPagamentoEtapa({
       ? dividirEmParcelas(entrada - avistaVal, nEnt)
       : [];
   const diaVenc = lerData(fp.primeiro_mes)?.getDate();
+  // Mudou a quantidade de parcelas da entrada: se estava editando os
+  // valores à mão, recomeça com partes iguais na nova quantidade.
+  const trocarQtdEntrada = (n: number | null, totalParcelado: number | null) => {
+    const editando = !!fp.sinal_valores && fp.sinal_valores.length > 0;
+    set({
+      sinal_parcelas: n,
+      sinal_valores: editando && n && n >= 1 && totalParcelado ? dividirEmParcelas(totalParcelado, n).map(fmtBRL) : null,
+    });
+  };
   // Casas do Veneza: balões + financiamento no lugar da chave (o contrato
   // do Veneza não tem chave). Aparece também se a proposta já tiver balões.
   const comBaloes = temBaloesNaTabela(lote) || !!fp.balao_qtd || !!fp.balao_valor || !!fp.financiamento_valor;
@@ -424,6 +510,7 @@ export default function FormaPagamentoEtapa({
                 onChange={(v) =>
                   set({
                     sinal_forma: v,
+                    sinal_valores: null,
                     sinal_parcelas:
                       v === "unica"
                         ? 1
@@ -445,19 +532,12 @@ export default function FormaPagamentoEtapa({
                   min={2}
                   max={MAX_PARCELAS_ENTRADA}
                   value={fp.sinal_parcelas ?? ""}
-                  onChange={(e) => set({ sinal_parcelas: e.target.value ? Number(e.target.value) : null })}
+                  onChange={(e) => trocarQtdEntrada(e.target.value ? Number(e.target.value) : null, entrada)}
                 />
-                {valoresEntrada.length > 0 && (
-                  <span className="text-[11px] text-ink-soft">
-                    {new Set(valoresEntrada).size === 1
-                      ? `${valoresEntrada.length}x de R$ ${fmtBRL(valoresEntrada[0])}`
-                      : `${valoresEntrada.filter((v) => v === valoresEntrada[0]).length}x de R$ ${fmtBRL(valoresEntrada[0])} e ${
-                          valoresEntrada.filter((v) => v !== valoresEntrada[0]).length
-                        }x de R$ ${fmtBRL(valoresEntrada[valoresEntrada.length - 1])}`}
-                    , uma por mês
-                  </span>
-                )}
               </Field>
+            )}
+            {fp.sinal_forma === "parcelada" && valoresEntrada.length > 0 && (
+              <ParcelasEntrada total={entrada} n={nEnt} valores={fp.sinal_valores} onChange={(v) => set({ sinal_valores: v })} />
             )}
             {fp.sinal_forma === "mista" && (
               <div className="grid gap-3">
@@ -475,14 +555,25 @@ export default function FormaPagamentoEtapa({
                     min={1}
                     max={MAX_PARCELAS_ENTRADA}
                     value={fp.sinal_parcelas ?? ""}
-                    onChange={(e) => set({ sinal_parcelas: e.target.value ? Number(e.target.value) : null })}
+                    onChange={(e) =>
+                      trocarQtdEntrada(
+                        e.target.value ? Number(e.target.value) : null,
+                        entrada && avistaVal != null ? Math.round((entrada - avistaVal) * 100) / 100 : null,
+                      )
+                    }
                   />
                   {valoresSaldo.length > 0 && entrada && avistaVal != null && (
-                    <span className="text-[11px] text-ink-soft">
-                      Saldo de R$ {fmtBRL(entrada - avistaVal)} em {valoresSaldo.length}x de R$ {fmtBRL(valoresSaldo[0])}, uma por mês
-                    </span>
+                    <span className="text-[11px] text-ink-soft">Saldo de R$ {fmtBRL(entrada - avistaVal)}</span>
                   )}
                 </Field>
+                {valoresSaldo.length > 0 && entrada && avistaVal != null && (
+                  <ParcelasEntrada
+                    total={Math.round((entrada - avistaVal) * 100) / 100}
+                    n={nEnt}
+                    valores={fp.sinal_valores}
+                    onChange={(v) => set({ sinal_valores: v })}
+                  />
+                )}
                 <CampoData
                   id="fp-entrada-saldo-data"
                   label="Vencimento da 1ª parcela do saldo *"

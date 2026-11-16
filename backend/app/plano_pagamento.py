@@ -171,6 +171,8 @@ class Plano:
     entrada_data: Optional[date] = None
     entrada_avista: Optional[float] = None  # "mista": parte paga à vista agora
     entrada_resto_primeira: Optional[date] = None  # "mista": 1ª parcela do saldo
+    # valor de cada parcela digitado à mão (None = parcela inválida/vazia)
+    entrada_valores_manuais: Optional[list] = None
     # parcelas mensais
     parcelas: Optional[int] = None
     parcela_valor: Optional[float] = None
@@ -189,12 +191,39 @@ class Plano:
     estruturado: bool = False  # True = proposta feita no formulário novo (02/10)
     erros: list = field(default_factory=list)
 
+    def _manuais_ok(self, n: int) -> Optional[list[float]]:
+        m = self.entrada_valores_manuais
+        if m and len(m) == n and all(v is not None and v > 0 for v in m):
+            return list(m)
+        return None
+
     @property
     def entrada_valores(self) -> list[float]:
+        """Parcelas da entrada ("parcelada"): as digitadas à mão, se houver,
+        senão partes iguais."""
         if not self.entrada:
             return []
         n = self.entrada_parcelas if self.entrada_forma == "parcelada" else 1
+        if n > 1:
+            manuais = self._manuais_ok(n)
+            if manuais:
+                return manuais
         return dividir_em_parcelas(self.entrada, max(1, n))
+
+    @property
+    def saldo_entrada(self) -> Optional[float]:
+        if self.entrada_forma != "mista" or not self.entrada or not self.entrada_avista:
+            return None
+        return round(self.entrada - self.entrada_avista, 2)
+
+    @property
+    def saldo_valores(self) -> list[float]:
+        """Parcelas do saldo da entrada ("mista"): digitadas ou iguais."""
+        resto = self.saldo_entrada
+        if not resto or resto <= 0:
+            return []
+        n = max(1, self.entrada_parcelas)
+        return self._manuais_ok(n) or dividir_em_parcelas(resto, n)
 
     @property
     def baloes_total(self) -> float:
@@ -221,6 +250,8 @@ def ler_plano(fp: Optional[dict]) -> Plano:
     except (TypeError, ValueError):
         n_entrada = 1
     primeira_txt = fp.get("primeiro_mes")
+    brutos = fp.get("sinal_valores")
+    manuais = [valor(v) for v in brutos] if isinstance(brutos, list) and brutos else None
     try:
         balao_qtd = int(fp.get("balao_qtd")) if fp.get("balao_qtd") not in (None, "") else None
     except (TypeError, ValueError):
@@ -238,6 +269,7 @@ def ler_plano(fp: Optional[dict]) -> Plano:
         entrada_data=data(fp.get("sinal_vencimento")),
         entrada_avista=valor(fp.get("sinal_avista")),
         entrada_resto_primeira=data(fp.get("sinal_resto_primeira")),
+        entrada_valores_manuais=manuais,
         parcelas=parcelas,
         parcela_valor=valor(fp.get("valor_parcela")),
         primeira_parcela=data(primeira_txt),
@@ -339,6 +371,7 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
                 erros.append(f"Entrada com saldo parcelado: informe em quantas vezes (de 1 a {MAX_PARCELAS_ENTRADA}).")
             if not p.entrada_resto_primeira:
                 erros.append("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).")
+        erros += _erros_valores_entrada(fp, p)
         if p.entrada_meio not in MEIOS_PAGAMENTO:
             erros.append("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).")
         if not p.entrada_data:
@@ -372,6 +405,55 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
     if not fp.get("confirmado"):
         erros.append("Falta a confirmação final: marque que conferiu todos os valores com o cliente.")
     return erros
+
+
+def _erros_valores_entrada(fp: dict, p: Plano) -> list[str]:
+    """Parcelas da entrada com valor digitado à mão: uma por parcela, todas
+    válidas e somando o total (entrada inteira ou o saldo, na mista)."""
+    brutos = fp.get("sinal_valores")
+    if p.entrada_forma not in ("parcelada", "mista") or not isinstance(brutos, list) or not brutos:
+        return []
+    n = p.entrada_parcelas
+    if len(brutos) != n:
+        return [f"Parcelas da entrada: informe o valor de cada uma das {n} parcelas."]
+    erros: list[str] = []
+    for i, bruto in enumerate(brutos, 1):
+        v = valor(bruto)
+        if bruto in (None, ""):
+            erros.append(f"Informe o valor da {i}ª parcela da entrada.")
+        elif v is None:
+            erros.append(f"Valor da {i}ª parcela da entrada inválido: {FORMATO_VALOR}")
+        elif v <= 0:
+            erros.append(f"A {i}ª parcela da entrada tem que ser maior que zero.")
+    if erros:
+        return erros
+    alvo = p.entrada if p.entrada_forma == "parcelada" else p.saldo_entrada
+    if not alvo:
+        return []
+    soma = round(sum(valor(b) for b in brutos), 2)
+    if abs(soma - alvo) > 0.005:
+        o_que = "o valor da entrada" if p.entrada_forma == "parcelada" else "o saldo da entrada (entrada menos o valor à vista)"
+        erros.append(
+            f"As parcelas da entrada somam R$ {fmt_brl(soma)}, mas tinham que somar {o_que}, R$ {fmt_brl(alvo)} "
+            f"(diferença de R$ {fmt_brl(abs(soma - alvo))})."
+        )
+    return erros
+
+
+def grupos_parcelas(valores: list[float]) -> list[tuple[int, float]]:
+    """[4000, 4000, 3670] -> [(2, 4000.0), (1, 3670.0)] (iguais em sequência)."""
+    grupos: list[tuple[int, float]] = []
+    for v in valores:
+        if grupos and abs(grupos[-1][1] - v) < 0.005:
+            grupos[-1] = (grupos[-1][0] + 1, grupos[-1][1])
+        else:
+            grupos.append((1, v))
+    return grupos
+
+
+def texto_curto_parcelas(valores: list[float]) -> str:
+    """'3x de R$ 4.000,00' ou '2x de R$ 4.000,00 + 1x de R$ 3.670,00'."""
+    return " + ".join(f"{k}x de R$ {fmt_brl(v)}" for k, v in grupos_parcelas(valores))
 
 
 def _erros_baloes_financiamento(fp: dict, p: Plano) -> list[str]:
@@ -437,12 +519,18 @@ def normalizar(fp: dict) -> dict:
             out[chave] = None
     elif p.entrada_forma == "parcelada" and p.entrada:
         out["sinal_valor_parcela"] = fmt_brl(p.entrada_valores[0])
-    elif p.entrada_forma == "mista" and p.entrada and p.entrada_avista:
-        _resto = round(p.entrada - p.entrada_avista, 2)
-        out["sinal_valor_parcela"] = fmt_brl(dividir_em_parcelas(_resto, max(1, p.entrada_parcelas))[0])
+    elif p.entrada_forma == "mista" and p.saldo_valores:
+        out["sinal_valor_parcela"] = fmt_brl(p.saldo_valores[0])
     else:
         out["sinal_parcelas"] = 1 if p.entrada_forma == "unica" else out.get("sinal_parcelas")
         out["sinal_valor_parcela"] = None
+    # parcelas digitadas à mão: mesmo formato dos outros valores; só valem
+    # na entrada parcelada/mista
+    brutos = fp.get("sinal_valores")
+    if p.a_vista or p.entrada_forma not in ("parcelada", "mista") or not isinstance(brutos, list) or not brutos:
+        out["sinal_valores"] = None
+    else:
+        out["sinal_valores"] = [fmt_brl(valor(b)) if valor(b) is not None else b for b in brutos]
     return out
 
 
@@ -457,9 +545,13 @@ def resumo(fp: Optional[dict]) -> str:
     partes = []
     if p.entrada:
         if p.entrada_forma == "mista" and p.entrada_avista:
-            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} ({fmt_brl(p.entrada_avista)} à vista + {p.entrada_parcelas}x do saldo)")
+            sv = p.saldo_valores
+            saldo = texto_curto_parcelas(sv) if p.entrada_valores_manuais and len(grupos_parcelas(sv)) > 1 else f"{p.entrada_parcelas}x do saldo"
+            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} ({fmt_brl(p.entrada_avista)} à vista + {saldo})")
         elif p.entrada_forma == "parcelada" and p.entrada_parcelas > 1:
-            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} em {p.entrada_parcelas}x")
+            ev = p.entrada_valores
+            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} em "
+                          + (texto_curto_parcelas(ev) if p.entrada_valores_manuais and len(grupos_parcelas(ev)) > 1 else f"{p.entrada_parcelas}x"))
         else:
             partes.append(f"Entrada R$ {fmt_brl(p.entrada)}")
     if p.parcelas and p.parcela_valor:

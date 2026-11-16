@@ -9,7 +9,7 @@ import {
   mostrarPdfNaAba,
 } from "../../lib/api";
 import type { ConferenciaProposta, HistoricoContratos } from "../../lib/api";
-import { fmtBRL, fmtData, lerPlano, lerValor, resumoPlano, textoMeio, valorPorExtenso } from "../../lib/pagamento";
+import { fmtBRL, fmtData, lerPlano, lerValor, resumoPlano, textoCurtoParcelas, textoMeio, valorPorExtenso } from "../../lib/pagamento";
 import { ESTADO_CIVIL_OPCOES } from "../../components/qualificacaoCampos";
 import { temConjuge } from "../../lib/cadastro";
 import PropostaDocumentos from "./PropostaDocumentos";
@@ -499,8 +499,10 @@ function FormaPagamentoResumo({
   }
   const entradaTxt =
     fp.sinal_forma === "parcelada" && p.entradaParcelas > 1
-      ? `${p.entradaParcelas}x de R$ ${fmtBRL(p.entradaValores[0])} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_vencimento)}`
-      : fp.sinal_forma === "unica"
+      ? `${textoCurtoParcelas(p.entradaValores)} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_vencimento)}`
+      : fp.sinal_forma === "mista" && p.saldoValores.length
+        ? `R$ ${fp.sinal_avista} à vista em ${fmtData(fp.sinal_vencimento)} + saldo em ${textoCurtoParcelas(p.saldoValores)} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_resto_primeira)}`
+        : fp.sinal_forma === "unica"
         ? `De uma vez via ${textoMeio(fp.sinal_meio)} em ${fmtData(fp.sinal_vencimento)}`
         : "Forma, meio e data não informados (proposta antiga)";
   const total = p.total;

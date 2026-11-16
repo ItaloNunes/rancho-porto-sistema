@@ -156,6 +156,8 @@ export interface Plano {
   entrada: number | null;
   entradaParcelas: number;
   entradaValores: number[];
+  /** "mista": parcelas do saldo (entrada - parte à vista). */
+  saldoValores: number[];
   parcelas: number | null;
   parcelaValor: number | null;
   chave: number;
@@ -166,9 +168,32 @@ export interface Plano {
   total: number;
 }
 
+/** Parcelas da entrada digitadas à mão, se estiverem completas e válidas
+ * (uma por parcela, todas > 0); senão null (vale a divisão igual). */
+export function valoresManuaisEntrada(fp: FormaPagamentoDados, n: number): number[] | null {
+  const brutos = fp.sinal_valores;
+  if (!brutos || brutos.length !== n) return null;
+  const vals = brutos.map((b) => lerValor(b ?? ""));
+  return vals.every((v) => v != null && v > 0) ? (vals as number[]) : null;
+}
+
+/** [4000, 4000, 3670] -> "2x de R$ 4.000,00 + 1x de R$ 3.670,00". */
+export function textoCurtoParcelas(valores: number[]): string {
+  const grupos: [number, number][] = [];
+  for (const v of valores) {
+    const ult = grupos[grupos.length - 1];
+    if (ult && Math.abs(ult[1] - v) < 0.005) ult[0] += 1;
+    else grupos.push([1, v]);
+  }
+  return grupos.map(([k, v]) => `${k}x de R$ ${fmtBRL(v)}`).join(" + ");
+}
+
 export function lerPlano(fp: FormaPagamentoDados): Plano {
   const entrada = lerValor(fp.sinal);
   const nEnt = fp.sinal_forma === "parcelada" ? Math.max(1, Number(fp.sinal_parcelas) || 1) : 1;
+  const nSaldo = Math.max(1, Number(fp.sinal_parcelas) || 1);
+  const avistaEnt = lerValor(fp.sinal_avista);
+  const saldo = fp.sinal_forma === "mista" && entrada && avistaEnt && avistaEnt > 0 && avistaEnt < entrada ? entrada - avistaEnt : null;
   const parcelas = fp.dividido_em_parcelas ?? null;
   const parcelaValor = lerValor(fp.valor_parcela);
   const chave = lerValor(fp.chave_valor) ?? 0;
@@ -185,7 +210,8 @@ export function lerPlano(fp: FormaPagamentoDados): Plano {
     renda: lerValor(fp.renda),
     entrada,
     entradaParcelas: nEnt,
-    entradaValores: entrada ? dividirEmParcelas(entrada, nEnt) : [],
+    entradaValores: entrada ? ((nEnt > 1 && valoresManuaisEntrada(fp, nEnt)) || dividirEmParcelas(entrada, nEnt)) : [],
+    saldoValores: saldo ? (valoresManuaisEntrada(fp, nSaldo) ?? dividirEmParcelas(saldo, nSaldo)) : [],
     parcelas,
     parcelaValor,
     chave,
@@ -272,6 +298,7 @@ export function validarPlano(
         erros.push(`Entrada com saldo parcelado: informe em quantas vezes (de 1 a ${MAX_PARCELAS_ENTRADA}).`);
       if (!lerData(fp.sinal_resto_primeira)) erros.push("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).");
     }
+    erros.push(...errosValoresEntrada(fp));
     if (!fp.sinal_meio || !MEIOS_OK.has(fp.sinal_meio))
       erros.push("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).");
     const dEntrada = lerData(fp.sinal_vencimento);
@@ -339,6 +366,36 @@ export function resumoPlano(fp: FormaPagamentoDados): string {
   return partes.join(" + ") || "A combinar";
 }
 
+/** Parcelas da entrada digitadas à mão (mesma regra de
+ * plano_pagamento._erros_valores_entrada): uma por parcela, todas válidas,
+ * somando a entrada (parcelada) ou o saldo (mista). */
+export function errosValoresEntrada(fp: FormaPagamentoDados): string[] {
+  const brutos = fp.sinal_valores;
+  if ((fp.sinal_forma !== "parcelada" && fp.sinal_forma !== "mista") || !brutos || brutos.length === 0) return [];
+  const n = Math.max(1, Number(fp.sinal_parcelas) || 1);
+  if (brutos.length !== n) return [`Parcelas da entrada: informe o valor de cada uma das ${n} parcelas.`];
+  const erros: string[] = [];
+  brutos.forEach((b, i) => {
+    const v = lerValor(b ?? "");
+    if (!b) erros.push(`Informe o valor da ${i + 1}ª parcela da entrada.`);
+    else if (v == null) erros.push(`Valor da ${i + 1}ª parcela da entrada inválido: ${FORMATO_VALOR}`);
+    else if (v <= 0) erros.push(`A ${i + 1}ª parcela da entrada tem que ser maior que zero.`);
+  });
+  if (erros.length) return erros;
+  const entrada = lerValor(fp.sinal);
+  const av = lerValor(fp.sinal_avista);
+  const alvo = fp.sinal_forma === "parcelada" ? entrada : entrada && av ? Math.round((entrada - av) * 100) / 100 : null;
+  if (!alvo) return [];
+  const soma = Math.round(brutos.reduce((t, b) => t + (lerValor(b ?? "") ?? 0), 0) * 100) / 100;
+  if (Math.abs(soma - alvo) > 0.005) {
+    const oQue = fp.sinal_forma === "parcelada" ? "o valor da entrada" : "o saldo da entrada (entrada menos o valor à vista)";
+    erros.push(
+      `As parcelas da entrada somam R$ ${fmtBRL(soma)}, mas tinham que somar ${oQue}, R$ ${fmtBRL(alvo)} (diferença de R$ ${fmtBRL(Math.abs(soma - alvo))}).`,
+    );
+  }
+  return erros;
+}
+
 /** O que vai pro servidor: só os campos da modalidade escolhida. Restos de
  * digitação da outra modalidade (ex.: escolheu parcelado, digitou parcelas
  * e depois trocou pra à vista) não viajam — senão um resto inválido
@@ -353,6 +410,7 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
       sinal_meio: null,
       sinal_vencimento: null,
       sinal_valor_parcela: null,
+      sinal_valores: null,
       dividido_em_parcelas: null,
       valor_parcela: null,
       vencimento: null,
@@ -365,5 +423,10 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
       financiamento_valor: null,
     };
   }
-  return { ...fp, avista_meio: null, avista_data: null };
+  return {
+    ...fp,
+    avista_meio: null,
+    avista_data: null,
+    sinal_valores: fp.sinal_forma === "parcelada" || fp.sinal_forma === "mista" ? (fp.sinal_valores ?? null) : null,
+  };
 }

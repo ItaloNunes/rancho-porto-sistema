@@ -15,7 +15,7 @@ from typing import Optional
 from fpdf import FPDF
 
 from .cadastro_proposta import tem_conjuge
-from .plano_pagamento import MEIOS_PAGAMENTO, fmt_brl, fmt_data, ler_plano
+from .plano_pagamento import MEIOS_PAGAMENTO, fmt_brl, fmt_data, ler_plano, texto_curto_parcelas
 from .texto_seguro import ajustar_para_latin1
 
 logger = logging.getLogger(__name__)
@@ -513,8 +513,12 @@ def gerar_proposta_pdf(
         )
     elif plano.estruturado and a_vista is False:
         if plano.entrada_forma == "parcelada" and plano.entrada_parcelas > 1:
-            forma_entrada = f"Parcelada: {plano.entrada_parcelas}x de R$ {fmt_brl(plano.entrada_valores[0])}"
+            forma_entrada = f"Parcelada: {texto_curto_parcelas(plano.entrada_valores)}"
             data_rot = "1ª parcela da entrada em"
+        elif plano.entrada_forma == "mista" and plano.saldo_valores:
+            forma_entrada = (f"R$ {fmt_brl(plano.entrada_avista)} à vista + saldo em {texto_curto_parcelas(plano.saldo_valores)}"
+                             f" (1ª em {fmt_data(plano.entrada_resto_primeira)})")
+            data_rot = "Parte à vista paga em"
         else:
             forma_entrada = "Pagamento único"
             data_rot = "Entrada paga em"

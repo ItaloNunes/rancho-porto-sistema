@@ -272,3 +272,38 @@ def test_plano_com_baloes_que_nao_fecha_mostra_a_soma_completa():
 def test_a_vista_limpa_baloes_e_financiamento():
     fp = normalizar({"a_vista": True, "balao_qtd": 3, "balao_valor": "1.000,00", "financiamento_valor": "5.000,00"})
     assert fp["balao_qtd"] is None and fp["balao_valor"] is None and fp["financiamento_valor"] is None
+
+
+# ------------------------------------- parcelas da entrada com valor digitado (16/11)
+from app.plano_pagamento import ler_plano as _ler, normalizar as _norm, resumo as _resumo, validar as _validar
+
+
+def _fp_mista(valores):
+    return {"a_vista": False, "renda": "7.000,00", "valor_proposto": 100000.0, "sinal": "15.670,00",
+            "sinal_forma": "mista", "sinal_avista": "4.000,00", "sinal_parcelas": 3, "sinal_meio": "pix",
+            "sinal_vencimento": "2026-11-20", "sinal_resto_primeira": "2026-12-20", "sinal_valores": valores,
+            "dividido_em_parcelas": 10, "valor_parcela": "8.433,00", "primeiro_mes": "2027-01-10", "confirmado": True}
+
+
+def test_entrada_mista_valores_digitados_fecha():
+    fp = _fp_mista(["4.000", "4.000", "3.670"])
+    assert _validar(fp, 100000.0, None) == []
+    p = _ler(fp)
+    assert p.saldo_valores == [4000.0, 4000.0, 3670.0]
+    n = _norm(fp)
+    assert n["sinal_valores"] == ["4.000,00", "4.000,00", "3.670,00"] and n["sinal_valor_parcela"] == "4.000,00"
+    assert "2x de R$ 4.000,00 + 1x de R$ 3.670,00" in _resumo(fp)
+
+
+def test_entrada_valores_digitados_que_nao_fecham():
+    erros = _validar(_fp_mista(["4.000", "4.000", "3.678,50"]), 100000.0, None)
+    assert any("somam R$ 11.678,50" in e and "R$ 11.670,00" in e for e in erros)
+    erros = _validar(_fp_mista(["4.000", "7.670"]), 100000.0, None)
+    assert any("cada uma das 3 parcelas" in e for e in erros)
+    erros = _validar(_fp_mista(["4.000", "", "7.670"]), 100000.0, None)
+    assert any("2ª parcela" in e for e in erros)
+
+
+def test_entrada_unica_descarta_valores_digitados():
+    fp = {**_fp_mista(["1", "2"]), "sinal_forma": "unica"}
+    assert _norm(fp)["sinal_valores"] is None

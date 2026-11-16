@@ -440,6 +440,20 @@ def _demais_texto(fp: dict) -> str:
     return f"e as demais todo dia {d.day}, a partir de {d.strftime('%d/%m/%Y')}"
 
 
+def _texto_parcelas_entrada(valores: list[float], brl) -> str:
+    """'3 (três) parcelas mensais de R$ 4.000,00 cada' ou, com valores
+    diferentes (iguais em sequência viram um grupo), '3 (três) parcelas
+    mensais, 2 (duas) de R$ 4.000,00 e 1 (uma) de R$ 3.670,00'."""
+    from .plano_pagamento import grupos_parcelas
+
+    n = len(valores)
+    grupos = grupos_parcelas(valores)
+    if len(grupos) == 1:
+        return f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais de {brl(valores[0])} cada"
+    partes = [f"{k} ({_numero_extenso_feminino(k)}) de {brl(v)}" for k, v in grupos]
+    return f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais, " + ", ".join(partes[:-1]) + " e " + partes[-1]
+
+
 def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float = 0) -> dict:
     """Textos da forma de pagamento pros dois contratos, montados a partir
     do plano da proposta (app/plano_pagamento.py). Proposta antiga (sem o
@@ -474,28 +488,15 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float 
         if plano.entrada_forma == "mista" and plano.entrada_avista:
             avista = plano.entrada_avista
             resto = round(entrada - avista, 2)
-            n = plano.entrada_parcelas
-            valores = dividir_em_parcelas(resto, max(1, n))
+            valores = plano.saldo_valores or dividir_em_parcelas(resto, max(1, plano.entrada_parcelas))
             data_resto = fmt_data(plano.entrada_resto_primeira)
-            if len(set(valores)) == 1:
-                saldo_txt = f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais de {brl(valores[0])} cada"
-            else:
-                k = valores.count(valores[0])
-                saldo_txt = (f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais, {k} ({_numero_extenso_feminino(k)}) "
-                             f"de {brl(valores[0])} e {n - k} ({_numero_extenso_feminino(n - k)}) de {brl(valores[-1])}")
+            saldo_txt = _texto_parcelas_entrada(valores, brl)
             compl_pf = (f", sendo {brl(avista)} via {meio} em {data_txt} e o saldo de {brl(resto)} "
                         f"em {saldo_txt}, vencendo a primeira em {data_resto} {_demais_texto(fp)}")
             compl_rt = (f" sendo {brl(avista)} via {meio} em {data_txt} e o saldo de {brl(resto)} "
                         f"pago em {saldo_txt}, a primeira para o dia {data_resto} {_demais_texto(fp)}")
         elif plano.entrada_forma == "parcelada" and plano.entrada_parcelas > 1:
-            n = plano.entrada_parcelas
-            valores = dividir_em_parcelas(entrada, n)
-            if len(set(valores)) == 1:
-                parcelas_txt = f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais de {brl(valores[0])} cada"
-            else:
-                k = valores.count(valores[0])
-                parcelas_txt = (f"{n} ({_numero_extenso_feminino(n)}) parcelas mensais, {k} ({_numero_extenso_feminino(k)}) "
-                                f"de {brl(valores[0])} e {n - k} ({_numero_extenso_feminino(n - k)}) de {brl(valores[-1])}")
+            parcelas_txt = _texto_parcelas_entrada(plano.entrada_valores, brl)
             compl_pf = (f", paga em {parcelas_txt}, via {meio}, vencendo a primeira em {data_txt} "
                         f"{_demais_texto(fp)}")
             compl_rt = (f" sendo pago em {parcelas_txt}, via {meio}, a primeira para o dia {data_txt} "

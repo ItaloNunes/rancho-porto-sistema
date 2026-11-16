@@ -503,6 +503,10 @@ class FormaPagamentoDados(BaseModel):
     # o backend descartava o valor à vista e a entrada mista não fechava.
     sinal_avista: Optional[str] = None
     sinal_resto_primeira: Optional[str] = None  # AAAA-MM-DD
+    # Valor de cada parcela da entrada digitado à mão (16/11) -- ex.: 2x de
+    # 4.000,00 e 1x de 3.670,00. "parcelada": todas as parcelas da entrada;
+    # "mista": as parcelas do saldo. Vazio = divide em partes iguais.
+    sinal_valores: Optional[list[Optional[str]]] = Field(default=None, max_length=24)
     # Desconto que o CORRETOR dá ao cliente SAINDO da própria comissão
     # (10/11): registrado aqui no pagamento pra não se perder entre edições;
     # ao gerar o contrato, vira o desconto_corretor passado no endpoint.

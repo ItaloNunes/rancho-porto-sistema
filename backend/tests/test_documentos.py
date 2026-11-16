@@ -700,3 +700,20 @@ def test_regras_conjuge_fora_do_contrato():
     assert "Casado(a) ou União estável" in problemas_conjuge({**ok, "estado_civil": "solteiro"})[0]
     # sem a marcação continua travando a incoerência
     assert problemas_conjuge({"estado_civil": "casado", "tem_conjuge": False})
+
+
+# ------------------------------------- parcelas da entrada com valor digitado (16/11)
+def test_pf_entrada_parcelada_com_valores_digitados():
+    fp = {**fp_unica(LOTE_PF), "sinal_forma": "parcelada", "sinal_parcelas": 3, "sinal_meio": "boleto",
+          "sinal_valores": ["4.000,00", "4.000,00", "999,00"]}
+    t = texto_docx(pf(fp))
+    assert "3 (três) parcelas mensais, 2 (duas) de R$ 4.000,00" in t
+    assert "e 1 (uma) de R$ 999,00" in t
+
+
+def test_pf_entrada_mista_com_saldo_digitado():
+    fp = {**fp_unica(LOTE_PF), "sinal_forma": "mista", "sinal_avista": "1.000,00", "sinal_parcelas": 3,
+          "sinal_resto_primeira": "2026-11-05", "sinal_valores": ["3.000,00", "3.000,00", "1.999,00"]}
+    t = texto_docx(pf(fp))
+    assert "R$ 1.000,00" in t and "saldo de R$ 7.999,00" in t
+    assert "2 (duas) de R$ 3.000,00" in t and "1 (uma) de R$ 1.999,00" in t

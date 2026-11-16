@@ -4,7 +4,7 @@ import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPag
 import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
 import { apagarRascunho, lerRascunho, quandoFoiSalvo, useRascunhoAutomatico } from "../../lib/rascunho";
 import { ESTADOS_COM_CONJUGE, problemasConjuge, problemasPessoa, problemasTelefones, temConjuge } from "../../lib/cadastro";
-import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
+import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, textoCurtoParcelas, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
 
@@ -1057,9 +1057,11 @@ function Revisao({
             {linhaValor(
               "Entrada",
               p.entrada,
-              p.entradaParcelas > 1
-                ? `Parcelada em ${p.entradaParcelas}x de R$ ${fmtBRL(p.entradaValores[0])} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_vencimento)}`
-                : `De uma vez, via ${textoMeio(fp.sinal_meio)}, em ${fmtData(fp.sinal_vencimento)}`,
+              fp.sinal_forma === "mista" && p.saldoValores.length
+                ? `R$ ${fp.sinal_avista} à vista em ${fmtData(fp.sinal_vencimento)} + saldo em ${textoCurtoParcelas(p.saldoValores)} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_resto_primeira)}`
+                : p.entradaParcelas > 1
+                  ? `Parcelada em ${textoCurtoParcelas(p.entradaValores)} via ${textoMeio(fp.sinal_meio)}, 1ª em ${fmtData(fp.sinal_vencimento)}`
+                  : `De uma vez, via ${textoMeio(fp.sinal_meio)}, em ${fmtData(fp.sinal_vencimento)}`,
             )}
             {linhaValor(
               `Parcelas mensais: ${p.parcelas ?? 0} x`,
