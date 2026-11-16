@@ -687,6 +687,21 @@ def _escrever_confrontacoes(celula, p_referencia, linhas: list[str]) -> None:
             run.bold = False
 
 
+def _achar_cpf_assinatura(doc, apos_indice: int = 200) -> int:
+    """Acha o índice do parágrafo que tem APENAS 'CPF: ' sozinho (campo em
+    branco pra preencher à mão na assinatura do COMPRADOR), fora da tabela
+    do QUADRO RESUMO. Antes era hardcoded (314 no modelo antigo), mas o
+    modelo revisado (14/11) deslocou os parágrafos. Procurar pelo conteúdo
+    deixa a função resistente a futuras edições do modelo no Word."""
+    for i in range(apos_indice, len(doc.paragraphs)):
+        if doc.paragraphs[i].text.strip() == "CPF:":
+            return i
+    raise ValueError(
+        "Não encontrei o 'CPF:' da assinatura do comprador no modelo do "
+        "contrato — o modelo pode ter sido reeditado e não tem mais esse campo."
+    )
+
+
 def preencher_contrato_porto_franco(
     *,
     proposta: dict,
@@ -900,36 +915,39 @@ def preencher_contrato_porto_franco(
     # Único "CPF: " isolado fora da tabela do QUADRO RESUMO -- confirmado
     # direto no índice de parágrafos do modelo (ver conversa de 28/09); se o
     # modelo for reeditado no Word essa posição pode mudar.
-    _substituir_texto(doc.paragraphs[314], "CPF: ", f"CPF: {cpf}")
-    # Nome do comprador acima do CPF -- o modelo trazia só "CPF:" nesse
-    # bloco (os da VENDEDORA têm nome), e o contrato saía sem dizer quem
-    # assina (achado em 02/10). O parágrafo 313 é a linha vazia entre o traço
-    # e o CPF; copia a formatação (negrito/fonte) do run do CPF.
-    p_nome = doc.paragraphs[313]
-    p_nome.alignment = doc.paragraphs[314].alignment
+    # Acha o 'CPF:' solto da assinatura (modelo antigo era p[314]; o novo
+    # — 14/11 — é p[313]). Olhar pelo conteúdo evita precisar re-mapear
+    # cada edição do modelo. O parágrafo do nome é o imediatamente anterior.
+    idx_cpf = _achar_cpf_assinatura(doc, apos_indice=200)
+    idx_nome = idx_cpf - 1
+    _substituir_texto(doc.paragraphs[idx_cpf], "CPF: ", f"CPF: {cpf}")
+    p_nome = doc.paragraphs[idx_nome]
+    p_nome.alignment = doc.paragraphs[idx_cpf].alignment
     run_nome = p_nome.add_run(nome)
-    # mesma formatação (fonte do tema, negrito, tamanho) do "CPF:" logo
-    # abaixo -- copia o rPr inteiro; copiar só font.name perdia a fonte de
-    # tema (Calibri) e o nome saía em Arial.
-    rpr_modelo = doc.paragraphs[314].runs[0]._r.rPr
+    rpr_modelo = doc.paragraphs[idx_cpf].runs[0]._r.rPr
     if rpr_modelo is not None:
         run_nome._r.insert(0, copy.deepcopy(rpr_modelo))
 
     # --- Assinatura do cônjuge (pedido de 30/10) ---------------------------
-    # Duplica o bloco traço/nome/CPF/"COMPRADOR" (parágrafos 312-315) logo
-    # abaixo. Por último, pois a inserção desloca os índices dos parágrafos.
+    # Duplica o bloco linha-vazia/traço/nome/CPF/"COMPRADOR" logo abaixo.
+    # Posição deduzida a partir do idx_cpf (que o helper achou): o bloco é
+    # [idx_cpf-3 .. idx_cpf+1] (vazia, traço, nome, CPF, COMPRADOR).
     if com_conjuge:
         pars = doc.paragraphs
-        ref = pars[315]._p
-        for par in (pars[311], *pars[312:316]):
+        # ref = último parágrafo do bloco atual (COMPRADOR)
+        ref = pars[idx_cpf + 1]._p
+        for par in pars[idx_cpf - 3 : idx_cpf + 2]:
             novo = copy.deepcopy(par._p)
             ref.addnext(novo)
             ref = novo
         pars = doc.paragraphs
-        # blocos: 311 (vazio) 312 traço, 313 nome, 314 CPF, 315 COMPRADOR,
-        # depois a cópia: 316 vazio, 317 traço, 318 nome, 319 CPF, 320 COMPRADOR
-        pars[318].runs[0].text = nome_c
-        _substituir_texto(pars[319], f"CPF: {cpf}", f"CPF: {formatar_cpf_cnpj(conjuge.get('cpf_cnpj'))}")
+        # Cópia começa em idx_cpf+2; +3 é o nome, +4 é o CPF
+        pars[idx_cpf + 4].runs[0].text = nome_c
+        _substituir_texto(
+            pars[idx_cpf + 5],
+            f"CPF: {cpf}",
+            f"CPF: {formatar_cpf_cnpj(conjuge.get('cpf_cnpj'))}",
+        )
 
     buffer = io.BytesIO()
     doc.save(buffer)
