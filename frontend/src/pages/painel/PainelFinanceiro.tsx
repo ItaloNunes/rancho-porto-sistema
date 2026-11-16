@@ -539,6 +539,9 @@ function FormularioContrato({
     const dcTxt = fp?.desconto_corretor_valor ?? "";
     if (dcTxt) setDescontoCorretor(dcTxt);
     if (!reemissao) {
+      // Comissão CHEIA sugerida: 5% do valor proposto (padrão de todas as
+      // emissões até hoje). O desconto do corretor é abatido depois, sozinho.
+      if (proposta.valor_proposto) setComissao(brl(Math.round(proposta.valor_proposto * 5) / 100));
       setPreenchido(true);
       return;
     }
@@ -619,7 +622,7 @@ function FormularioContrato({
         )}
       </div>
       <label className="grid gap-1 text-sm">
-        <span className="text-ink-soft">Comissão de corretagem (R$)</span>
+        <span className="text-ink-soft">Comissão CHEIA do corretor, antes do desconto (R$)</span>
         <input
           className="input"
           type="text"
@@ -634,7 +637,8 @@ function FormularioContrato({
           required
         />
         <span className="text-xs text-ink-soft">
-          Digite com os centavos — ex.: 369800 vira R$ 3.698,00.
+          Digite com os centavos — ex.: 369800 vira R$ 3.698,00. Não tire o desconto do corretor daqui: o sistema
+          já abate sozinho.
           {reemissao && preenchido && " Veio preenchido com a última emissão — ajuste se precisar."}
         </span>
       </label>
@@ -658,6 +662,32 @@ function FormularioContrato({
           Fica registrado que foi o corretor quem deu — o texto do contrato não muda.
         </span>
       </label>
+      {(() => {
+        const dig = (t: string) => (t.replace(/\D/g, "") === "" ? 0 : parseInt(t.replace(/\D/g, ""), 10) / 100);
+        const brl = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const bruta = dig(comissao);
+        const desc = dig(descontoCorretor);
+        const preco = (proposta.valor_proposto ?? 0) - (proposta.desconto_especial ?? 0) - desc;
+        if (!bruta && !desc) return null;
+        return (
+          <div id="contrato-resumo-valores" className="rounded-lg border border-sage/40 bg-sage/10 p-3 text-sm grid gap-1">
+            <p className="font-semibold text-ink">Vai sair assim no contrato:</p>
+            <p>
+              Comissão: <strong>R$ {brl(Math.max(0, bruta - desc))}</strong>
+              {desc > 0 && <span className="text-ink-soft"> (R$ {brl(bruta)} − desconto R$ {brl(desc)})</span>}
+            </p>
+            {desc > 0 && (
+              <p>
+                Preço do lote: <strong>R$ {brl(preco)}</strong>
+                <span className="text-ink-soft">
+                  {" "}(R$ {brl(proposta.valor_proposto ?? 0)}
+                  {proposta.desconto_especial ? ` − desconto aprovado R$ ${brl(proposta.desconto_especial)}` : ""} − desconto do corretor R$ {brl(desc)})
+                </span>
+              </p>
+            )}
+          </div>
+        );
+      })()}
       <label className="grid gap-1 text-sm">
         <span className="text-ink-soft">Data de celebração do contrato</span>
         <input className="input" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
