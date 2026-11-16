@@ -880,14 +880,19 @@ def preencher_contrato_porto_franco(
         qualificacao_corretor += (
             f", dados bancários: {corretor['banco']}, Ag. {corretor['agencia']}, C/C {corretor['conta']}"
         )
-    # Cláusula de comissão opcional (14/11): o modelo novo do Porto Franco
-    # (ajustado após o registro da incorporação) retirou a cláusula explícita
-    # de comissão. Se o texto não estiver no modelo, segue em frente — a
-    # comissão continua no histórico de emissões (quem, quanto, quando), e os
-    # relatórios internos usam o valor dali, não o texto do contrato.
-    try:
+    # Cláusula de comissão (16/11): achada pelo CONTEÚDO, não pela posição.
+    # O modelo revisado após o registro da incorporação ganhou parágrafos
+    # novos antes dela (pp[17] -> pp[18]); com a posição fixa, o contrato
+    # saía com o texto-modelo "R$  () ... [QUALIFICAR: ...]" sem ninguém
+    # notar. Se um modelo futuro não tiver a cláusula, segue sem ela; se tiver
+    # o texto-modelo e não der pra preencher, para com erro (nunca imprime
+    # o espaço em branco).
+    p_comissao = next(
+        (par for par in pp if "COMISSÃO DE CORRETAGEM" in par.text or "[QUALIFICAR:" in par.text), None
+    )
+    if p_comissao is not None and "fixada em R$" in p_comissao.text:
         _substituir_texto(
-            pp[17],
+            p_comissao,
             "fixada em R$  (), a ser paga diretamente ao CORRETOR/IMOBILIÁRIA "
             "[QUALIFICAR: nome/razão social, CPF/CNPJ, CRECI e dados bancários], "
             "mediante transferência bancária ou PIX para conta por este indicada",
@@ -895,8 +900,6 @@ def preencher_contrato_porto_franco(
             f"a ser paga diretamente ao CORRETOR/IMOBILIÁRIA {qualificacao_corretor}, "
             "mediante transferência bancária ou PIX para conta por este indicada",
         )
-    except (IndexError, ValueError):
-        pass  # modelo sem cláusula de comissão (ex.: Porto Franco revisado 14/11)
 
     # --- XII. LOCAL E DATA DE CELEBRAÇÃO -----------------------------------
     p_data = t.rows[19].cells[0].paragraphs[1]

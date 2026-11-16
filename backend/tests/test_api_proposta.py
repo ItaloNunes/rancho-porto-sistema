@@ -563,12 +563,13 @@ def test_empreendimento_sem_modelo_nao_gera_contrato_nem_recibo():
     from app.documentos_gerados import modelo_documentos, modelo_recibo
     assert modelo_documentos("Porto Franco Residencial") == "porto_franco"
     assert modelo_documentos("Rancho Texas") == "rancho_texas"
-    # 29/10: Riviera e Veneza ganharam modelo de contrato, mas não de recibo
+    # 16/11: Riviera, Veneza e Rota dos Ventos têm contrato e recibo
     assert modelo_documentos("Riviera Residence Beach") == "riviera"
     assert modelo_documentos("Veneza Residencial") == "veneza"
-    assert modelo_recibo("Riviera Residence Beach") is None and modelo_recibo("Veneza Residencial") is None
+    assert modelo_documentos("Rota dos Ventos") == "rota_ventos"
+    assert modelo_recibo("Riviera Residence Beach") == "riviera" and modelo_recibo("Veneza Residencial") == "veneza"
     assert modelo_recibo("Porto Franco Residencial") == "porto_franco"
-    for nome in ("Boulevard Residence", "Praia Mar", "Rota dos Ventos"):
+    for nome in ("Boulevard Residence", "Praia Mar"):
         assert modelo_documentos(nome) is None and modelo_recibo(nome) is None
 
 
@@ -635,7 +636,7 @@ FP_VENEZA = {"a_vista": False, "renda": "9.000,00", "valor_proposto": 343000.0, 
              "balao_qtd": 3, "balao_valor": "11.433,33", "financiamento_valor": "240.099,89", "confirmado": True}
 
 
-def test_contrato_do_veneza_sai_e_recibo_continua_bloqueado(cliente_api):
+def test_contrato_do_veneza_sai_e_recibo_tambem(cliente_api):
     api, sb = cliente_api
     app.dependency_overrides[get_current_corretor] = lambda: ADMIN
     _semear_veneza(sb, FP_VENEZA)
@@ -645,8 +646,9 @@ def test_contrato_do_veneza_sai_e_recibo_continua_bloqueado(cliente_api):
     from pypdf import PdfReader
     texto = " ".join(" ".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(r.content)).pages).split())
     assert "CONTRATO Nº 0091" in texto and "240.099,89" in texto and "corresponde a 5% do valor total" in texto
+    # 16/11: o Veneza ganhou modelo de recibo
     r = api.get("/crm/propostas/p3/recibo?valor=1000&data=2026-10-29")
-    assert r.status_code == 422 and "recibo" in r.text
+    assert r.status_code == 200, r.text
 
 
 def test_contrato_do_veneza_trava_chave(cliente_api):

@@ -130,9 +130,21 @@ def test_pf_legado_continua_funcionando():
 
 def test_pf_nome_na_assinatura_com_mesma_fonte_do_cpf():
     d = docx.Document(io.BytesIO(pf(fp_unica(LOTE_PF))))
-    nome, cpf = d.paragraphs[313], d.paragraphs[314]
+    # posição achada pelo conteúdo (o modelo revisado de 16/11 mudou os índices)
+    i = next(i for i, p in enumerate(d.paragraphs) if p.text.startswith("CPF: ") and p.text != "CPF: "
+             and d.paragraphs[i + 1].text.strip() == "COMPRADOR")
+    nome, cpf = d.paragraphs[i - 1], d.paragraphs[i]
     assert nome.text == "Maria Teste da Silva"
     assert nome.runs[0]._r.rPr.xml == cpf.runs[0]._r.rPr.xml
+
+
+def test_pf_clausula_de_comissao_sai_preenchida():
+    """16/11: com o modelo revisado, a cláusula de comissão saía com o
+    texto-modelo "R$  () ... [QUALIFICAR: ...]" (posição fixa errada)."""
+    t = texto_docx(pf(fp_unica(LOTE_PF)))
+    assert "[QUALIFICAR" not in t and "R$  ()" not in t
+    assert "AUTÔNOMA E INTEGRANTE DO PREÇO" in t
+    assert "a ser paga diretamente ao CORRETOR/IMOBILIÁRIA" in t
 
 
 # ------------------------------------------------------------------ Rancho Texas
