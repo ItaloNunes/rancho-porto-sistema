@@ -426,6 +426,14 @@ def confirmar_importacao_lotes(payload: ImportacaoConfirmarPayload, admin: dict 
         )
         if r:
             atualizados.append(r[0])
+            # 13/11: a importação mudava o status sem deixar rastro -- um lote
+            # que virava 'reservado' por aqui não tinha como saber de onde veio.
+            registrar_log(
+                sb, admin, "mudou_status_lote_planilha", "lote", item.lote_id,
+                f"Mudou o status do lote {r[0].get('identificador') or item.lote_id} de '{item.status_atual}' "
+                f"pra '{item.status}' pela importação de planilha.",
+                {"status_anterior": item.status_atual, "status_novo": item.status, "origem": "planilha"},
+            )
         else:
             ignorados += 1
     return ImportacaoConfirmarResultado(

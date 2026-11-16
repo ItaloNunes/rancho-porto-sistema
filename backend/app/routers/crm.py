@@ -43,7 +43,7 @@ from ..documentos_gerados import (
 from ..docx_pdf import docx_para_pdf
 from ..pdf import gerar_proposta_pdf, gerar_visao_geral_pdf, montar_relatorio_completo
 from ..cadastro_proposta import email_valido, problemas_cadastro, problemas_conjuge, so_digitos, telefone_valido, tem_conjuge
-from ..estoque import PROPOSTA_VIVAS, detentores, liberar_lote_se_livre, lote_em_empreendimento_ativo
+from ..estoque import MSG_CONEXAO_FALHOU, PROPOSTA_VENDA, PROPOSTA_VIVAS, RESERVA_VIVAS, desfazer_trava_orfa, detentores, liberar_lote_se_livre, lote_em_empreendimento_ativo, vender_lote
 from ..plano_pagamento import conferir_contrato, ler_plano, problemas_para_aprovar, resumo_contrato, valores_contrato
 from ..plano_pagamento import normalizar as normalizar_plano
 from ..plano_pagamento import resumo as resumo_plano
@@ -706,14 +706,20 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         # só marca 'reservado' se ele AINDA estiver 'disponivel' nesse exato
         # instante (0 linhas afetadas = outra proposta/reserva ganhou a corrida
         # entre a checagem acima e esta escrita).
-        travou = (
-            sb.table("lotes")
-            .update({"status": "reservado"})
-            .eq("id", lote_id)
-            .eq("status", "disponivel")
-            .execute()
-            .data
-        )
+        try:
+            travou = (
+                sb.table("lotes")
+                .update({"status": "reservado"})
+                .eq("id", lote_id)
+                .eq("status", "disponivel")
+                .execute()
+                .data
+            )
+        except Exception:
+            # Conexão caiu durante a trava (ver estoque.desfazer_trava_orfa).
+            logger.exception("Falha ao travar o lote %s para proposta.", lote_id)
+            desfazer_trava_orfa(sb, lote_id)
+            raise HTTPException(503, MSG_CONEXAO_FALHOU)
         if not travou:
             raise HTTPException(409, "Este lote acabou de ser reservado por outra proposta — atualize a página.")
     else:
@@ -752,9 +758,10 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         # o lote preso em 'reservado' sem nenhuma proposta por trás. Só se
         # foi esta função que travou agora (reserva pré-existente já estava
         # 'reservado' antes, não é essa gravação que deve destravar ela).
+        logger.exception("Falha ao gravar a proposta do lote %s.", lote_id)
         if reserva is None:
-            sb.table("lotes").update({"status": "disponivel"}).eq("id", lote_id).execute()
-        raise
+            desfazer_trava_orfa(sb, lote_id)
+        raise HTTPException(503, MSG_CONEXAO_FALHOU)
 
     if reserva is not None:
         # Linka a proposta de volta na reserva de origem, em vez de gerar
@@ -1654,15 +1661,9 @@ def gerar_contrato_proposta(
     # (caso ainda não estejam) — pedido de 03/11 pelo financeiro.
     status_atual = proposta.get("status") or ""
     if status_atual != "aceita":
-        vendeu = (
-            sb.table("lotes")
-            .update({"status": "vendido"})
-            .eq("id", proposta["lote_id"])
-            .neq("status", "vendido")
-            .execute()
-            .data
-        )
-        if vendeu:
+        # Desde 13/11 o lote normalmente já está 'vendido' pela aprovação;
+        # vender_lote trata isso como sucesso desde que seja desta proposta.
+        if vender_lote(sb, proposta["lote_id"], proposta_id):
             sb.table("propostas").update({"status": "aceita"}).eq("id", proposta_id).execute()
             registrar_log(
                 sb, corretor, "mudou_status_proposta", "proposta", proposta_id,
@@ -1831,43 +1832,37 @@ def atualizar_status_proposta(
                     "Não dá pra aprovar esta proposta: " + " ".join(problemas) + " Cancele e gere a proposta de "
                     "novo pelo formulário, com a forma de pagamento correta.",
                 )
+    if payload.status in ("aprovada", "aceita") and atual not in PROPOSTA_VENDA:
+        # Lote vira 'vendido' antes de a proposta mudar de status: se outra
+        # proposta já levou o lote, nada é gravado e o erro sai claro.
+        if not vender_lote(sb, existente["lote_id"], proposta_id):
+            raise HTTPException(
+                409, "Este lote já consta como vendido (por outra proposta) — confira antes de aprovar esta."
+            )
     atualizado = sb.table("propostas").update({"status": payload.status}).eq("id", proposta_id).execute().data[
         0
     ]
     if payload.status == "aceita":
-        # Nada no fluxo hoje obriga passar por 'aprovada' antes de 'aceita'
-        # (um corretor pode pular direto pra cá) — então duas propostas
-        # diferentes pro mesmo lote podem chegar em 'aceita' sem que a etapa
-        # de aprovação tenha travado o lote antes. O UPDATE condicional
-        # abaixo garante, na escrita, que não existe venda dupla: só marca
-        # 'vendido' se o lote AINDA não estiver 'vendido' nesse instante: 0
-        # linhas afetadas quer dizer que outra proposta já venceu essa
-        # corrida, e essa é rejeitada com um erro claro em vez de sobrescrever
-        # silenciosamente quem já comprou.
-        vendeu = (
-            sb.table("lotes")
-            .update({"status": "vendido"})
-            .eq("id", existente["lote_id"])
-            .neq("status", "vendido")
-            .execute()
-            .data
-        )
-        if not vendeu:
-            raise HTTPException(
-                409, "Este lote já consta como vendido (por outra proposta) — confira antes de aceitar esta."
-            )
+        # O lote já foi marcado 'vendido' acima (vender_lote), antes de gravar
+        # o status -- inclusive quando um corretor pula direto pra 'aceita'.
         _confirmar_reserva_da_proposta(sb, proposta_id)
     elif payload.status == "aprovada":
         _gerar_reserva_da_proposta_aprovada(sb, proposta_id, existente)
         _confirmar_reserva_da_proposta(sb, proposta_id)
     elif payload.status in ("recusada", "cancelada"):
-        _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"], venda_desfeita=(atual == "aceita"))
+        _liberar_lote_da_proposta(sb, proposta_id, existente["lote_id"], venda_desfeita=(atual in PROPOSTA_VENDA))
     registrar_log(
         sb, corretor, "mudou_status_proposta", "proposta", proposta_id,
         f"Mudou status da proposta {_numero_proposta(existente)} pra '{payload.status}'.",
         {"status_novo": payload.status},
     )
     return atualizado
+
+
+PROPOSTA_STATUS_TEXTO = {
+    "rascunho": "rascunho", "aguardando_aprovacao": "aguardando aprovação", "aprovada": "aprovada",
+    "enviada": "enviada", "aceita": "aceita",
+}
 
 
 # Transições de status da proposta (03/10). Antes qualquer corretor podia pôr
@@ -2299,6 +2294,38 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
     except Exception:
         logger.warning("lotes_precos_historico indisponível (migração 0025 já rodou no banco?) — seguindo sem histórico de preço.")
 
+    # Quem segura cada lote reservado/vendido (13/11): nome do cliente e
+    # corretor da reserva viva, ou número/status da proposta viva. Lote
+    # 'reservado' sem nenhum dos dois é "órfão" -- ficou preso sem dono (ex.:
+    # conexão com o banco caiu no meio de uma reserva em 12/11) e a tela
+    # oferece liberar. Só o financeiro (admin) recebe esses dados.
+    detentor_por_lote: dict[str, str] = {}
+    detentores_ok = False
+    if eh_admin(_corretor):
+        try:
+            nomes_corretor = {c["id"]: c.get("nome") for c in sb.table("corretores").select("id, nome").execute().data}
+            for r in (
+                sb.table("reservas").select("lote_id, nome, corretor_id, status, created_at")
+                .in_("status", list(RESERVA_VIVAS)).order("created_at").execute().data
+            ) or []:
+                quem = f"Reserva de {r.get('nome') or 'cliente sem nome'}"
+                if nomes_corretor.get(r.get("corretor_id")):
+                    quem += f" (corretor {nomes_corretor[r['corretor_id']]})"
+                detentor_por_lote[r["lote_id"]] = quem
+            for pv in (
+                sb.table("propostas").select("lote_id, numero, status, corretor_id, created_at")
+                .in_("status", list(PROPOSTA_VIVAS)).order("created_at").execute().data
+            ) or []:
+                quem = f"Proposta Nº {int(pv.get('numero') or 0):04d} ({PROPOSTA_STATUS_TEXTO.get(pv['status'], pv['status'])})"
+                if nomes_corretor.get(pv.get("corretor_id")):
+                    quem += f" do corretor {nomes_corretor[pv['corretor_id']]}"
+                detentor_por_lote[pv["lote_id"]] = quem
+            detentores_ok = True
+        except Exception:
+            # sem esses dados não dá pra afirmar que um lote é órfão
+            logger.warning("Não deu pra montar 'quem segura' os lotes -- seguindo sem essa informação.")
+            detentor_por_lote = {}
+
     resultado = []
     for l in lotes:
         condo = condos.get(l["condominio_id"], {})
@@ -2314,6 +2341,8 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
                 "proposta_pendente_desde": proposta["created_at"] if proposta else None,
                 "preco_pode_reverter": pode_reverter,
                 "preco_alterado_em": vigente_desde_por_lote.get(l["id"]) if pode_reverter else None,
+                "detentor": detentor_por_lote.get(l["id"]) if eh_admin(_corretor) else None,
+                "reserva_orfa": bool(detentores_ok and l["status"] == "reservado" and l["id"] not in detentor_por_lote),
             }
         )
     return resultado

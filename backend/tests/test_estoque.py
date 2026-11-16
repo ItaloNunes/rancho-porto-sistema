@@ -78,7 +78,9 @@ def test_expiracao_nao_devolve_lote_de_venda_aprovada(ambiente):
         r["expira_em"] = "2000-01-01T00:00:00+00:00"
         r["status"] = "pendente"  # pior caso: reserva ainda "pendente"
     assert reservas._expirar_vencidas(sb) == 0
-    assert sb.banco["lotes"][0]["status"] == "reservado"
+    # Desde 13/11 a aprovação já marca o lote como vendido — e a expiração
+    # continua sem devolver lote de venda aprovada pro estoque.
+    assert sb.banco["lotes"][0]["status"] == "vendido"
 
 
 def test_rascunho_abandonado_expira_junto_e_libera(ambiente):
@@ -138,3 +140,24 @@ def test_corretor_nao_ve_nem_mexe_em_proposta_de_outro(ambiente):
     corpo = payload()
     corpo["lote_id"] = "lote-2"
     assert api.post("/crm/propostas", json=corpo).status_code == 403
+
+
+def test_aprovar_proposta_marca_lote_vendido(ambiente):
+    api, sb, quem = ambiente
+    pid = _cria_proposta(api, sb)
+    quem["u"] = ADMIN
+    assert api.patch(f"/crm/propostas/{pid}/status", json={"status": "aprovada"}).status_code == 200
+    assert sb.banco["lotes"][0]["status"] == "vendido"
+    # aceitar depois continua funcionando (lote já vendido por ESTA proposta)
+    assert api.patch(f"/crm/propostas/{pid}/status", json={"status": "aceita"}).status_code == 200
+    assert sb.banco["lotes"][0]["status"] == "vendido"
+
+
+def test_cancelar_proposta_aprovada_devolve_lote(ambiente):
+    api, sb, quem = ambiente
+    pid = _cria_proposta(api, sb)
+    quem["u"] = ADMIN
+    assert api.patch(f"/crm/propostas/{pid}/status", json={"status": "aprovada"}).status_code == 200
+    assert sb.banco["lotes"][0]["status"] == "vendido"
+    assert api.patch(f"/crm/propostas/{pid}/status", json={"status": "cancelada"}).status_code == 200
+    assert sb.banco["lotes"][0]["status"] == "disponivel"

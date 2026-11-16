@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -11,9 +12,11 @@ from ..schemas import (
     ReservaUpdate,
 )
 from ..auditoria import registrar_log
-from ..estoque import PROPOSTA_SEGURA_LOTE, detentores, liberar_lote_se_livre, lote_em_empreendimento_ativo, proposta_viva_da_reserva
+from ..estoque import MSG_CONEXAO_FALHOU, PROPOSTA_SEGURA_LOTE, desfazer_trava_orfa, detentores, liberar_lote_se_livre, lote_em_empreendimento_ativo, proposta_viva_da_reserva
 from ..precos import congelar_preco_lote
 from ..security import eh_admin, get_current_corretor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/lotes", tags=["reservas"])
 admin_router = APIRouter(prefix="/reservas", tags=["reservas"])
@@ -199,14 +202,22 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
     if lote[0]["status"] != "disponivel":
         raise HTTPException(409, f"Este lote não está disponível (status atual: {lote[0]['status']}).")
 
-    travou = (
-        sb.table("lotes")
-        .update({"status": "reservado"})
-        .eq("id", payload.lote_id)
-        .eq("status", "disponivel")
-        .execute()
-        .data
-    )
+    try:
+        travou = (
+            sb.table("lotes")
+            .update({"status": "reservado"})
+            .eq("id", payload.lote_id)
+            .eq("status", "disponivel")
+            .execute()
+            .data
+        )
+    except Exception:
+        # A conexão caiu durante a trava: o UPDATE pode ter chegado ao banco
+        # sem a resposta voltar (12/11/2026, Lote 01 Q15 do Porto Franco
+        # ficou 'reservado' sem reserva). Confere e libera se ficou órfão.
+        logger.exception("Falha ao travar o lote %s para reserva.", payload.lote_id)
+        desfazer_trava_orfa(sb, payload.lote_id)
+        raise HTTPException(503, MSG_CONEXAO_FALHOU)
     if not travou:
         # A checagem lá em cima passou, mas alguém "ganhou" o lote entre a
         # leitura e esta escrita — 0 linhas afetadas é exatamente esse caso.
@@ -220,10 +231,12 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
         criada = sb.table("reservas").insert(data).execute().data[0]
     except Exception:
         # Já travamos o lote como 'reservado' antes de tentar gravar a
-        # reserva em si — se essa gravação falhar, desfaz a trava pra não
-        # deixar o lote preso em 'reservado' sem nenhuma reserva por trás.
-        sb.table("lotes").update({"status": "disponivel"}).eq("id", payload.lote_id).execute()
-        raise
+        # reserva em si — se essa gravação falhar, desfaz a trava (só se o
+        # lote ficou mesmo sem reserva por trás; a gravação pode ter chegado
+        # ao banco mesmo com a conexão caindo na resposta).
+        logger.exception("Falha ao gravar a reserva do lote %s.", payload.lote_id)
+        desfazer_trava_orfa(sb, payload.lote_id)
+        raise HTTPException(503, MSG_CONEXAO_FALHOU)
     registrar_log(
         sb, corretor, "criou_reserva", "reserva", criada["id"],
         f"Criou reserva pro lote (cliente: {criada.get('nome') or 'sem nome'}).",

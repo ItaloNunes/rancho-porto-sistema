@@ -365,6 +365,10 @@ class LoteComCondominio(Lote):
     # original desde sempre não tem pra onde reverter.
     preco_pode_reverter: bool = False
     preco_alterado_em: Optional[datetime] = None
+    # Quem segura o lote (reserva/proposta viva) e se ele está 'reservado'
+    # sem dono nenhum (13/11). Só preenchido para o financeiro (admin).
+    detentor: Optional[str] = None
+    reserva_orfa: bool = False
 
 
 class LotePrecoHistorico(BaseModel):

@@ -254,6 +254,27 @@ export default function PainelLotes() {
                           .join(" · ")}
                       </div>
                     )}
+                    {l.detentor && l.status !== "disponivel" && (
+                      <div className="mt-1 text-[11px] font-normal text-ink-soft">🔒 {l.detentor}</div>
+                    )}
+                    {l.reserva_orfa && (
+                      <div className="mt-1">
+                        <span
+                          className="inline-flex items-center gap-1 rounded bg-rust/10 text-rust px-1.5 py-0.5 text-[11px] font-semibold"
+                          title="Está 'Reservado', mas não existe nenhuma reserva nem proposta ativa por trás — provavelmente ficou preso por uma falha de conexão."
+                        >
+                          ⚠ Reservado sem dono
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-2 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40"
+                          disabled={salvandoId === l.id}
+                          onClick={() => setPendente({ lote: l, novoStatus: "disponivel" })}
+                        >
+                          Liberar lote
+                        </button>
+                      </div>
+                    )}
                     {l.proposta_pendente_desde && (
                       <div className="mt-1 text-[11px] font-normal text-ink-soft">
                         📝 Proposta ({PROPOSTA_STATUS_LABEL[l.proposta_pendente_status ?? ""] ?? l.proposta_pendente_status}
