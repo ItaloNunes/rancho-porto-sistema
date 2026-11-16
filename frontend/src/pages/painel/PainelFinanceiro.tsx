@@ -668,8 +668,7 @@ function FormularioContrato({
           }}
         />
         <span className="text-xs text-ink-soft">
-          Deixe em branco se não houve. Esse valor sai da comissão do corretor e também abate do valor do lote pro cliente.
-          Fica registrado que foi o corretor quem deu — o texto do contrato não muda.
+          Deixe em branco se não houve. Esse valor sai só da comissão do corretor — o preço do lote no contrato não muda.
         </span>
       </label>
       {(() => {
@@ -678,7 +677,7 @@ function FormularioContrato({
         const desc = dig(descontoCorretor);
         // digitada já sem o desconto: a cheia é os 5% (o servidor faz igual)
         const bruta = comissaoJaDescontada ? cincoPorCento : dig(comissao);
-        const preco = (proposta.valor_proposto ?? 0) - (proposta.desconto_especial ?? 0) - desc;
+        const preco = (proposta.valor_proposto ?? 0) - (proposta.desconto_especial ?? 0);
         if (!bruta && !desc) return null;
         return (
           <div id="contrato-resumo-valores" className="rounded-lg border border-sage/40 bg-sage/10 p-3 text-sm grid gap-1">
@@ -687,15 +686,14 @@ function FormularioContrato({
               Comissão: <strong>R$ {brl(Math.max(0, bruta - desc))}</strong>
               {desc > 0 && <span className="text-ink-soft"> (R$ {brl(bruta)} − desconto R$ {brl(desc)})</span>}
             </p>
-            {desc > 0 && (
-              <p>
-                Preço do lote: <strong>R$ {brl(preco)}</strong>
-                <span className="text-ink-soft">
-                  {" "}(R$ {brl(proposta.valor_proposto ?? 0)}
-                  {proposta.desconto_especial ? ` − desconto aprovado R$ ${brl(proposta.desconto_especial)}` : ""} − desconto do corretor R$ {brl(desc)})
-                </span>
-              </p>
-            )}
+            <p>
+              Preço do lote: <strong>R$ {brl(preco)}</strong>
+              {proposta.desconto_especial ? (
+                <span className="text-ink-soft"> (com o desconto aprovado de R$ {brl(proposta.desconto_especial)})</span>
+              ) : desc > 0 ? (
+                <span className="text-ink-soft"> (o desconto do corretor não muda o preço)</span>
+              ) : null}
+            </p>
           </div>
         );
       })()}

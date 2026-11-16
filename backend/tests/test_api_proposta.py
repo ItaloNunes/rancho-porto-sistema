@@ -779,4 +779,11 @@ def test_comissao_digitada_ja_sem_desconto_nao_desconta_duas_vezes(cliente_api):
         assert r.status_code == 200, r.text
         d = ultima()
         assert d["comissao"] == liquida and d["comissao_bruta"] == cinco, (digitada, d)
+        # o desconto do corretor NÃO baixa o preço do lote no contrato (16/11)
+        import io
+        from pypdf import PdfReader
+        from app.documentos_gerados import formatar_valor
+        texto = " ".join(" ".join(pg.extract_text() for pg in PdfReader(io.BytesIO(r.content)).pages[:4]).split())
+        assert f"R$ {formatar_valor(prop['valor_proposto'])}" in texto
+        assert f"R$ {formatar_valor(prop['valor_proposto'] - 500)}" not in texto
     assert ultima()["comissao_digitada_liquida"] is True

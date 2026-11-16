@@ -1544,9 +1544,11 @@ def gerar_contrato_proposta(
         comissao_bruta = cinco_por_cento
         comissao_digitada_liquida = True
     comissao = round(comissao_bruta - desconto_corretor, 2)
-    # Desconto no valor do lote = o aprovado pelo financeiro + o que o corretor
-    # deu ao cliente (esse último absorvido pela comissão dele, não pela empresa).
-    desconto = round(float(proposta.get("desconto_especial") or 0) + desconto_corretor, 2)
+    # Desconto no valor do lote = só o aprovado pelo financeiro. O desconto do
+    # corretor NÃO mexe no preço do contrato (16/11, decisão da Castel: o lote
+    # sai sempre pelo valor proposto, ex.: R$ 89.990) -- ele só reduz a
+    # comissão do corretor.
+    desconto = round(float(proposta.get("desconto_especial") or 0), 2)
     if desconto:
         # Com desconto aprovado pelo financeiro, o valor final é menor --
         # conferir_contrato compara com o valor_proposto original e daria
