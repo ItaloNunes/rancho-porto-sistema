@@ -523,7 +523,16 @@ function FormularioContrato({
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [preenchido, setPreenchido] = useState(false);
+  const [confirmaJaDescontada, setConfirmaJaDescontada] = useState(false);
   const reemissao = !!numeroContrato(proposta.numero_contrato);
+  // Trava do erro das propostas 37 e 41 (16/11): comissão digitada já sem o
+  // desconto do corretor = cheia (5%) − desconto. O sistema abateria de novo.
+  const centavosDe = (t: string) => (t.replace(/\D/g, "") === "" ? 0 : parseInt(t.replace(/\D/g, ""), 10) / 100);
+  const cincoPorCento = proposta.valor_proposto ? Math.round(proposta.valor_proposto * 5) / 100 : 0;
+  const comissaoJaDescontada =
+    centavosDe(descontoCorretor) > 0 &&
+    cincoPorCento > 0 &&
+    Math.abs(centavosDe(comissao) + centavosDe(descontoCorretor) - cincoPorCento) < 0.01;
 
   // Pré-preenchimento:
   //  • Reemissão ("baixar o contrato novamente"): usa a ÚLTIMA emissão (via
@@ -577,6 +586,10 @@ function FormularioContrato({
     }
     if (desc > numero) {
       setErro("O desconto do corretor não pode ser maior que a comissão dele.");
+      return;
+    }
+    if (comissaoJaDescontada && !confirmaJaDescontada) {
+      setErro("A comissão parece já estar sem o desconto do corretor — veja o aviso acima antes de gerar.");
       return;
     }
     setErro(null);
@@ -688,6 +701,35 @@ function FormularioContrato({
           </div>
         );
       })()}
+      {comissaoJaDescontada && (
+        <div id="contrato-aviso-desconto-duplo" className="rounded-lg border border-rust/50 bg-rust/10 p-3 text-sm grid gap-2">
+          <p className="font-semibold text-rust">
+            Atenção: parece que o desconto do corretor já foi tirado da comissão.
+          </p>
+          <p className="text-ink">
+            R$ {centavosDe(comissao).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} + desconto R${" "}
+            {centavosDe(descontoCorretor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} = 5% do valor. O sistema
+            tira o desconto sozinho — se seguir assim, ele será descontado duas vezes.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              id="contrato-usar-comissao-cheia"
+              className="btn btn-primary"
+              onClick={() => {
+                setComissao(cincoPorCento.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                setErro(null);
+              }}
+            >
+              Usar a comissão cheia: R$ {cincoPorCento.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </button>
+            <label className="flex items-center gap-2 text-xs text-ink-soft">
+              <input type="checkbox" checked={confirmaJaDescontada} onChange={(e) => setConfirmaJaDescontada(e.target.checked)} />
+              Está certo assim (a comissão cheia deste contrato é outra)
+            </label>
+          </div>
+        </div>
+      )}
       <label className="grid gap-1 text-sm">
         <span className="text-ink-soft">Data de celebração do contrato</span>
         <input className="input" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
