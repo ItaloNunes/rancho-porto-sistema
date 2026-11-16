@@ -470,6 +470,8 @@ export interface QualificacaoDados {
   /** "O comprador tem cônjuge ou companheiro(a) que assina junto?" (03/10).
    * Sem resposta (proposta antiga), vale o estado civil — ver temConjuge. */
   tem_conjuge?: boolean | null;
+  /** Casado(a)/união estável, mas o cônjuge não entra no contrato. */
+  conjuge_fora_do_contrato?: boolean | null;
   conjuge?: PessoaDados | null;
   endereco_residencial: EnderecoDados;
   endereco_comercial: EnderecoDados;

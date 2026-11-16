@@ -475,6 +475,15 @@ def test_criacao_com_uniao_estavel_completa(cliente_api):
     assert r.status_code == 200, r.text
 
 
+def test_criacao_casado_com_conjuge_fora_do_contrato(cliente_api):
+    api, sb = cliente_api
+    corpo = payload()
+    corpo["dados_qualificacao"].update({"estado_civil": "casado", "tem_conjuge": False, "conjuge_fora_do_contrato": True})
+    r = api.post("/crm/propostas", json=corpo)
+    assert r.status_code == 200, r.text
+    assert sb.banco["propostas"][0]["dados_qualificacao"]["conjuge_fora_do_contrato"] is True
+
+
 def test_contrato_rancho_texas_trava_sem_dados_do_conjuge(cliente_api):
     api, sb = cliente_api
     app.dependency_overrides[get_current_corretor] = lambda: ADMIN

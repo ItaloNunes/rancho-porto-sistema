@@ -112,6 +112,8 @@ def tem_conjuge(dados: Optional[dict]) -> bool:
     Resposta direta do formulário (tem_conjuge, 03/10); proposta antiga, sem
     essa resposta, decide pelo estado civil (casado/união estável)."""
     dados = dados or {}
+    if dados.get("conjuge_fora_do_contrato") is True:
+        return False
     if dados.get("tem_conjuge") is not None:
         return bool(dados.get("tem_conjuge"))
     return dados.get("estado_civil") in ESTADOS_COM_CONJUGE
@@ -127,7 +129,10 @@ def problemas_conjuge(dados: Optional[dict]) -> list[str]:
     resposta = dados.get("tem_conjuge")
     if resposta is True and estado not in ESTADOS_COM_CONJUGE:
         erros.append("Comprador com cônjuge/companheiro(a): o estado civil tem que ser Casado(a) ou União estável.")
-    if resposta is False and estado in ESTADOS_COM_CONJUGE:
+    fora = dados.get("conjuge_fora_do_contrato") is True
+    if fora and estado not in ESTADOS_COM_CONJUGE:
+        erros.append("Cônjuge fora do contrato: o estado civil tem que ser Casado(a) ou União estável.")
+    if resposta is False and estado in ESTADOS_COM_CONJUGE and not fora:
         erros.append("Estado civil Casado(a)/União estável, mas foi informado que o comprador não tem cônjuge -- confira.")
     if tem_conjuge(dados):
         conjuge = dados.get("conjuge") or {}

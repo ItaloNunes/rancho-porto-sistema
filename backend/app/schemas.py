@@ -556,6 +556,10 @@ class QualificacaoDados(BaseModel):
     # companheiro(a) que assina junto?". True exige estado civil casado ou
     # união estável e os dados do cônjuge; ver cadastro_proposta.tem_conjuge.
     tem_conjuge: Optional[bool] = None
+    # Casado(a)/união estável, mas o cônjuge NÃO entra no contrato (16/11):
+    # o estado civil sai como casado e o contrato fica só no nome do
+    # comprador (100%), sem dados nem assinatura do cônjuge.
+    conjuge_fora_do_contrato: Optional[bool] = None
     conjuge: Optional[PessoaDados] = None
     endereco_residencial: EnderecoDados = Field(default_factory=EnderecoDados)
     endereco_comercial: EnderecoDados = Field(default_factory=EnderecoDados)

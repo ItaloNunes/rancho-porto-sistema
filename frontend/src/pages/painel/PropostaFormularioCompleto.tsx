@@ -288,7 +288,7 @@ export default function PropostaFormularioCompleto({
       // ela o contrato do Rancho Texas poderia sair sem a COMPRADORA.
       if (dados.tem_conjuge === null || dados.tem_conjuge === undefined)
         return "Responda se o comprador tem cônjuge ou companheiro(a).";
-      if (dados.tem_conjuge || !modoRapido) {
+      if (dados.tem_conjuge || dados.conjuge_fora_do_contrato || !modoRapido) {
         if (!dados.estado_civil) return "Selecione o estado civil.";
       }
       if (dados.tem_conjuge) {
@@ -614,38 +614,59 @@ export default function PropostaFormularioCompleto({
         {passo === 2 && (
           <>
             <Field label="O comprador tem cônjuge ou companheiro(a) que assina junto? *">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {([
-                  [true, "Sim — casado(a) ou união estável"],
-                  [false, "Não"],
-                ] as const).map(([valor, rotulo]) => (
-                  <button
-                    key={String(valor)}
-                    type="button"
-                    id={valor ? "tem-conjuge-sim" : "tem-conjuge-nao"}
-                    className={`rounded-lg border px-3 py-2.5 text-sm font-semibold text-left transition-colors ${
-                      dados.tem_conjuge === valor ? "border-primary bg-primary/10 text-ink" : "border-border text-ink-soft hover:border-primary/50"
-                    }`}
-                    onClick={() =>
-                      setDados({
-                        ...dados,
-                        tem_conjuge: valor,
-                        // troca de resposta: o estado civil anterior pode não servir mais
-                        estado_civil:
-                          dados.estado_civil && ESTADOS_COM_CONJUGE.includes(dados.estado_civil) === valor
-                            ? dados.estado_civil
-                            : null,
-                        conjuge: valor ? (dados.conjuge ?? {}) : null,
-                      })
-                    }
-                  >
-                    {rotulo}
-                  </button>
-                ))}
+                  ["sim", "Sim — casado(a) ou união estável, e o cônjuge entra no contrato"],
+                  ["fora", "Casado(a) ou união estável, mas o cônjuge NÃO entra no contrato"],
+                  ["nao", "Não tem cônjuge"],
+                ] as const).map(([opcao, rotulo]) => {
+                  const atual =
+                    dados.tem_conjuge === true
+                      ? "sim"
+                      : dados.tem_conjuge === false
+                        ? dados.conjuge_fora_do_contrato
+                          ? "fora"
+                          : "nao"
+                        : null;
+                  const casadoNovo = opcao !== "nao";
+                  return (
+                    <button
+                      key={opcao}
+                      type="button"
+                      id={`tem-conjuge-${opcao}`}
+                      className={`rounded-lg border px-3 py-2.5 text-sm font-semibold text-left transition-colors ${
+                        atual === opcao ? "border-primary bg-primary/10 text-ink" : "border-border text-ink-soft hover:border-primary/50"
+                      }`}
+                      onClick={() =>
+                        setDados({
+                          ...dados,
+                          tem_conjuge: opcao === "sim",
+                          conjuge_fora_do_contrato: opcao === "fora" ? true : null,
+                          // troca de resposta: o estado civil anterior pode não servir mais
+                          estado_civil:
+                            dados.estado_civil && ESTADOS_COM_CONJUGE.includes(dados.estado_civil) === casadoNovo
+                              ? dados.estado_civil
+                              : opcao === "fora"
+                                ? "casado"
+                                : null,
+                          conjuge: opcao === "sim" ? (dados.conjuge ?? {}) : null,
+                        })
+                      }
+                    >
+                      {rotulo}
+                    </button>
+                  );
+                })}
               </div>
             </Field>
+            {dados.conjuge_fora_do_contrato && (
+              <p className="text-xs text-ink-soft -mt-1">
+                O contrato sai só no nome do comprador (100%), com estado civil casado(a)/união estável, sem dados nem
+                assinatura do cônjuge.
+              </p>
+            )}
             {dados.tem_conjuge !== null && dados.tem_conjuge !== undefined && (
-              <Field label={modoRapido && !dados.tem_conjuge ? "Estado civil" : "Estado civil *"}>
+              <Field label={modoRapido && !dados.tem_conjuge && !dados.conjuge_fora_do_contrato ? "Estado civil" : "Estado civil *"}>
                 <select
                   id="estado-civil"
                   className="input"
@@ -653,7 +674,7 @@ export default function PropostaFormularioCompleto({
                   onChange={(e) => setDados({ ...dados, estado_civil: (e.target.value || null) as EstadoCivil | null })}
                 >
                   <option value="">Selecione...</option>
-                  {ESTADO_CIVIL_OPCOES.filter((o) => ESTADOS_COM_CONJUGE.includes(o.valor) === !!dados.tem_conjuge).map((o) => (
+                  {ESTADO_CIVIL_OPCOES.filter((o) => ESTADOS_COM_CONJUGE.includes(o.valor) === !!(dados.tem_conjuge || dados.conjuge_fora_do_contrato)).map((o) => (
                     <option key={o.valor} value={o.valor}>
                       {o.label}
                     </option>
@@ -1002,6 +1023,7 @@ function Revisao({
         <p>
           <span className="text-ink-soft">Estado civil: </span>
           {ESTADO_CIVIL_OPCOES.find((o) => o.valor === dados.estado_civil)?.label || "—"}
+          {dados.conjuge_fora_do_contrato ? " (cônjuge não entra no contrato)" : ""}
         </p>
         {temConjuge(dados) && (
           <p>

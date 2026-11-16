@@ -24,6 +24,7 @@ const CAMPOS_CONJUGE: [keyof PessoaDados, string][] = [
 /** Se o comprador tem cônjuge/companheiro(a) que entra no contrato: a
  * resposta direta (tem_conjuge) manda; sem ela, o estado civil. */
 export function temConjuge(dados: Partial<QualificacaoDados>): boolean {
+  if (dados.conjuge_fora_do_contrato === true) return false;
   if (dados.tem_conjuge !== null && dados.tem_conjuge !== undefined) return !!dados.tem_conjuge;
   return !!dados.estado_civil && ESTADOS_COM_CONJUGE.includes(dados.estado_civil);
 }
@@ -112,7 +113,9 @@ export function problemasConjuge(dados: Partial<QualificacaoDados>): string[] {
   const comConjuge = !!estado && ESTADOS_COM_CONJUGE.includes(estado);
   if (dados.tem_conjuge === true && !comConjuge)
     erros.push("Comprador com cônjuge/companheiro(a): o estado civil tem que ser Casado(a) ou União estável.");
-  if (dados.tem_conjuge === false && comConjuge)
+  const fora = dados.conjuge_fora_do_contrato === true;
+  if (fora && !comConjuge) erros.push("Cônjuge fora do contrato: o estado civil tem que ser Casado(a) ou União estável.");
+  if (dados.tem_conjuge === false && comConjuge && !fora)
     erros.push("Estado civil Casado(a)/União estável, mas foi informado que o comprador não tem cônjuge -- confira.");
   if (temConjuge(dados)) {
     const c = dados.conjuge ?? {};

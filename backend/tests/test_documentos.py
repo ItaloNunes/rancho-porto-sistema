@@ -664,3 +664,39 @@ def test_rota_trava_chave():
 def test_extenso_com_e_entre_grupos(valor, esperado):
     from app.documentos_gerados import valor_por_extenso
     assert valor_por_extenso(valor) == esperado
+
+
+# ------------------------------------------- casado(a), mas cônjuge fora do contrato (16/11)
+def _casado_sem_conjuge(lote, fp):
+    p = proposta(fp, lote, casado=True)  # traz dados de cônjuge, que NÃO podem entrar
+    p["dados_qualificacao"].update({"tem_conjuge": False, "conjuge_fora_do_contrato": True})
+    return p
+
+
+def test_casado_com_conjuge_fora_nao_entra_em_nenhum_contrato():
+    from app.documentos_gerados import preencher_contrato_rota_ventos
+    t_pf = texto_docx(preencher_contrato_porto_franco(proposta=_casado_sem_conjuge(LOTE_PF, fp_unica(LOTE_PF)), lote=LOTE_PF,
+                                                      cliente=CLIENTE, corretor=CORRETOR, valor_comissao=0,
+                                                      data_contrato=date(2026, 10, 2)))
+    t_rt = texto_docx(preencher_contrato_rancho_texas(proposta=_casado_sem_conjuge(LOTE_RT, fp_unica(LOTE_RT)), lote=LOTE_RT,
+                                                      cliente=CLIENTE, data_contrato=date(2026, 10, 2)))
+    t_rota = texto_docx(preencher_contrato_rota_ventos(proposta=_casado_sem_conjuge(LOTE_ROTA, FP_ROTA), lote=LOTE_ROTA,
+                                                       cliente=CLIENTE, data_contrato=date(2026, 11, 16)))
+    for t in (t_pf, t_rt, t_rota):
+        assert "João Teste" not in t and "529.982.247-25" not in t
+        assert "Casado(a)" in t
+    assert "CÔNJUGE" not in t_rota
+    linhas = tabela_proporcao(preencher_contrato_porto_franco(
+        proposta=_casado_sem_conjuge(LOTE_PF, fp_unica(LOTE_PF)), lote=LOTE_PF, cliente=CLIENTE, corretor=CORRETOR,
+        valor_comissao=0, data_contrato=date(2026, 10, 2)))
+    assert linhas[0] == ["Maria Teste da Silva", "100%"]
+
+
+def test_regras_conjuge_fora_do_contrato():
+    from app.cadastro_proposta import problemas_conjuge, tem_conjuge
+    ok = {"estado_civil": "casado", "tem_conjuge": False, "conjuge_fora_do_contrato": True}
+    assert problemas_conjuge(ok) == [] and tem_conjuge(ok) is False
+    assert problemas_conjuge({**ok, "estado_civil": "uniao_estavel"}) == []
+    assert "Casado(a) ou União estável" in problemas_conjuge({**ok, "estado_civil": "solteiro"})[0]
+    # sem a marcação continua travando a incoerência
+    assert problemas_conjuge({"estado_civil": "casado", "tem_conjuge": False})

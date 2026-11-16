@@ -33,7 +33,7 @@ export default function PropostaDadosLeitura({ proposta }: { proposta: PropostaD
         <Linha r="Nascimento" v={dataBR(pr.data_nascimento)} />
         <Linha r="Profissão" v={pr.profissao} />
         <Linha r="E-mail" v={pr.email} />
-        <Linha r="Estado civil" v={estadoCivil} />
+        <Linha r="Estado civil" v={estadoCivil && dq.conjuge_fora_do_contrato ? `${estadoCivil} (cônjuge não entra no contrato)` : estadoCivil} />
       </Bloco>
       {cj && (cj.nome || cj.cpf_cnpj) && (
         <Bloco titulo="Cônjuge / companheiro(a)">
