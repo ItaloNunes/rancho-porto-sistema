@@ -5,6 +5,7 @@ import {
   MAX_PARCELAS_ENTRADA,
   MEIOS_PAGAMENTO,
   dividirEmParcelas,
+  entradaLiquida,
   fmtBRL,
   fmtData,
   fmtDataExtenso,
@@ -414,7 +415,8 @@ export default function FormaPagamentoEtapa({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lote?.id]);
 
-  const entrada = lerValor(fp.sinal);
+  // entrada que o cliente paga (já sem o desconto na entrada, se houver)
+  const entrada = entradaLiquida(fp);
   const nEnt = Number(fp.sinal_parcelas);
   const valoresEntrada =
     fp.sinal_forma === "parcelada" && entrada && Number.isInteger(nEnt) && nEnt >= 2 ? dividirEmParcelas(entrada, nEnt) : [];
@@ -705,8 +707,14 @@ export default function FormaPagamentoEtapa({
           label="Desconto na entrada que o cliente vai pagar"
           valor={fp.desconto_entrada_valor}
           onChange={(v) => set({ desconto_entrada_valor: v })}
-          ajuda="Deixe em branco se não houver. Reduz o valor que o cliente paga de entrada; parcelas e chave ficam iguais. O valor do lote no contrato cai no mesmo tanto do desconto."
+          ajuda="Deixe em branco se não houver. Reduz o valor que o cliente paga de entrada; parcelas e chave ficam iguais."
         />
+        {lerValor(fp.desconto_entrada_valor ?? "") && lerValor(fp.sinal) && entrada !== lerValor(fp.sinal) ? (
+          <p id="fp-entrada-liquida" className="text-xs text-ink-soft">
+            O cliente paga de entrada <strong className="text-ink">R$ {fmtBRL(entrada ?? 0)}</strong> (R$ {fmtBRL(lerValor(fp.sinal) ?? 0)} −
+            desconto R$ {fmtBRL(lerValor(fp.desconto_entrada_valor ?? "") ?? 0)}). É esse valor que vai no contrato e nas parcelas da entrada.
+          </p>
+        ) : null}
       </Bloco>
 
       <ConferenciaPlano fp={fp} valorTabela={lote?.valor_total} onAjustarCentavos={(novo) => onChange(semConfirmacao(novo))} />

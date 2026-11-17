@@ -307,3 +307,18 @@ def test_entrada_valores_digitados_que_nao_fecham():
 def test_entrada_unica_descarta_valores_digitados():
     fp = {**_fp_mista(["1", "2"]), "sinal_forma": "unica"}
     assert _norm(fp)["sinal_valores"] is None
+
+
+# ------------------------------------- desconto na entrada (17/11)
+def test_desconto_na_entrada_usa_a_entrada_liquida_em_tudo():
+    fp = {"a_vista": False, "renda": "7.000,00", "valor_proposto": 89990.0, "sinal": "10.000,00",
+          "desconto_entrada_valor": "1.000", "sinal_forma": "parcelada", "sinal_parcelas": 4, "sinal_meio": "pix",
+          "sinal_vencimento": "2026-12-10", "dividido_em_parcelas": 100, "valor_parcela": "719,92",
+          "primeiro_mes": "2027-04-20", "chave_valor": "8.998,00", "confirmado": True}
+    assert _validar(fp, 89990.0, None) == []
+    p = _ler(fp)
+    assert p.entrada == 9000.0 and p.entrada_bruta == 10000.0 and p.entrada_valores == [2250.0] * 4
+    n = _norm(fp)
+    assert n["desconto_entrada_valor"] == "1.000,00" and n["sinal_valor_parcela"] == "2.250,00"
+    assert _resumo(fp).startswith("Entrada R$ 9.000,00 (R$ 10.000,00 - desconto R$ 1.000,00) em 4x")
+    assert any("menor que a entrada" in e for e in _validar({**fp, "desconto_entrada_valor": "10.000"}, 89990.0, None))

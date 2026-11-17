@@ -188,8 +188,17 @@ export function textoCurtoParcelas(valores: number[]): string {
   return grupos.map(([k, v]) => `${k}x de R$ ${fmtBRL(v)}`).join(" + ");
 }
 
+/** Entrada que o cliente paga de fato: sinal digitado − desconto na entrada
+ * (17/11). Mesma regra de plano_pagamento.ler_plano. */
+export function entradaLiquida(fp: FormaPagamentoDados): number | null {
+  const bruta = lerValor(fp.sinal);
+  const desc = lerValor(fp.desconto_entrada_valor ?? "");
+  if (bruta && desc && desc > 0 && desc < bruta) return Math.round((bruta - desc) * 100) / 100;
+  return bruta;
+}
+
 export function lerPlano(fp: FormaPagamentoDados): Plano {
-  const entrada = lerValor(fp.sinal);
+  const entrada = entradaLiquida(fp);
   const nEnt = fp.sinal_forma === "parcelada" ? Math.max(1, Number(fp.sinal_parcelas) || 1) : 1;
   const nSaldo = Math.max(1, Number(fp.sinal_parcelas) || 1);
   const avistaEnt = lerValor(fp.sinal_avista);
@@ -278,6 +287,12 @@ export function validarPlano(
       erros.push("Informe como o pagamento à vista será feito (PIX, transferência, boleto, cheque ou dinheiro).");
     if (!lerData(fp.avista_data)) erros.push("Informe a data do pagamento à vista (dia/mês/ano).");
   } else {
+    if (invalido(fp.desconto_entrada_valor)) erros.push(`Valor do desconto na entrada inválido: ${FORMATO_VALOR}`);
+    else {
+      const db = lerValor(fp.desconto_entrada_valor ?? "");
+      const eb = lerValor(fp.sinal);
+      if (db && eb && db >= eb) erros.push("O desconto na entrada tem que ser menor que a entrada.");
+    }
     if (invalido(fp.sinal)) erros.push(`Valor da entrada inválido: ${FORMATO_VALOR}`);
     else if (!p.entrada || p.entrada <= 0) erros.push("A entrada é obrigatória: informe o valor da entrada.");
     else if (p.entrada >= vp)
@@ -382,7 +397,7 @@ export function errosValoresEntrada(fp: FormaPagamentoDados): string[] {
     else if (v <= 0) erros.push(`A ${i + 1}ª parcela da entrada tem que ser maior que zero.`);
   });
   if (erros.length) return erros;
-  const entrada = lerValor(fp.sinal);
+  const entrada = entradaLiquida(fp);
   const av = lerValor(fp.sinal_avista);
   const alvo = fp.sinal_forma === "parcelada" ? entrada : entrada && av ? Math.round((entrada - av) * 100) / 100 : null;
   if (!alvo) return [];
@@ -411,6 +426,7 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
       sinal_vencimento: null,
       sinal_valor_parcela: null,
       sinal_valores: null,
+      desconto_entrada_valor: null,
       dividido_em_parcelas: null,
       valor_parcela: null,
       vencimento: null,

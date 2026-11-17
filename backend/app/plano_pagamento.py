@@ -182,9 +182,12 @@ class Plano:
     # chave
     chave: Optional[float] = None
     chave_data: Optional[date] = None
-    # Desconto aplicado na entrada (17/11). A entrada que o cliente paga é
-    # (entrada - desconto_entrada); o valor do lote cai o mesmo tanto.
+    # Desconto aplicado na entrada (17/11). `entrada` acima JÁ É a líquida
+    # (o que o cliente paga = sinal digitado - desconto); `entrada_bruta` é a
+    # digitada, só pra mostrar "R$ 10.000 - desconto R$ 1.000". Assim parcelas
+    # da entrada, saldo da mista, resumo, PDF e contrato usam o mesmo número.
     desconto_entrada: Optional[float] = None
+    entrada_bruta: Optional[float] = None
     # Casas do Veneza (tabela de 27/10): balões anuais e o saldo pago por
     # financiamento bancário. Vazios em todos os outros empreendimentos.
     balao_qtd: Optional[int] = None
@@ -237,8 +240,7 @@ class Plano:
         if self.a_vista:
             return self.valor_proposto or 0.0
         return ((self.entrada or 0.0) + (self.parcelas or 0) * (self.parcela_valor or 0.0) + (self.chave or 0.0)
-                + self.baloes_total + (self.financiamento or 0.0)
-                - (self.desconto_entrada or 0.0))
+                + self.baloes_total + (self.financiamento or 0.0))
 
 
 def ler_plano(fp: Optional[dict]) -> Plano:
@@ -256,6 +258,11 @@ def ler_plano(fp: Optional[dict]) -> Plano:
     primeira_txt = fp.get("primeiro_mes")
     brutos = fp.get("sinal_valores")
     manuais = [valor(v) for v in brutos] if isinstance(brutos, list) and brutos else None
+    entrada_bruta = valor(fp.get("sinal"))
+    desconto_entrada = valor(fp.get("desconto_entrada_valor"))
+    entrada = entrada_bruta
+    if entrada_bruta and desconto_entrada and 0 < desconto_entrada < entrada_bruta:
+        entrada = round(entrada_bruta - desconto_entrada, 2)
     try:
         balao_qtd = int(fp.get("balao_qtd")) if fp.get("balao_qtd") not in (None, "") else None
     except (TypeError, ValueError):
@@ -266,9 +273,10 @@ def ler_plano(fp: Optional[dict]) -> Plano:
         renda=valor(fp.get("renda")),
         avista_meio=fp.get("avista_meio"),
         avista_data=data(fp.get("avista_data")),
-        entrada=valor(fp.get("sinal")),
+        entrada=entrada,
+        entrada_bruta=entrada_bruta,
         entrada_forma=fp.get("sinal_forma"),
-        desconto_entrada=valor(fp.get("desconto_entrada_valor")),
+        desconto_entrada=desconto_entrada,
         entrada_parcelas=max(1, n_entrada),
         entrada_meio=fp.get("sinal_meio"),
         entrada_data=data(fp.get("sinal_vencimento")),
@@ -350,6 +358,10 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
             erros.append("A entrada é obrigatória: informe o valor da entrada.")
         elif p.entrada >= vp:
             erros.append("A entrada não pode ser igual ou maior que o valor proposto -- se for tudo de uma vez, escolha \"À vista\".")
+        if _invalido(fp, "desconto_entrada_valor"):
+            erros.append(f"Valor do desconto na entrada inválido: {FORMATO_VALOR}")
+        elif p.desconto_entrada and p.entrada_bruta and p.desconto_entrada >= p.entrada_bruta:
+            erros.append("O desconto na entrada tem que ser menor que a entrada.")
         if p.entrada_forma not in ("unica", "parcelada", "mista"):
             erros.append("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.")
         elif p.entrada_forma == "parcelada":
@@ -502,7 +514,8 @@ def normalizar(fp: dict) -> dict:
     cada parcela da entrada), pra PDF/contrato/listas lerem tudo igual."""
     out = dict(fp)
     p = ler_plano(fp)
-    for chave in ("sinal", "sinal_avista", "valor_parcela", "chave_valor", "renda", "balao_valor", "financiamento_valor"):
+    for chave in ("sinal", "sinal_avista", "valor_parcela", "chave_valor", "renda", "balao_valor", "financiamento_valor",
+                  "desconto_entrada_valor"):
         v = valor(fp.get(chave))
         if v is not None:
             out[chave] = fmt_brl(v)
@@ -520,7 +533,7 @@ def normalizar(fp: dict) -> dict:
         for chave in ("sinal", "sinal_avista", "sinal_resto_primeira", "sinal_forma", "sinal_parcelas", "sinal_meio", "sinal_vencimento",
                       "sinal_valor_parcela", "dividido_em_parcelas", "valor_parcela", "vencimento",
                       "primeiro_mes", "chave_valor", "chave_vencimento", "balao_qtd", "balao_valor",
-                      "financiamento_valor"):
+                      "financiamento_valor", "desconto_entrada_valor"):
             out[chave] = None
     elif p.entrada_forma == "parcelada" and p.entrada:
         out["sinal_valor_parcela"] = fmt_brl(p.entrada_valores[0])
@@ -549,16 +562,18 @@ def resumo(fp: Optional[dict]) -> str:
             (f" em {fmt_data(p.avista_data)}" if p.avista_data else "")
     partes = []
     if p.entrada:
+        desc_txt = (f" (R$ {fmt_brl(p.entrada_bruta)} - desconto R$ {fmt_brl(p.desconto_entrada)})"
+                    if p.entrada_bruta and p.entrada != p.entrada_bruta else "")
         if p.entrada_forma == "mista" and p.entrada_avista:
             sv = p.saldo_valores
             saldo = texto_curto_parcelas(sv) if p.entrada_valores_manuais and len(grupos_parcelas(sv)) > 1 else f"{p.entrada_parcelas}x do saldo"
-            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} ({fmt_brl(p.entrada_avista)} à vista + {saldo})")
+            partes.append(f"Entrada R$ {fmt_brl(p.entrada)}{desc_txt} ({fmt_brl(p.entrada_avista)} à vista + {saldo})")
         elif p.entrada_forma == "parcelada" and p.entrada_parcelas > 1:
             ev = p.entrada_valores
-            partes.append(f"Entrada R$ {fmt_brl(p.entrada)} em "
+            partes.append(f"Entrada R$ {fmt_brl(p.entrada)}{desc_txt} em "
                           + (texto_curto_parcelas(ev) if p.entrada_valores_manuais and len(grupos_parcelas(ev)) > 1 else f"{p.entrada_parcelas}x"))
         else:
-            partes.append(f"Entrada R$ {fmt_brl(p.entrada)}")
+            partes.append(f"Entrada R$ {fmt_brl(p.entrada)}{desc_txt}")
     if p.parcelas and p.parcela_valor:
         partes.append(f"{p.parcelas}x de R$ {fmt_brl(p.parcela_valor)}")
     if p.balao_qtd and p.balao_valor:
@@ -608,10 +623,8 @@ def valores_contrato(fp: Optional[dict], lote: Optional[dict]) -> ValoresContrat
         # Entrada LÍQUIDA que entra no contrato (entrada original menos
         # desconto na entrada, 17/11). Parcelas e chave ficam iguais;
         # o valor total do lote cai no mesmo tanto do desconto.
-        entrada=(
-            max(0.0, (p.entrada or valor(lote.get("entrada")) or 0.0) - (p.desconto_entrada or 0.0))
-            or None
-        ),
+        # p.entrada já é a LÍQUIDA (sinal - desconto na entrada, 17/11).
+        entrada=p.entrada or valor(lote.get("entrada")),
         parcelas=qtd,
         parcela_valor=p.parcela_valor or valor(lote.get("parcela_mensal")),
         chave=(p.chave or 0.0) if p.estruturado else (valor(lote.get("entrega")) or 0.0),
