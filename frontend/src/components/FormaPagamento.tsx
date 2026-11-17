@@ -699,6 +699,16 @@ export default function FormaPagamentoEtapa({
         />
       </Bloco>
 
+      <Bloco titulo="Desconto na entrada (opcional)">
+        <CampoDinheiro
+          id="fp-desconto-entrada"
+          label="Desconto na entrada que o cliente vai pagar"
+          valor={fp.desconto_entrada_valor}
+          onChange={(v) => set({ desconto_entrada_valor: v })}
+          ajuda="Deixe em branco se não houver. Reduz o valor que o cliente paga de entrada; parcelas e chave ficam iguais. O valor do lote no contrato cai no mesmo tanto do desconto."
+        />
+      </Bloco>
+
       <ConferenciaPlano fp={fp} valorTabela={lote?.valor_total} onAjustarCentavos={(novo) => onChange(semConfirmacao(novo))} />
 
       <Field label="Observações">

@@ -182,6 +182,9 @@ class Plano:
     # chave
     chave: Optional[float] = None
     chave_data: Optional[date] = None
+    # Desconto aplicado na entrada (17/11). A entrada que o cliente paga é
+    # (entrada - desconto_entrada); o valor do lote cai o mesmo tanto.
+    desconto_entrada: Optional[float] = None
     # Casas do Veneza (tabela de 27/10): balões anuais e o saldo pago por
     # financiamento bancário. Vazios em todos os outros empreendimentos.
     balao_qtd: Optional[int] = None
@@ -234,7 +237,8 @@ class Plano:
         if self.a_vista:
             return self.valor_proposto or 0.0
         return ((self.entrada or 0.0) + (self.parcelas or 0) * (self.parcela_valor or 0.0) + (self.chave or 0.0)
-                + self.baloes_total + (self.financiamento or 0.0))
+                + self.baloes_total + (self.financiamento or 0.0)
+                - (self.desconto_entrada or 0.0))
 
 
 def ler_plano(fp: Optional[dict]) -> Plano:
@@ -264,6 +268,7 @@ def ler_plano(fp: Optional[dict]) -> Plano:
         avista_data=data(fp.get("avista_data")),
         entrada=valor(fp.get("sinal")),
         entrada_forma=fp.get("sinal_forma"),
+        desconto_entrada=valor(fp.get("desconto_entrada_valor")),
         entrada_parcelas=max(1, n_entrada),
         entrada_meio=fp.get("sinal_meio"),
         entrada_data=data(fp.get("sinal_vencimento")),
@@ -600,7 +605,13 @@ def valores_contrato(fp: Optional[dict], lote: Optional[dict]) -> ValoresContrat
         qtd = None
     return ValoresContrato(
         a_vista=False,
-        entrada=p.entrada or valor(lote.get("entrada")),
+        # Entrada LÍQUIDA que entra no contrato (entrada original menos
+        # desconto na entrada, 17/11). Parcelas e chave ficam iguais;
+        # o valor total do lote cai no mesmo tanto do desconto.
+        entrada=(
+            max(0.0, (p.entrada or valor(lote.get("entrada")) or 0.0) - (p.desconto_entrada or 0.0))
+            or None
+        ),
         parcelas=qtd,
         parcela_valor=p.parcela_valor or valor(lote.get("parcela_mensal")),
         chave=(p.chave or 0.0) if p.estruturado else (valor(lote.get("entrega")) or 0.0),
