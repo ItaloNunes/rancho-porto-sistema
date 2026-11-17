@@ -5,6 +5,7 @@ import {
   MAX_PARCELAS_ENTRADA,
   MEIOS_PAGAMENTO,
   dividirEmParcelas,
+  abatimentoNoPreco,
   entradaLiquida,
   fmtBRL,
   fmtData,
@@ -79,6 +80,23 @@ export function temBaloesNaTabela(lote: LoteComCondominio | null | undefined): b
 /** Campo de dinheiro: aceita "8999", "8.999", "8.999,00"; ao sair do campo
  * vira "8.999,00", e mostra o valor por extenso embaixo pra pegar dígito a
  * mais/a menos na hora (ex.: 89,99 x 89.990,00). */
+/** Parcelas da entrada digitadas à mão + mudou a entrada ou o desconto:
+ * a última parcela vira "o que falta" pra continuar fechando (17/11 -- o
+ * financeiro pôs R$ 178,06 de desconto e as parcelas ficaram somando o
+ * valor antigo). Se não der (faltaria valor negativo), deixa como está e a
+ * tela mostra a diferença. */
+function comUltimaParcelaAjustada(fp: FormaPagamentoDados): FormaPagamentoDados {
+  const lista = fp.sinal_valores;
+  if (!lista || lista.length < 2 || (fp.sinal_forma !== "parcelada" && fp.sinal_forma !== "mista")) return fp;
+  const liq = entradaLiquida(fp);
+  const av = lerValor(fp.sinal_avista ?? "");
+  const alvo = fp.sinal_forma === "parcelada" ? liq : liq && av ? liq - av : null;
+  if (!alvo) return fp;
+  const outras = lista.slice(0, -1).reduce<number>((t, v) => t + (lerValor(v ?? "") ?? 0), 0);
+  const ultima = Math.round((alvo - outras) * 100) / 100;
+  return ultima > 0 ? { ...fp, sinal_valores: [...lista.slice(0, -1), fmtBRL(ultima)] } : fp;
+}
+
 /** Valor de cada parcela da entrada: partes iguais (padrão) ou digitado à
  * mão, uma por uma (16/11 -- ex.: 2x de 4.000,00 e 1x de 3.670,00). */
 function ParcelasEntrada({
@@ -320,7 +338,12 @@ export function ConferenciaPlano({
     );
   }
   if (fp.a_vista !== false) return null;
-  const diff = p.total - vp;
+  // com desconto na entrada, o lote sai por (valor proposto - desconto)
+  // só mostra/abate quando o valor proposto foi digitado cheio; se já veio
+  // com o desconto, não desconta de novo
+  const dscEnt = abatimentoNoPreco(fp, p.total, vp);
+  const alvo = Math.round((vp - dscEnt) * 100) / 100;
+  const diff = p.total - alvo;
   const fecha = Math.abs(diff) <= tolerancia(p);
   const comBaloes = !!(p.balaoQtd || p.balaoValor || p.financiamento);
   const linhas: [string, string][] = [
@@ -356,14 +379,26 @@ export function ConferenciaPlano({
             <td className="pt-1 text-right font-semibold text-ink">R$ {fmtBRL(p.total)}</td>
           </tr>
           <tr>
-            <td className="font-semibold text-ink">Valor proposto</td>
-            <td className="text-right font-semibold text-ink">R$ {fmtBRL(vp)}</td>
+            <td className={dscEnt ? "text-ink-soft" : "font-semibold text-ink"}>Valor proposto</td>
+            <td className={`text-right ${dscEnt ? "text-ink-soft" : "font-semibold text-ink"}`}>R$ {fmtBRL(vp)}</td>
           </tr>
+          {dscEnt > 0 && (
+            <>
+              <tr>
+                <td className="text-ink-soft">Desconto na entrada</td>
+                <td className="text-right text-ink-soft">− R$ {fmtBRL(dscEnt)}</td>
+              </tr>
+              <tr>
+                <td className="font-semibold text-ink">Valor do lote no contrato</td>
+                <td className="text-right font-semibold text-ink">R$ {fmtBRL(alvo)}</td>
+              </tr>
+            </>
+          )}
         </tbody>
       </table>
       <p className={`mt-2 text-xs font-semibold ${fecha ? "text-sage" : "text-rust"}`}>
         {fecha
-          ? `✓ A conta fecha: ${partes} = valor proposto.`
+          ? `✓ A conta fecha: ${partes} = ${dscEnt ? "valor do lote no contrato" : "valor proposto"}.`
           : `✗ A conta não fecha: diferença de R$ ${fmtBRL(Math.abs(diff))} (${diff > 0 ? "sobrando" : "faltando"}). Ajuste ${comBaloes ? "a entrada, as parcelas, os balões ou o financiamento" : "a entrada, as parcelas ou a chave"}.`}
       </p>
       {!fecha && onAjustarCentavos && Math.abs(diff) <= 1 && (
@@ -500,14 +535,14 @@ export default function FormaPagamentoEtapa({
       {fp.a_vista === false && (
         <>
           <Bloco titulo="1. Entrada (sinal / arras) — obrigatória" destaque>
-            <CampoDinheiro id="fp-entrada" label="Valor da entrada *" valor={fp.sinal} onChange={(v) => set({ sinal: v })} />
+            <CampoDinheiro id="fp-entrada" label="Valor da entrada *" valor={fp.sinal} onChange={(v) => set(comUltimaParcelaAjustada({ ...fp, sinal: v }))} />
             <div id="fp-bloco-desconto-entrada" className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 grid gap-2">
               <p className="text-sm font-bold text-ink">💲 Desconto na entrada (opcional)</p>
               <CampoDinheiro
                 id="fp-desconto-entrada"
                 label="Quanto de desconto o cliente tem na entrada?"
                 valor={fp.desconto_entrada_valor}
-                onChange={(v) => set({ desconto_entrada_valor: v })}
+                onChange={(v) => set(comUltimaParcelaAjustada({ ...fp, desconto_entrada_valor: v }))}
                 ajuda="Deixe em branco se não houver. Parcelas e chave ficam iguais; o cliente paga a entrada menos esse valor."
               />
               {lerValor(fp.desconto_entrada_valor ?? "") && lerValor(fp.sinal) && entrada !== lerValor(fp.sinal) ? (

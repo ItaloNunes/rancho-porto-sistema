@@ -322,3 +322,31 @@ def test_desconto_na_entrada_usa_a_entrada_liquida_em_tudo():
     assert n["desconto_entrada_valor"] == "1.000,00" and n["sinal_valor_parcela"] == "2.250,00"
     assert _resumo(fp).startswith("Entrada R$ 9.000,00 (R$ 10.000,00 - desconto R$ 1.000,00) em 4x")
     assert any("menor que a entrada" in e for e in _validar({**fp, "desconto_entrada_valor": "10.000"}, 89990.0, None))
+
+
+def test_desconto_na_entrada_baixa_o_preco_e_fecha_com_o_valor_proposto():
+    """Caso real de 17/11: plano de tabela (156.780,58) + desconto de 178,06 na entrada."""
+    from app.plano_pagamento import conferir_contrato
+    fp = {"a_vista": False, "renda": "20.000,00", "valor_proposto": 156780.58, "sinal": "15.678,06",
+          "desconto_entrada_valor": "178,06", "sinal_forma": "parcelada", "sinal_parcelas": 4,
+          "sinal_valores": ["4.000", "4.000", "4.000", "3.500"], "sinal_meio": "pix", "sinal_vencimento": "2026-12-10",
+          "dividido_em_parcelas": 100, "valor_parcela": "1.254,24", "primeiro_mes": "2027-04-20",
+          "chave_valor": "15.678,52", "confirmado": True}
+    assert _validar(fp, 156780.58, None) == []
+    assert _ler(fp).desconto_entrada_aplicado == 178.06
+    assert conferir_contrato(_norm(fp), 156780.58, {}) == []
+    erros = _validar({**fp, "sinal_valores": ["4.000", "4.000", "4.000", "3.678,06"]}, 156780.58, None)
+    assert any("R$ 15.500,00" in e for e in erros)
+
+
+def test_desconto_na_entrada_com_valor_proposto_ja_descontado():
+    """O financeiro também pode pôr o valor proposto já com o desconto (156.602,52)."""
+    from app.plano_pagamento import conferir_contrato
+    fp = {"a_vista": False, "renda": "20.000,00", "valor_proposto": 156602.52, "sinal": "15.678,06",
+          "desconto_entrada_valor": "178,06", "sinal_forma": "parcelada", "sinal_parcelas": 4,
+          "sinal_valores": ["4.000", "4.000", "4.000", "3.500"], "sinal_meio": "pix", "sinal_vencimento": "2026-12-10",
+          "dividido_em_parcelas": 100, "valor_parcela": "1.254,24", "primeiro_mes": "2027-04-20",
+          "chave_valor": "15.678,52", "confirmado": True}
+    assert _validar(fp, 156602.52, None) == []
+    assert _ler(fp).abatimento_no_preco(156602.52) == 0.0  # não desconta de novo
+    assert conferir_contrato(_norm(fp), 156602.52, {}) == []

@@ -232,6 +232,25 @@ class Plano:
         return self._manuais_ok(n) or dividir_em_parcelas(resto, n)
 
     @property
+    def desconto_entrada_aplicado(self) -> float:
+        """Desconto na entrada que valeu (0 se vazio/inválido). O preço do lote
+        cai esse tanto: o plano é montado com os valores cheios (os da tabela),
+        e o cliente paga a entrada menos o desconto (17/11)."""
+        if self.entrada_bruta and self.entrada is not None and self.entrada < self.entrada_bruta:
+            return round(self.entrada_bruta - self.entrada, 2)
+        return 0.0
+
+    def abatimento_no_preco(self, vp: Optional[float]) -> float:
+        """Quanto o preço impresso cai por causa do desconto na entrada. Aceita
+        os dois jeitos de preencher (17/11): valor proposto CHEIO (soma do plano
+        = valor proposto - desconto -> o preço cai o desconto) ou valor
+        proposto JÁ COM o desconto (soma = valor proposto -> não cai de novo)."""
+        dsc = self.desconto_entrada_aplicado
+        if not dsc or not vp or self.a_vista:
+            return 0.0
+        return dsc if abs(self.total_calculado - (vp - dsc)) <= 0.005 else 0.0
+
+    @property
     def baloes_total(self) -> float:
         return (self.balao_qtd or 0) * (self.balao_valor or 0.0)
 
@@ -412,11 +431,14 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
         erros += _erros_baloes_financiamento(fp, p)
         if not erros:
             total = p.total_calculado
-            if abs(total - vp) > tolerancia(p):
+            dsc = p.desconto_entrada_aplicado
+            alvo = round(vp - p.abatimento_no_preco(vp), 2)
+            if abs(total - alvo) > tolerancia(p):
+                alvo_txt = (f"o valor proposto é R$ {fmt_brl(vp)} (ou R$ {fmt_brl(round(vp - dsc, 2))}, se já tirar o "
+                            f"desconto na entrada de R$ {fmt_brl(dsc)})") if dsc else f"o valor proposto é R$ {fmt_brl(vp)}"
                 erros.append(
                     f"A soma não fecha: {_texto_soma(p.entrada, p.parcelas, p.parcela_valor, p.chave or 0, p.balao_qtd, p.balao_valor, p.financiamento)}"
-                    f" = R$ {fmt_brl(total)}, mas o valor proposto é "
-                    f"R$ {fmt_brl(vp)} (diferença de R$ {fmt_brl(abs(total - vp))})."
+                    f" = R$ {fmt_brl(total)}, mas {alvo_txt} (diferença de R$ {fmt_brl(abs(total - alvo))})."
                 )
 
     if not fp.get("confirmado"):
@@ -669,6 +691,8 @@ def conferir_contrato(fp: Optional[dict], valor_total: Optional[float], lote: Op
     v = valores_contrato(fp, lote)
     if v.a_vista:
         return problemas
+    # o preço impresso já desconta o desconto na entrada (17/11)
+    valor_total = round(valor_total - ler_plano(fp).abatimento_no_preco(valor_total), 2)
     if not v.entrada or v.entrada <= 0:
         problemas.append("A proposta não tem o valor da entrada.")
     if not v.parcelas or not v.parcela_valor:

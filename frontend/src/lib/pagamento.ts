@@ -188,6 +188,23 @@ export function textoCurtoParcelas(valores: number[]): string {
   return grupos.map(([k, v]) => `${k}x de R$ ${fmtBRL(v)}`).join(" + ");
 }
 
+/** Desconto na entrada que valeu (0 se vazio/inválido). O preço do lote cai
+ * esse tanto (17/11) -- mesma regra de Plano.desconto_entrada_aplicado. */
+export function descontoEntradaAplicado(fp: FormaPagamentoDados): number {
+  const bruta = lerValor(fp.sinal);
+  const liq = entradaLiquida(fp);
+  return bruta && liq != null && liq < bruta ? Math.round((bruta - liq) * 100) / 100 : 0;
+}
+
+/** Quanto o preço do contrato cai pelo desconto na entrada. Aceita os dois
+ * jeitos: valor proposto cheio (soma = proposto - desconto -> cai o desconto)
+ * ou já descontado (soma = proposto -> não cai de novo). Igual ao servidor. */
+export function abatimentoNoPreco(fp: FormaPagamentoDados, total: number, vp: number): number {
+  const dsc = descontoEntradaAplicado(fp);
+  if (!dsc || !vp || fp.a_vista) return 0;
+  return Math.abs(total - (vp - dsc)) <= 0.005 ? dsc : 0;
+}
+
 /** Entrada que o cliente paga de fato: sinal digitado − desconto na entrada
  * (17/11). Mesma regra de plano_pagamento.ler_plano. */
 export function entradaLiquida(fp: FormaPagamentoDados): number | null {
@@ -339,10 +356,13 @@ export function validarPlano(
     else if ((p.balaoQtd ?? 0) > 0 && !(p.balaoValor && p.balaoValor > 0)) erros.push("Balões: informe o valor de cada balão.");
     else if ((p.balaoValor ?? 0) > 0 && !((p.balaoQtd ?? 0) > 0)) erros.push("Balões: informe a quantidade de balões.");
     if (invalido(fp.financiamento_valor)) erros.push(`Valor do financiamento inválido: ${FORMATO_VALOR}`);
-    if (erros.length === 0 && Math.abs(p.total - vp) > tolerancia(p)) {
-      erros.push(
-        `A soma não fecha: ${textoSoma(p)} = R$ ${fmtBRL(p.total)}, mas o valor proposto é R$ ${fmtBRL(vp)} (diferença de R$ ${fmtBRL(Math.abs(p.total - vp))}).`,
-      );
+    const dsc = descontoEntradaAplicado(fp);
+    const alvo = Math.round((vp - abatimentoNoPreco(fp, p.total, vp)) * 100) / 100;
+    if (erros.length === 0 && Math.abs(p.total - alvo) > tolerancia(p)) {
+      const alvoTxt = dsc
+        ? `o valor proposto é R$ ${fmtBRL(vp)} (ou R$ ${fmtBRL(Math.round((vp - dsc) * 100) / 100)}, se já tirar o desconto na entrada de R$ ${fmtBRL(dsc)})`
+        : `o valor proposto é R$ ${fmtBRL(vp)}`;
+      erros.push(`A soma não fecha: ${textoSoma(p)} = R$ ${fmtBRL(p.total)}, mas ${alvoTxt} (diferença de R$ ${fmtBRL(Math.abs(p.total - alvo))}).`);
     }
   }
   if (incluirConfirmacao && !fp.confirmado)
