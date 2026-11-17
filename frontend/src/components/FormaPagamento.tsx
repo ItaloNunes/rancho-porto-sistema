@@ -501,6 +501,23 @@ export default function FormaPagamentoEtapa({
         <>
           <Bloco titulo="1. Entrada (sinal / arras) — obrigatória" destaque>
             <CampoDinheiro id="fp-entrada" label="Valor da entrada *" valor={fp.sinal} onChange={(v) => set({ sinal: v })} />
+            <div id="fp-bloco-desconto-entrada" className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 grid gap-2">
+              <p className="text-sm font-bold text-ink">💲 Desconto na entrada (opcional)</p>
+              <CampoDinheiro
+                id="fp-desconto-entrada"
+                label="Quanto de desconto o cliente tem na entrada?"
+                valor={fp.desconto_entrada_valor}
+                onChange={(v) => set({ desconto_entrada_valor: v })}
+                ajuda="Deixe em branco se não houver. Parcelas e chave ficam iguais; o cliente paga a entrada menos esse valor."
+              />
+              {lerValor(fp.desconto_entrada_valor ?? "") && lerValor(fp.sinal) && entrada !== lerValor(fp.sinal) ? (
+                <p id="fp-entrada-liquida" className="text-sm text-ink">
+                  O cliente paga de entrada <strong>R$ {fmtBRL(entrada ?? 0)}</strong> (R$ {fmtBRL(lerValor(fp.sinal) ?? 0)} −
+                  desconto R$ {fmtBRL(lerValor(fp.desconto_entrada_valor ?? "") ?? 0)}). É esse valor que vai no contrato e nas
+                  parcelas da entrada.
+                </p>
+              ) : null}
+            </div>
             <Field label="Como a entrada será paga? *">
               <Opcoes<"unica" | "parcelada" | "mista">
                 opcoes={[
@@ -699,22 +716,6 @@ export default function FormaPagamentoEtapa({
           onChange={(v) => set({ desconto_corretor_valor: v })}
           ajuda="Deixe em branco se não houver. Sai só da comissão do corretor — o preço do lote no contrato continua o valor proposto."
         />
-      </Bloco>
-
-      <Bloco titulo="Desconto na entrada (opcional)">
-        <CampoDinheiro
-          id="fp-desconto-entrada"
-          label="Desconto na entrada que o cliente vai pagar"
-          valor={fp.desconto_entrada_valor}
-          onChange={(v) => set({ desconto_entrada_valor: v })}
-          ajuda="Deixe em branco se não houver. Reduz o valor que o cliente paga de entrada; parcelas e chave ficam iguais."
-        />
-        {lerValor(fp.desconto_entrada_valor ?? "") && lerValor(fp.sinal) && entrada !== lerValor(fp.sinal) ? (
-          <p id="fp-entrada-liquida" className="text-xs text-ink-soft">
-            O cliente paga de entrada <strong className="text-ink">R$ {fmtBRL(entrada ?? 0)}</strong> (R$ {fmtBRL(lerValor(fp.sinal) ?? 0)} −
-            desconto R$ {fmtBRL(lerValor(fp.desconto_entrada_valor ?? "") ?? 0)}). É esse valor que vai no contrato e nas parcelas da entrada.
-          </p>
-        ) : null}
       </Bloco>
 
       <ConferenciaPlano fp={fp} valorTabela={lote?.valor_total} onAjustarCentavos={(novo) => onChange(semConfirmacao(novo))} />

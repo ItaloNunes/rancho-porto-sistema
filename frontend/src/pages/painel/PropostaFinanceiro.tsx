@@ -107,6 +107,15 @@ export default function PropostaFinanceiro({
     );
   }
 
+  function abrirDescontoEntrada() {
+    abrirEdicaoPagamento();
+    setTimeout(() => {
+      const el = document.getElementById("fp-bloco-desconto-entrada");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (document.getElementById("fp-desconto-entrada") as HTMLInputElement | null)?.focus();
+    }, 150);
+  }
+
   function abrirEdicaoPagamento() {
     const fp = ((proposta.dados_qualificacao ?? {}) as Partial<QualificacaoDados>).forma_pagamento ?? {};
     setFpEdicao(fp);
@@ -232,6 +241,15 @@ export default function PropostaFinanceiro({
             onClick={editandoPagamento ? () => setEditandoPagamento(false) : abrirEdicaoPagamento}
           >
             {editandoPagamento ? "Cancelar edição de pagamento" : "Editar pagamento"}
+          </button>
+        )}
+        {!encerrada && !editandoPagamento && (
+          <button
+            id="financeiro-desconto-entrada"
+            className="btn !py-2 !px-4 !text-sm border-2 border-amber-400 bg-amber-50 text-ink hover:bg-amber-100"
+            onClick={abrirDescontoEntrada}
+          >
+            💲 Desconto na entrada
           </button>
         )}
         <button className="btn btn-outline !py-2 !px-4 !text-sm" onClick={verPdfProposta} disabled={abrindoPdf}>
