@@ -3,7 +3,8 @@ import Modal from "../../components/Modal";
 import { api, formatMoney, formatarNumeroProposta, numeroContrato } from "../../lib/api";
 import { PrazoAnaliseBadge } from "./PropostaDocumentos";
 import PropostaFinanceiro from "./PropostaFinanceiro";
-import type { PropostaDetalhe, PropostaStatus } from "../../types";
+import { abatimentoNoPreco, lerPlano } from "../../lib/pagamento";
+import type { FormaPagamentoDados, PropostaDetalhe, PropostaStatus } from "../../types";
 
 // Uma proposta sai da fila do financeiro assim que alguém decide algo sobre
 // ela — aprovada/enviada/aceita seguiram em frente, recusada/cancelada não
@@ -677,7 +678,15 @@ function FormularioContrato({
         const desc = dig(descontoCorretor);
         // digitada já sem o desconto: a cheia é os 5% (o servidor faz igual)
         const bruta = comissaoJaDescontada ? cincoPorCento : dig(comissao);
-        const preco = (proposta.valor_proposto ?? 0) - (proposta.desconto_especial ?? 0);
+        // Mesmo cálculo do servidor (documentos_gerados): valor proposto
+        // - desconto aprovado - desconto na entrada (quando a proposta foi
+        // montada com o valor cheio). Antes a tela ignorava o desconto na
+        // entrada e mostrava o valor cheio (proposta 44, 18/11).
+        const fpProp = ((proposta.dados_qualificacao as { forma_pagamento?: FormaPagamentoDados } | undefined)
+          ?.forma_pagamento ?? {}) as FormaPagamentoDados;
+        const vpProp = proposta.valor_proposto ?? 0;
+        const dscEnt = abatimentoNoPreco(fpProp, lerPlano(fpProp).total, vpProp);
+        const preco = Math.round((vpProp - (proposta.desconto_especial ?? 0) - dscEnt) * 100) / 100;
         if (!bruta && !desc) return null;
         return (
           <div id="contrato-resumo-valores" className="rounded-lg border border-sage/40 bg-sage/10 p-3 text-sm grid gap-1">
@@ -688,7 +697,9 @@ function FormularioContrato({
             </p>
             <p>
               Preço do lote: <strong>R$ {brl(preco)}</strong>
-              {proposta.desconto_especial ? (
+              {dscEnt > 0 ? (
+                <span className="text-ink-soft"> (R$ {brl(vpProp)} − desconto na entrada R$ {brl(dscEnt)})</span>
+              ) : proposta.desconto_especial ? (
                 <span className="text-ink-soft"> (com o desconto aprovado de R$ {brl(proposta.desconto_especial)})</span>
               ) : desc > 0 ? (
                 <span className="text-ink-soft"> (o desconto do corretor não muda o preço)</span>
