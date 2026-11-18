@@ -238,7 +238,9 @@ def test_pdf_tem_exatamente_o_texto_do_libreoffice(gerar):
     # quebra as palavras: o LibreOffice do GitHub (Ubuntu 24.04) gera o PDF
     # de referência com as palavras partidas nos acentos ("s ócio", "COMISS
     # ÃO") e a extração de texto devolve pedaços; o nosso PDF sai inteiro.
-    assert "".join(obtido) == "".join(esperado)
+    # E o "²" de "m²": o LibreOffice do GitHub não devolve esse caractere na
+    # extração do PDF de referência ("m," em vez de "m²"); o nosso PDF tem.
+    assert "".join(obtido).replace("²", "") == "".join(esperado).replace("²", "")
 
 
 # ------------------------------------------------------------------ cônjuge / naturalidade (03/10)
