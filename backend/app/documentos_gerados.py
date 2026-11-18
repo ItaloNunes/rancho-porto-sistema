@@ -440,13 +440,6 @@ def _demais_texto(fp: dict) -> str:
     return f"e as demais todo dia {d.day}, a partir de {d.strftime('%d/%m/%Y')}"
 
 
-def _desconto_entrada(proposta: dict) -> float:
-    """Desconto na entrada (17/11): o preço impresso cai esse tanto; a
-    entrada impressa já sai líquida e parcelas/chave ficam iguais."""
-    fp = ((proposta or {}).get("dados_qualificacao") or {}).get("forma_pagamento") or {}
-    return ler_plano(fp).abatimento_no_preco((proposta or {}).get("valor_proposto"))
-
-
 def _texto_parcelas_entrada(valores: list[float], brl) -> str:
     """'3 (três) parcelas mensais de R$ 4.000,00 cada' ou, com valores
     diferentes (iguais em sequência viram um grupo), '3 (três) parcelas
@@ -511,6 +504,17 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float 
         else:
             compl_pf = f", paga via {meio} em {data_txt}"
             compl_rt = f" sendo pago via {meio} para o dia {data_txt}"
+    # Desconto na entrada (18/11, pedido da Nayane): o preço do contrato fica
+    # o valor proposto CHEIO (ex.: R$ 156.780,58). A entrada sai pelo valor
+    # cheio e o contrato diz o desconto e o valor líquido que o cliente paga
+    # -- assim entrada + parcelas + chave continuam fechando com o preço. O
+    # desconto sai da comissão do corretor (campo "desconto do corretor").
+    abat = plano.abatimento_no_preco(plano.valor_proposto or valor_total) if plano.estruturado else 0.0
+    if abat and entrada:
+        bruta = round(entrada + abat, 2)
+        out["entrada"] = brl(bruta)
+        compl_pf = f", com desconto de {brl(abat)} concedido pela VENDEDORA, sendo o valor líquido de {brl(entrada)}" + compl_pf
+        compl_rt = f", com desconto de {brl(abat)} concedido pela VENDEDORA, valor líquido de {brl(entrada)}," + compl_rt
     out["entrada_compl_pf"], out["entrada_compl_rt"] = compl_pf, compl_rt
 
     qtd = v.parcelas
@@ -833,7 +837,7 @@ def preencher_contrato_porto_franco(
         )
 
     # --- VI. PREÇO --------------------------------------------------------
-    valor_total = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto - _desconto_entrada(proposta), 2)
+    valor_total = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2)
     p_preco = t.rows[9].cells[0].paragraphs[1]
     _substituir_texto(
         p_preco,
@@ -1096,7 +1100,7 @@ def preencher_contrato_rancho_texas(
         _substituir_texto(confrontacoes[idx], exemplo, em_branco)
 
     # --- VI. PREÇO ----------------------------------------------------------
-    valor_total = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto - _desconto_entrada(proposta), 2)
+    valor_total = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2)
     p_preco = t.rows[9].cells[0].paragraphs[1]
     _substituir_texto(
         p_preco,
@@ -1302,7 +1306,7 @@ def preencher_contrato_riviera(
 
     # --- VI. PREÇO -------------------------------------------------------------
     _vp_riv = proposta.get("valor_proposto") or lote.get("valor_total") or 0.0
-    valor_total = round(_vp_riv - desconto - _desconto_entrada(proposta), 2)
+    valor_total = round(_vp_riv - desconto, 2)
     _substituir_texto(
         t.rows[9].cells[0].paragraphs[1],
         "R$ 170.000,00 (Cento e setenta mil reais)",
@@ -1428,7 +1432,7 @@ def preencher_contrato_veneza(
 
     # --- 03. PREÇO --------------------------------------------------------------------
     _vp_ven = float(proposta.get("valor_proposto") or lote.get("valor_total") or 0.0)
-    proposto = round(_vp_ven - desconto - _desconto_entrada(proposta), 2)
+    proposto = round(_vp_ven - desconto, 2)
     tabela = float(fp.get("valor_tabela") or lote.get("valor_total") or proposto)
     bonus = max(0.0, round(tabela - proposto, 2))
     preco_total = round(proposto + bonus, 2)
@@ -1547,7 +1551,7 @@ def preencher_contrato_rota_ventos(
     nome = _nome_comprador(proponente, cliente)
     cpf = formatar_cpf_cnpj(proponente.get("cpf_cnpj") or cliente.get("cpf"))
     cpf_c = formatar_cpf_cnpj(conjuge.get("cpf_cnpj")) if com_conjuge else ""
-    valor = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto - _desconto_entrada(proposta), 2)
+    valor = round((proposta.get("valor_proposto") or lote.get("valor_total") or 0.0) - desconto, 2)
 
     def ou_traco(v) -> str:
         return v if (v and str(v).strip()) else "-"

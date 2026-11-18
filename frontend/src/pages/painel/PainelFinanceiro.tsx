@@ -546,7 +546,12 @@ function FormularioContrato({
     const fp = (proposta.dados_qualificacao as { forma_pagamento?: { desconto_corretor_valor?: string | null } } | undefined)
       ?.forma_pagamento;
     const dcTxt = fp?.desconto_corretor_valor ?? "";
-    if (dcTxt) setDescontoCorretor(dcTxt);
+    // Desconto na entrada sai da comissão do corretor (18/11): se não houver
+    // desconto do corretor registrado, já vem com o valor do desconto na entrada.
+    const fpCompleto = (fp ?? {}) as FormaPagamentoDados;
+    const dscEntrada = abatimentoNoPreco(fpCompleto, lerPlano(fpCompleto).total, proposta.valor_proposto ?? 0);
+    const dcPadrao = dcTxt || (dscEntrada > 0 ? brl(dscEntrada) : "");
+    if (dcPadrao) setDescontoCorretor(dcPadrao);
     if (!reemissao) {
       // Comissão CHEIA sugerida: 5% do valor proposto (padrão de todas as
       // emissões até hoje). O desconto do corretor é abatido depois, sozinho.
@@ -563,6 +568,7 @@ function FormularioContrato({
         const desc = typeof ultima.desconto_corretor === "number" ? ultima.desconto_corretor : 0;
         setComissao(brl(bruta));
         if (desc > 0) setDescontoCorretor(brl(desc));
+        else if (dcPadrao) setDescontoCorretor(dcPadrao);
         if (ultima.data_contrato) setData(ultima.data_contrato);
       })
       .catch(() => {})
@@ -678,15 +684,15 @@ function FormularioContrato({
         const desc = dig(descontoCorretor);
         // digitada já sem o desconto: a cheia é os 5% (o servidor faz igual)
         const bruta = comissaoJaDescontada ? cincoPorCento : dig(comissao);
-        // Mesmo cálculo do servidor (documentos_gerados): valor proposto
-        // - desconto aprovado - desconto na entrada (quando a proposta foi
-        // montada com o valor cheio). Antes a tela ignorava o desconto na
-        // entrada e mostrava o valor cheio (proposta 44, 18/11).
+        // Mesmo cálculo do servidor (documentos_gerados): o preço é o valor
+        // proposto - desconto aprovado. O desconto na entrada NÃO baixa o
+        // preço (18/11, pedido da Nayane): o contrato mostra o desconto e a
+        // entrada líquida, e o desconto sai da comissão do corretor.
         const fpProp = ((proposta.dados_qualificacao as { forma_pagamento?: FormaPagamentoDados } | undefined)
           ?.forma_pagamento ?? {}) as FormaPagamentoDados;
         const vpProp = proposta.valor_proposto ?? 0;
         const dscEnt = abatimentoNoPreco(fpProp, lerPlano(fpProp).total, vpProp);
-        const preco = Math.round((vpProp - (proposta.desconto_especial ?? 0) - dscEnt) * 100) / 100;
+        const preco = Math.round((vpProp - (proposta.desconto_especial ?? 0)) * 100) / 100;
         if (!bruta && !desc) return null;
         return (
           <div id="contrato-resumo-valores" className="rounded-lg border border-sage/40 bg-sage/10 p-3 text-sm grid gap-1">
@@ -698,7 +704,7 @@ function FormularioContrato({
             <p>
               Preço do lote: <strong>R$ {brl(preco)}</strong>
               {dscEnt > 0 ? (
-                <span className="text-ink-soft"> (R$ {brl(vpProp)} − desconto na entrada R$ {brl(dscEnt)})</span>
+                <span className="text-ink-soft"> — o cliente tem R$ {brl(dscEnt)} de desconto na entrada (escrito no contrato)</span>
               ) : proposta.desconto_especial ? (
                 <span className="text-ink-soft"> (com o desconto aprovado de R$ {brl(proposta.desconto_especial)})</span>
               ) : desc > 0 ? (

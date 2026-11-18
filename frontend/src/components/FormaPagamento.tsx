@@ -389,7 +389,7 @@ export function ConferenciaPlano({
                 <td className="text-right text-ink-soft">− R$ {fmtBRL(dscEnt)}</td>
               </tr>
               <tr>
-                <td className="font-semibold text-ink">Valor do lote no contrato</td>
+                <td className="font-semibold text-ink">Total pago pelo cliente</td>
                 <td className="text-right font-semibold text-ink">R$ {fmtBRL(alvo)}</td>
               </tr>
             </>
@@ -398,7 +398,7 @@ export function ConferenciaPlano({
       </table>
       <p className={`mt-2 text-xs font-semibold ${fecha ? "text-sage" : "text-rust"}`}>
         {fecha
-          ? `✓ A conta fecha: ${partes} = ${dscEnt ? "valor do lote no contrato" : "valor proposto"}.`
+          ? `✓ A conta fecha: ${partes} = ${dscEnt ? "valor proposto − desconto na entrada (o contrato sai com o valor proposto e mostra o desconto)" : "valor proposto"}.`
           : `✗ A conta não fecha: diferença de R$ ${fmtBRL(Math.abs(diff))} (${diff > 0 ? "sobrando" : "faltando"}). Ajuste ${comBaloes ? "a entrada, as parcelas, os balões ou o financiamento" : "a entrada, as parcelas ou a chave"}.`}
       </p>
       {!fecha && onAjustarCentavos && Math.abs(diff) <= 1 && (
@@ -537,7 +537,7 @@ export default function FormaPagamentoEtapa({
           <Bloco titulo="1. Entrada (sinal / arras) — obrigatória" destaque>
             <CampoDinheiro id="fp-entrada" label="Valor da entrada *" valor={fp.sinal} onChange={(v) => set(comUltimaParcelaAjustada({ ...fp, sinal: v }))} />
             <div id="fp-bloco-desconto-entrada" className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 grid gap-2">
-              <p className="text-sm font-bold text-ink">💲 Desconto na entrada (opcional)</p>
+              <p className="text-sm font-bold text-ink">💲 Desconto na entrada (opcional) — sai da comissão do corretor</p>
               <CampoDinheiro
                 id="fp-desconto-entrada"
                 label="Quanto de desconto o cliente tem na entrada?"
@@ -548,8 +548,8 @@ export default function FormaPagamentoEtapa({
               {lerValor(fp.desconto_entrada_valor ?? "") && lerValor(fp.sinal) && entrada !== lerValor(fp.sinal) ? (
                 <p id="fp-entrada-liquida" className="text-sm text-ink">
                   O cliente paga de entrada <strong>R$ {fmtBRL(entrada ?? 0)}</strong> (R$ {fmtBRL(lerValor(fp.sinal) ?? 0)} −
-                  desconto R$ {fmtBRL(lerValor(fp.desconto_entrada_valor ?? "") ?? 0)}). É esse valor que vai no contrato e nas
-                  parcelas da entrada.
+                  desconto R$ {fmtBRL(lerValor(fp.desconto_entrada_valor ?? "") ?? 0)}). O contrato mantém o valor proposto e
+                  escreve o desconto; na hora de gerar, o desconto já vem abatido da comissão do corretor.
                 </p>
               ) : null}
             </div>

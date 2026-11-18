@@ -723,3 +723,15 @@ def test_pf_entrada_mista_com_saldo_digitado():
     t = texto_docx(pf(fp))
     assert "R$ 1.000,00" in t and "saldo de R$ 7.999,00" in t
     assert "2 (duas) de R$ 3.000,00" in t and "1 (uma) de R$ 1.999,00" in t
+
+
+def test_pf_desconto_na_entrada_mantem_o_preco_cheio_e_escreve_o_desconto():
+    """18/11 (Nayane): preço = valor proposto cheio; a entrada sai cheia com o
+    desconto e o valor líquido escritos -- a soma continua fechando."""
+    fp = {**fp_unica(LOTE_PF), "sinal": "10.000,00", "desconto_entrada_valor": "1.001,00",
+          "sinal_forma": "parcelada", "sinal_parcelas": 4, "sinal_meio": "pix"}
+    fp["chave_valor"] = "7.998,00"  # 10.000 + 71.992 + 7.998 = 89.990 (cheio)
+    t = texto_docx(pf(fp))
+    assert "R$ 89.990,00" in t and "88.989" not in t
+    assert "Entrada / Arras confirmatórias: R$ 10.000,00" in t
+    assert "com desconto de R$ 1.001,00" in t and "valor líquido de R$ 8.999,00" in t

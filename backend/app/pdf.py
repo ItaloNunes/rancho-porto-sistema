@@ -506,14 +506,14 @@ def gerar_proposta_pdf(
         ("Valor de tabela do lote", _fmt_money(lote.get("valor_total")), 1),
         ("Valor proposto", _fmt_money(proposta.get("valor_proposto") or fp.get("valor_proposto")), 1),
     )
-    # Desconto na entrada (17/11): o lote sai no contrato por (proposto -
-    # desconto). Mostra aqui também pra o PDF não parecer com o valor cheio.
+    # Desconto na entrada (18/11): o preço do contrato é o valor proposto
+    # cheio; o cliente paga a entrada menos o desconto, que sai da comissão.
     _vp_pdf = proposta.get("valor_proposto") or fp.get("valor_proposto")
     _abat = plano.abatimento_no_preco(_vp_pdf) if plano.estruturado else 0.0
     if _abat:
         pdf.campo_grade(
-            ("Desconto na entrada", _fmt_money(_abat), 1),
-            ("Valor do lote no contrato", _fmt_money(round(float(_vp_pdf) - _abat, 2)), 1),
+            ("Desconto na entrada (sai da comissão)", _fmt_money(_abat), 1),
+            ("Total pago pelo cliente", _fmt_money(round(float(_vp_pdf) - _abat, 2)), 1),
         )
     if plano.estruturado and a_vista:
         pdf.campo_grade(
