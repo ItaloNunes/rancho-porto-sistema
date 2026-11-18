@@ -26,7 +26,9 @@ jobs:
             backend/requirements-dev.txt
 
       - name: Instalar LibreOffice (teste de fidelidade do PDF)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer
+        # + as mesmas fontes do contrato (Calibri -> Carlito, Arial/Times -> Liberation): sem elas o
+        # LibreOffice troca a fonte e o PDF de referência sai com as palavras quebradas nos acentos
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-crosextra-carlito fonts-liberation fonts-liberation2
 
       - name: Instalar dependências
         run: pip install -r backend/requirements-dev.txt  # requirements.txt + pytest
