@@ -53,7 +53,7 @@ h3 { font-size: 26px; }
 .hero { position: relative; min-height: min(90vh, 800px); display: grid; align-items: end; color: #fff; padding: 0; overflow: hidden; }
 .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% 50%; }
 .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(14,16,18,.38) 0%, rgba(14,16,18,.30) 35%, rgba(14,16,18,.88) 100%); }
-.hero-top { position: absolute; top: 0; left: 0; right: 0; z-index: 2; padding-top: calc(26px + env(safe-area-inset-top, 0px)); }
+.hero-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; padding-top: calc(26px + env(safe-area-inset-top, 0px)); }
 .hero-top .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .hero-logo { height: 76px; width: auto; filter: brightness(0) invert(1); }
 .hero-top a.small { font-size: 12px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; text-decoration: none; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.6); }
@@ -176,7 +176,7 @@ footer img { height: 42px; width: auto; }
       <img class="hero-logo" src="/lancamentos/riviera/assets/logo.png" alt="Riviera Residence Beach">
       <nav class="hero-nav">
         <a class="small" href="#obra">A obra hoje</a>
-        <a class="btn-todos" href="/"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20h-6v-6H9v6H3z" stroke-linejoin="round"/></svg><span class="lg">Todos os </span>empreendimentos</a>
+        <a class="btn-todos" href="https://rancho-porto-frontend.vercel.app/"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20h-6v-6H9v6H3z" stroke-linejoin="round"/></svg><span class="lg">Todos os </span>empreendimentos</a>
       </nav>
     </div>
   </div>
@@ -318,7 +318,7 @@ footer img { height: 42px; width: auto; }
 <footer>
   <div class="wrap">
     <img src="/lancamentos/riviera/assets/castel.png" alt="Castel Construções e Incorporações">
-    <a class="todos" href="/"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20h-6v-6H9v6H3z" stroke-linejoin="round"/></svg>Ver todos os empreendimentos</a>
+    <a class="todos" href="https://rancho-porto-frontend.vercel.app/"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20h-6v-6H9v6H3z" stroke-linejoin="round"/></svg>Ver todos os empreendimentos</a>
     <span>Riviera Residence Beach · Tibau/RN · Imagens meramente ilustrativas.</span>
   </div>
 </footer>
