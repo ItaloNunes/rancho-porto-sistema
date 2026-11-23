@@ -9,6 +9,14 @@
       "destination": "/og/porto-franco.html"
     },
     {
+      "source": "/lancamentos/:slug",
+      "destination": "/lancamentos/:slug/index.html"
+    },
+    {
+      "source": "/lancamentos/:slug/",
+      "destination": "/lancamentos/:slug/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

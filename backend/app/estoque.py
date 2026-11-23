@@ -81,12 +81,18 @@ def lote_em_empreendimento_ativo(sb, lote_id: str) -> bool:
     """O empreendimento do lote está visível (condominios.ativo)? Os
     empreendimentos novos entram ocultos (10/10) até o financeiro conferir:
     corretor não reserva nem faz proposta neles antes disso. Lote sem
-    empreendimento achado conta como ativo (não trava nada por engano)."""
+    empreendimento achado conta como ativo (não trava nada por engano).
+
+    Vendas bloqueadas (condominios.vendas_bloqueadas, 23/11): o
+    empreendimento aparece no catálogo e no painel, mas corretor ainda não
+    reserva nem faz proposta (ex.: esperando a tabela de preços atualizada)."""
     lote = sb.table("lotes").select("condominio_id").eq("id", lote_id).limit(1).execute().data
     if not lote or not lote[0].get("condominio_id"):
         return True
-    condo = sb.table("condominios").select("ativo").eq("id", lote[0]["condominio_id"]).limit(1).execute().data
-    return not condo or condo[0].get("ativo") is not False
+    condo = sb.table("condominios").select("*").eq("id", lote[0]["condominio_id"]).limit(1).execute().data
+    if not condo:
+        return True
+    return condo[0].get("ativo") is not False and not condo[0].get("vendas_bloqueadas")
 
 
 def vender_lote(sb, lote_id: str, proposta_id: str) -> bool:

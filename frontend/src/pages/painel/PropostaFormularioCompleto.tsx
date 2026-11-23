@@ -1202,5 +1202,5 @@ function LoteCombobox({
 }
 
 function rotuloLote(l: LoteComCondominio): string {
-  return `${l.condominio_nome} — ${l.identificador} (${l.status})${l.condominio_ativo === false ? " · oculto" : ""}`;
+  return `${l.condominio_nome} — ${l.identificador} (${l.status})${l.condominio_ativo === false ? " · oculto" : l.condominio_vendas_bloqueadas ? " · reserva travada" : ""}`;
 }

@@ -348,6 +348,8 @@ class LoteComCondominio(Lote):
     condominio_nome: str
     condominio_slug: str
     condominio_ativo: bool = True
+    # Empreendimento visível, mas corretor ainda não reserva (23/11).
+    condominio_vendas_bloqueadas: bool = False
     # "Observação" com data/hora que a tela de Lotes mostra assim que um
     # corretor cria uma proposta (mesmo em rascunho) pra esse lote — avisa o
     # admin que tem gente em negociação antes mesmo de virar reserva. Vem só

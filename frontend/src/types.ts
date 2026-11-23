@@ -283,6 +283,8 @@ export interface LoteComCondominio extends Lote {
   condominio_slug: string;
   /** false = empreendimento oculto (ainda não liberado); só o financeiro recebe esses lotes. */
   condominio_ativo?: boolean;
+  /** true = aparece no catálogo, mas corretor ainda não reserva (aguardando tabela). */
+  condominio_vendas_bloqueadas?: boolean;
   // "Observação" com data/hora de uma proposta ainda aberta (rascunho ou
   // aguardando aprovação) pra esse lote — ver GET /crm/lotes. null quando
   // não tem nenhuma proposta pendente no momento.

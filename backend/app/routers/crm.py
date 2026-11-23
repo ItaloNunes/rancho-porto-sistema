@@ -671,7 +671,7 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
     if not eh_admin(corretor) and not lote_em_empreendimento_ativo(sb, lote_id):
-        raise HTTPException(409, "Este empreendimento ainda não foi liberado para vendas.")
+        raise HTTPException(409, "Este empreendimento ainda não foi liberado para vendas — aguarde a tabela atualizada.")
 
     # Plano de pagamento (formulário de 02/10): só cria a proposta se a conta
     # fechar -- entrada obrigatória, datas válidas, entrada + parcelas + chave
@@ -2273,7 +2273,7 @@ def visao_geral_pdf(
 @router.get("/lotes", response_model=list[LoteComCondominio])
 def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
     sb = get_supabase()
-    condos = {c["id"]: c for c in sb.table("condominios").select("id, nome, slug, ativo").execute().data}
+    condos = {c["id"]: c for c in sb.table("condominios").select("*").execute().data}
     lotes = sb.table("lotes").select("*").order("condominio_id").order("lote_numero").execute().data
     # Empreendimento oculto (ativo = false, 10/10): só o financeiro vê os
     # lotes dele, pra conferir antes de liberar; corretor não vê.
@@ -2371,6 +2371,7 @@ def listar_todos_lotes(_corretor: dict = Depends(get_current_corretor)):
                 "condominio_nome": condo.get("nome", "?"),
                 "condominio_slug": condo.get("slug", ""),
                 "condominio_ativo": condo.get("ativo") is not False,
+                "condominio_vendas_bloqueadas": bool(condo.get("vendas_bloqueadas")),
                 "proposta_pendente_status": proposta["status"] if proposta else None,
                 "proposta_pendente_desde": proposta["created_at"] if proposta else None,
                 "preco_pode_reverter": pode_reverter,

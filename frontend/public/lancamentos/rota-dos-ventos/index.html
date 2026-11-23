@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rota dos Ventos</title>
+<meta name="description" content="Casas de 2 quartos em terreno de 200 m², com espaço para ampliação, no loteamento Rota dos Ventos, em Mossoró/RN, ao lado do Veneza Residencial.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300;1,9..144,400&family=Jost:wght@400;500&display=swap">
+<style>
+/* Abre com a fachada da casa; depois as duas plantas lado a lado, as
+   fotos, a localização (foto aérea com o acesso pela BR-110) e o convite
+   final. Tons de areia e terracota tirados da própria fachada e do folder. */
+:root {
+  --ink: #26221E;
+  --ink-soft: #5A534B;
+  --accent: #8A4B2A;
+  --accent-dark: #6E3A20;
+  --accent-tint: #F4E9E1;
+  --stone: #F4F0EA;
+  --line: #E0D8CE;
+  --paper: #FFFFFF;
+  --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --body: "Jost", "Segoe UI", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+.wrap { max-width: 1140px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+section { padding-block: 100px; }
+.band { background: var(--stone); }
+.eyebrow { display: flex; align-items: center; gap: 14px; font-size: 12.5px; font-weight: 500; letter-spacing: .28em; text-transform: uppercase; color: var(--accent); margin: 0 0 20px; }
+.eyebrow::before { content: ""; width: 32px; height: 1px; background: currentColor; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; font-variation-settings: "opsz" 72; line-height: 1.1; text-wrap: balance; margin: 0; letter-spacing: -.015em; }
+h1 em, h2 em { font-style: italic; font-weight: 300; color: var(--accent); }
+h2 { font-size: clamp(32px, 4.4vw, 50px); }
+h3 { font-size: 26px; }
+.lead { font-size: 19px; color: var(--ink-soft); max-width: 58ch; margin: 22px 0 0; }
+.btn { display: inline-flex; align-items: center; gap: 12px; padding: 17px 30px; border-radius: 2px; font-weight: 500; font-size: 13.5px; letter-spacing: .16em; text-transform: uppercase; text-decoration: none; transition: background .25s, color .25s; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.btn svg { transition: transform .25s; }
+.btn:hover svg { transform: translateX(4px); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-ghost { color: #fff; border: 1px solid rgba(255,255,255,.6); }
+.btn-ghost:hover { background: #fff; color: var(--ink); }
+
+/* Abertura */
+.hero { position: relative; min-height: min(90vh, 800px); display: grid; align-items: end; color: #fff; overflow: hidden; }
+.hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 55% 60%; }
+.hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20,16,12,.45) 0%, rgba(20,16,12,.25) 38%, rgba(20,16,12,.88) 100%); }
+.hero-top { position: absolute; top: 0; left: 0; right: 0; z-index: 2; padding-top: calc(24px + env(safe-area-inset-top, 0px)); }
+.hero-top .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.hero-logo { height: 70px; width: auto; filter: brightness(0) invert(1); }
+.hero-top a.small { font-size: 12px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; text-decoration: none; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.6); }
+.hero-body { position: relative; z-index: 2; padding-block: 150px 64px; }
+.hero .kicker { font-size: 12.5px; font-weight: 500; letter-spacing: .3em; text-transform: uppercase; color: rgba(255,255,255,.86); margin: 0 0 22px; }
+.hero h1 { font-size: clamp(40px, 6.2vw, 80px); max-width: 15ch; }
+.hero h1 em { color: #fff; }
+.hero p.sub { font-size: clamp(17px, 1.9vw, 20px); max-width: 54ch; margin: 24px 0 36px; color: rgba(255,255,255,.9); }
+.ctas { display: flex; flex-wrap: wrap; gap: 14px; }
+.hero-tags { display: flex; flex-wrap: wrap; gap: 10px 34px; margin-top: 50px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,.28); font-size: 13px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.88); }
+
+/* Vídeo: horizontal no computador, vertical no celular */
+.video { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #000; margin-top: 44px; }
+.video video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.video-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+@media (max-width: 700px) {
+  .video { aspect-ratio: 9 / 16; max-height: 82vh; margin-inline: auto; }
+}
+
+/* Casas */
+.casas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin-top: 52px; }
+.casa { background: var(--paper); border-top: 2px solid var(--accent); display: grid; align-content: start; }
+.casa figure { margin: 0; border-bottom: 1px solid var(--line); background: #fff; }
+.casa figure img { width: 100%; aspect-ratio: 1.9 / 1; object-fit: contain; }
+.casa .info { padding: 32px 32px 34px; display: grid; gap: 16px; }
+.casa .label { font-size: 12.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); }
+.casa .m2 { font-family: var(--display); font-size: 72px; line-height: .95; font-weight: 300; font-variation-settings: "opsz" 144; letter-spacing: -.03em; }
+.casa .m2 small { font-family: var(--body); font-size: 17px; font-weight: 400; margin-left: 8px; color: var(--ink-soft); letter-spacing: 0; }
+.casa ul { list-style: none; margin: 2px 0 0; padding: 18px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.casa li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: baseline; color: var(--ink-soft); }
+.casa li::before { content: ""; width: 12px; height: 1px; background: var(--accent); transform: translateY(-5px); }
+
+/* Fotos */
+.fotos { display: grid; grid-template-columns: 1.35fr 1fr; grid-template-rows: 1fr 1fr; gap: 16px; margin-top: 48px; }
+.fotos figure { margin: 0; position: relative; overflow: hidden; background: var(--stone); }
+.fotos figure:first-child { grid-row: span 2; }
+.fotos img { width: 100%; height: 100%; object-fit: cover; aspect-ratio: 4 / 3; }
+.fotos figure:first-child img { aspect-ratio: auto; min-height: 100%; }
+.fotos figcaption { position: absolute; left: 0; bottom: 0; padding: 10px 14px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #fff; background: linear-gradient(0deg, rgba(0,0,0,.55), transparent); width: 100%; }
+
+/* Localização */
+.local { display: grid; grid-template-columns: .8fr 1.2fr; gap: 56px; align-items: center; }
+.local > * { min-width: 0; }
+.local figure { margin: 0; border: 1px solid var(--line); background: var(--paper); }
+.local figure img { width: 100%; }
+.local figcaption { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); padding: 14px 18px; border-top: 1px solid var(--line); }
+.pontos { list-style: none; margin: 34px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.pontos li { padding: 18px 0; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
+.pontos b { font-family: var(--display); font-size: 23px; font-weight: 400; }
+.pontos span { font-size: 16px; color: var(--ink-soft); }
+
+/* Valores */
+.valores { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: end; }
+.valores > * { min-width: 0; }
+.valores .ctas { justify-content: flex-end; }
+
+/* Convite final */
+.final { background: var(--ink); color: #fff; }
+.final .wrap { display: grid; grid-template-columns: 1.2fr .8fr; gap: 48px; align-items: center; }
+.final .wrap > * { min-width: 0; }
+.final .eyebrow { color: rgba(255,255,255,.7); }
+.final h2 em { color: #fff; }
+.final p { color: rgba(255,255,255,.8); margin: 18px 0 0; max-width: 50ch; }
+.final .ctas { justify-content: flex-end; }
+.final .btn-primary { background: #fff; color: var(--ink); }
+.final .btn-primary:hover { background: var(--accent-tint); }
+
+footer { padding-block: 44px calc(44px + env(safe-area-inset-bottom, 0px)); font-size: 13px; letter-spacing: .04em; color: var(--ink-soft); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; }
+footer img { height: 42px; width: auto; }
+footer address { font-style: normal; line-height: 1.6; text-align: right; }
+
+@media (max-width: 860px) {
+  section { padding-block: 72px; }
+  .casas, .local, .valores, .final .wrap { grid-template-columns: 1fr; gap: 30px; }
+  .valores .ctas, .final .ctas { justify-content: flex-start; }
+  .fotos { grid-template-columns: 1fr; grid-template-rows: none; }
+  .fotos figure:first-child { grid-row: auto; }
+  .fotos figure:first-child img { aspect-ratio: 4 / 3; }
+  .hero-logo { height: 56px; }
+  footer address { text-align: left; }
+}
+@media (max-width: 480px) {
+  body { font-size: 17px; }
+  .casa .info { padding: 26px 22px 28px; }
+  .casa .m2 { font-size: 60px; }
+  .hero-top a.small { display: none; }
+  .btn { padding: 16px 24px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <img class="hero-img" src="/lancamentos/rota-dos-ventos/assets/capa.jpg" alt="Fachada da casa do Rota dos Ventos">
+  <div class="hero-top">
+    <div class="wrap">
+      <img class="hero-logo" src="/lancamentos/rota-dos-ventos/assets/logo.png" alt="Rota dos Ventos">
+      <a class="small" href="#casas">Conheça as casas</a>
+    </div>
+  </div>
+  <div class="hero-body">
+    <div class="wrap">
+      <p class="kicker">Mossoró/RN · Casas em terreno de 200 m²</p>
+      <h1>A casa própria <em>com espaço para crescer.</em></h1>
+      <p class="sub">Casas de 2 quartos em terreno de 200 m², já pensadas para ampliar quando a família pedir. Ao lado do Veneza Residencial, com acesso pela BR-110 e a 300 metros do Anel Viário.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="https://www.instagram.com/castelconstrutora/" target="_blank" rel="noopener">Falar com um corretor <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a class="btn btn-ghost" href="#video">Ver o vídeo</a>
+      </div>
+      <div class="hero-tags"><span>Terreno de 200 m²</span><span>2 quartos</span><span>Espaço para ampliação</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="video">
+  <div class="wrap">
+    <p class="eyebrow">O Rota dos Ventos hoje</p>
+    <h2>Veja de perto <em>onde fica a sua casa.</em></h2>
+    <p class="lead">Imagens aéreas do loteamento e das casas, a 300 metros do Anel Viário.</p>
+    <div class="video">
+      <video id="video-obra" controls playsinline preload="metadata" poster="/lancamentos/rota-dos-ventos/assets/obra-h.jpg"
+             data-h="/lancamentos/rota-dos-ventos/assets/obra-h.mp4" data-v="/lancamentos/rota-dos-ventos/assets/obra-v.mp4" data-poster-h="/lancamentos/rota-dos-ventos/assets/obra-h.jpg" data-poster-v="/lancamentos/rota-dos-ventos/assets/obra-v.jpg">
+        <source src="/lancamentos/rota-dos-ventos/assets/obra-h.mp4" type="video/mp4">
+      </video>
+    </div>
+    <script>
+      (function () {
+        var v = document.getElementById("video-obra");
+        var vertical = window.matchMedia("(max-width: 700px)").matches;
+        v.poster = vertical ? v.dataset.posterV : v.dataset.posterH;
+        v.querySelector("source").src = vertical ? v.dataset.v : v.dataset.h;
+        v.load();
+      })();
+    </script>
+    <div class="video-meta"><span>Imagens de novembro de 2026</span><span>Castel Construções e Incorporações</span></div>
+  </div>
+</section>
+
+<section class="band" id="casas">
+  <div class="wrap">
+    <p class="eyebrow">As casas</p>
+    <h2>Duas plantas. <em>Um quintal inteiro para planejar.</em></h2>
+    <p class="lead">As duas casas ocupam o mesmo terreno de 10 x 20 metros e deixam área livre na frente e nos fundos, para a garagem, o jardim ou o próximo cômodo.</p>
+    <div class="casas">
+      <article class="casa">
+        <figure><img src="/lancamentos/rota-dos-ventos/assets/planta-2q.jpg" alt="Planta baixa da casa de 2 quartos, área construída de 58,35 m²"></figure>
+        <div class="info">
+          <span class="label">Casa 2 quartos</span>
+          <div class="m2">58,35<small>m² construídos</small></div>
+          <h3>Para começar bem</h3>
+          <ul><li>2 quartos</li><li>Espaço para ampliação</li><li>Terreno de 200 m²</li></ul>
+        </div>
+      </article>
+      <article class="casa">
+        <figure><img src="/lancamentos/rota-dos-ventos/assets/planta-suite.jpg" alt="Planta baixa da casa de 2 quartos com suíte, área construída de 61,46 m²"></figure>
+        <div class="info">
+          <span class="label">Casa 2 quartos com suíte</span>
+          <div class="m2">61,46<small>m² construídos</small></div>
+          <h3>Mais privacidade</h3>
+          <ul><li>2 quartos, sendo 1 suíte</li><li>Espaço para ampliação</li><li>Terreno de 200 m²</li></ul>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="fotos">
+  <div class="wrap">
+    <p class="eyebrow">A fachada</p>
+    <h2>Linhas retas, <em>cara de casa nova.</em></h2>
+    <div class="fotos">
+      <figure><img src="/lancamentos/rota-dos-ventos/assets/fachada-varanda.jpg" alt="Casa do Rota dos Ventos vista de lado, com varanda e caminho de entrada" loading="lazy"><figcaption>Varanda e entrada</figcaption></figure>
+      <figure><img src="/lancamentos/rota-dos-ventos/assets/capa.jpg" alt="Fachada frontal da casa com garagem" loading="lazy"><figcaption>Fachada</figcaption></figure>
+      <figure><img src="/lancamentos/rota-dos-ventos/assets/fachada-lateral.jpg" alt="Vista lateral da casa do Rota dos Ventos" loading="lazy"><figcaption>Vista lateral</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="localizacao">
+  <div class="wrap local">
+    <div>
+      <p class="eyebrow">Localização</p>
+      <h2>Perto de tudo <em>o que importa no dia a dia.</em></h2>
+      <ul class="pontos">
+        <li><b>Ao lado do Veneza Residencial</b><span>Condomínio da mesma construtora, logo ao lado</span></li>
+        <li><b>BR-110</b><span>Acesso pela saída para Areia Branca</span></li>
+        <li><b>Anel Viário a 300 m</b><span>Ligação direta com o contorno da cidade</span></li>
+        <li><b>Avenida central de acesso</b><span>Com posto de combustível no acesso</span></li>
+      </ul>
+    </div>
+    <figure>
+      <img src="/lancamentos/rota-dos-ventos/assets/localizacao.jpg" alt="Foto aérea com a localização do Rota dos Ventos, atrás do Veneza Residencial, com acesso pela BR-110 e o Anel Viário a 300 metros" loading="lazy">
+      <figcaption>Foto real com imagens ilustrativas implantadas</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="valores">
+  <div class="wrap valores">
+    <div>
+      <p class="eyebrow">Valores e condições</p>
+      <h2>Receba a tabela <em>em primeira mão.</em></h2>
+      <p class="lead">A tabela de vendas do Rota dos Ventos está sendo finalizada. Fale com um corretor para reservar a sua vez e conhecer as condições assim que forem lançadas.</p>
+    </div>
+    <div class="ctas">
+      <a class="btn btn-primary" href="https://www.instagram.com/castelconstrutora/" target="_blank" rel="noopener">Falar com um corretor <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<section class="final" id="contato">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">Atendimento</p>
+      <h2>Sua casa no Rota dos Ventos <em>começa aqui.</em></h2>
+      <p>Tire suas dúvidas, conheça as plantas de perto e agende uma visita com a equipe da Castel.</p>
+    </div>
+    <div class="ctas">
+      <a class="btn btn-primary" href="https://www.instagram.com/castelconstrutora/" target="_blank" rel="noopener">Falar com um corretor <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <img src="/lancamentos/rota-dos-ventos/assets/castel.png" alt="Castel Construções e Incorporações">
+    <address>R. Seis de Janeiro, 1837 · Santo Antônio · Mossoró/RN · 59618-770<br>@castelconstrutora · Imagens meramente ilustrativas.</address>
+  </div>
+</footer>
+
+</body>
+</html>

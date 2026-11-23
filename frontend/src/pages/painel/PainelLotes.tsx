@@ -244,6 +244,14 @@ export default function PainelLotes() {
                         oculto
                       </span>
                     )}
+                    {l.condominio_ativo !== false && l.condominio_vendas_bloqueadas && (
+                      <span
+                        className="ml-1.5 inline-block rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide align-middle"
+                        title="Empreendimento no catálogo, mas reservas ainda travadas: aguardando a tabela atualizada"
+                      >
+                        reserva travada
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-medium text-ink">
                     {l.identificador}

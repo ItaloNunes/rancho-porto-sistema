@@ -568,6 +568,25 @@ def test_financeiro_ve_empreendimento_oculto_marcado(cliente_api):
     assert lotes["lote-1"]["condominio_ativo"] is True
 
 
+def test_vendas_bloqueadas_corretor_ve_mas_nao_reserva(cliente_api):
+    """23/11: empreendimento no catálogo (ativo) com reservas travadas até a
+    tabela atualizada -- corretor vê o lote, mas não reserva nem faz proposta;
+    o financeiro continua podendo."""
+    api, sb = cliente_api  # corretor comum
+    _semear_oculto(sb)
+    sb.banco["condominios"][1].update({"ativo": True, "vendas_bloqueadas": True})
+    lotes = {l["id"]: l for l in api.get("/crm/lotes").json()}
+    assert lotes["lote-bv"]["condominio_vendas_bloqueadas"] is True
+    assert lotes["lote-1"]["condominio_vendas_bloqueadas"] is False
+    r = api.post("/crm/propostas", json={**payload(), "lote_id": "lote-bv"})
+    assert r.status_code == 409 and "tabela atualizada" in r.text
+    from app.routers import reservas as reservas_mod
+    reservas_mod.get_supabase = lambda: sb
+    r = api.post("/reservas", json={"lote_id": "lote-bv", "nome": "Fulano", "contato": "84999990000"})
+    assert r.status_code == 409 and "tabela atualizada" in r.text
+    assert sb.banco["lotes"][1]["status"] == "disponivel"
+
+
 def test_empreendimento_sem_modelo_nao_gera_contrato_nem_recibo():
     from app.documentos_gerados import modelo_documentos, modelo_recibo
     assert modelo_documentos("Porto Franco Residencial") == "porto_franco"

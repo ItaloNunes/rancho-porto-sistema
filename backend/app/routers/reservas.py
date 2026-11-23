@@ -198,7 +198,7 @@ def criar_reserva(payload: ReservaCreateInterna, corretor: dict = Depends(get_cu
     if not lote:
         raise HTTPException(404, "Lote não encontrado.")
     if not eh_admin(corretor) and not lote_em_empreendimento_ativo(sb, payload.lote_id):
-        raise HTTPException(409, "Este empreendimento ainda não foi liberado para vendas.")
+        raise HTTPException(409, "Este empreendimento ainda não foi liberado para vendas — aguarde a tabela atualizada.")
     if lote[0]["status"] != "disponivel":
         raise HTTPException(409, f"Este lote não está disponível (status atual: {lote[0]['status']}).")
 
