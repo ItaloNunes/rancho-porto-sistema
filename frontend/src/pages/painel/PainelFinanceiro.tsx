@@ -151,8 +151,11 @@ export default function PainelFinanceiro() {
   const encerradas = (propostas ?? []).filter((p) => STATUS_ENCERRADAS.includes(p.status)).sort(porMaisRecente);
   // "Aprovadas" se divide pelo que importa pro financeiro: ainda sem contrato
   // emitido (em andamento) vs. já com contrato gerado (tem numero_contrato).
-  const emAndamento = aprovadas.filter((p) => !numeroContrato(p.numero_contrato));
-  const gerados = aprovadas.filter((p) => numeroContrato(p.numero_contrato));
+  // Contrato antigo feito fora do sistema (contrato_externo) também conta
+  // como gerado — senão fica eternamente "em andamento" (23/11).
+  const temContrato = (p: PropostaDetalhe) => !!numeroContrato(p.numero_contrato) || !!p.contrato_externo;
+  const emAndamento = aprovadas.filter((p) => !temContrato(p));
+  const gerados = aprovadas.filter(temContrato);
 
   // Ações das propostas aprovadas (em andamento e geradas): recibo, desconto
   // e gerar contrato — iguais às de antes, só reorganizadas por estado.
@@ -304,7 +307,9 @@ export default function PainelFinanceiro() {
                   <span className="inline-flex flex-col items-start gap-1">
                     <EstadoBadge tipo="gerado" />
                     <span className="text-[11px] text-ink-soft font-mono">
-                      Contrato Nº {numeroContrato(p.numero_contrato)}
+                      {numeroContrato(p.numero_contrato)
+                        ? `Contrato Nº ${numeroContrato(p.numero_contrato)}`
+                        : `Fora do sistema: ${p.contrato_externo}`}
                     </span>
                   </span>
                 )}

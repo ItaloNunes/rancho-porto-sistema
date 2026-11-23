@@ -174,6 +174,10 @@ export interface Proposta {
   /** Nº do contrato (sequência própria a partir do 91, 09/10) — dado na 1ª
    * emissão do contrato; null antes disso. Ver numeroContrato em lib/api.ts. */
   numero_contrato?: number | null;
+  /** Contrato feito fora do sistema ou na numeração antiga (23/11) — texto
+   * livre (ex.: "0022/2026" ou "emitido fora do sistema"). Conta como
+   * "gerado" no Financeiro, sem gastar número da sequência. */
+  contrato_externo?: string | null;
   lote_id: string;
   cliente_id: string;
   corretor_id?: string | null;

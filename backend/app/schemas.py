@@ -881,6 +881,9 @@ class Proposta(BaseModel):
     # contrato) de "gerados" (contrato já emitido) — por isso precisa sair
     # também na listagem, não só no detalhe.
     numero_contrato: Optional[int] = None
+    # Contrato feito fora do sistema / numeração antiga (migration 0035):
+    # conta como "gerado" no Financeiro sem gastar número da sequência.
+    contrato_externo: Optional[str] = None
     desconto_especial: float = 0
     desconto_motivo: Optional[str] = None
     desconto_aprovado_por: Optional[str] = None
