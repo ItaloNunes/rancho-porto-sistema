@@ -61,7 +61,10 @@ def gerar_usuario_unico(nome: str, ja_usados: set[str]) -> str:
     mesmo nome, ex. "João Barbosa" x2 na planilha) acrescentando um número:
     joao.barbosa, joao.barbosa2, joao.barbosa3... Muda `ja_usados` in-place
     (registra o resultado), pra poder chamar em sequência num loop."""
-    base = slug(nome)
+    # Só primeiro nome + último sobrenome (23/11): "Maria Regiane dos Santos
+    # Ribeiro" -> maria.ribeiro -- login longo demais confundia na digitação.
+    partes = slug(nome).split(".")
+    base = f"{partes[0]}.{partes[-1]}" if len(partes) > 2 else ".".join(partes)
     usuario = base
     n = 2
     while usuario in ja_usados:

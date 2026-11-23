@@ -85,3 +85,13 @@ def test_cabecalhos_de_seguranca(api):
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["x-frame-options"] == "DENY"
     assert r.headers["cache-control"] == "no-store"
+
+
+def test_usuario_gerado_so_com_nome_e_ultimo_sobrenome():
+    from app.usuarios import gerar_usuario_unico
+    usados = {"andrea.bezerra"}
+    assert gerar_usuario_unico("Maria Regiane dos Santos Ribeiro", usados) == "maria.ribeiro"
+    assert gerar_usuario_unico("Elieuza da Silva Sousa", usados) == "elieuza.sousa"
+    assert gerar_usuario_unico("Andrea Carla Bezerra", usados) == "andrea.bezerra2"
+    assert gerar_usuario_unico("Adryele Arruda", usados) == "adryele.arruda"
+    assert gerar_usuario_unico("Stheperson", usados) == "stheperson"
