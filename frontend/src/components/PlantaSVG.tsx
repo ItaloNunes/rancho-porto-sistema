@@ -166,6 +166,13 @@ export default function PlantaSVG({ condo, selecionado, onSelecionar, onSelecion
                 />
                 {(condo.plan_quadras ?? []).map((q, i) => {
                   const key = q.quadra ?? (q.lote_min != null ? `${q.lote_min}-${q.lote_max}` : String(i));
+                  // Quadra sem nenhum lote à venda (ex.: Quadra 4 da Rota dos
+                  // Ventos): não reage ao clique -- senão abre uma lista vazia.
+                  const temLote =
+                    q.lote_min != null && q.lote_max != null
+                      ? condo.lotes.some((l) => l.lote_numero >= q.lote_min! && l.lote_numero <= q.lote_max!)
+                      : q.quadra == null || condo.lotes.some((l) => l.quadra === q.quadra);
+                  if (!temLote) return null;
                   return (
                     <g
                       key={key}

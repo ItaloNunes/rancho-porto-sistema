@@ -9,11 +9,19 @@ const STATUS_LABEL: Record<string, string> = {
 
 const ROW_COLS = "1.4fr 1fr 1.3fr 1.1fr 1.1fr 1fr";
 
-export default function ListaLotes({ lotes, onSelecionar }: { lotes: Lote[]; onSelecionar: (id: string) => void }) {
+export default function ListaLotes({
+  lotes,
+  onSelecionar,
+  vazioMensagem,
+}: {
+  lotes: Lote[];
+  onSelecionar: (id: string) => void;
+  vazioMensagem?: string;
+}) {
   if (lotes.length === 0) {
     return (
       <div className="card p-16 text-center text-ink-soft text-sm">
-        Nenhum lote encontrado com esses filtros.
+        {vazioMensagem ?? "Nenhum lote encontrado com esses filtros."}
       </div>
     );
   }

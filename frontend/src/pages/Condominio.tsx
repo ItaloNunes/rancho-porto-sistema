@@ -244,7 +244,15 @@ export default function Condominio() {
             }}
           />
         ) : (
-          <ListaLotes lotes={filtrados} onSelecionar={setSelecionado} />
+          <ListaLotes
+            lotes={filtrados}
+            onSelecionar={setSelecionado}
+            vazioMensagem={
+              zonaFiltro?.quadra != null && zonaFiltro.lote_min == null && !quadrasDisponiveis.includes(zonaFiltro.quadra)
+                ? `A Quadra ${zonaFiltro.quadra} não tem lotes à venda neste empreendimento.`
+                : undefined
+            }
+          />
         )}
       </main>
 
