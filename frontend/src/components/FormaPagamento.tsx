@@ -13,12 +13,15 @@ import {
   lerData,
   lerPlano,
   lerValor,
+  semEntrada,
   textoCurtoParcelas,
   textoMeio,
   tolerancia,
   valorPorExtenso,
 } from "../lib/pagamento";
 import type { FormaPagamentoDados, LoteComCondominio, MeioPagamento } from "../types";
+import { temAcessoAdmin } from "../types";
+import { useAuth } from "../lib/auth";
 
 /** Qualquer mudança nos valores derruba as confirmações da revisão — o
  * corretor tem que conferir de novo o que mudou (dupla confirmação). */
@@ -346,8 +349,10 @@ export function ConferenciaPlano({
   const diff = p.total - alvo;
   const fecha = Math.abs(diff) <= tolerancia(p);
   const comBaloes = !!(p.balaoQtd || p.balaoValor || p.financiamento);
+  const sem = semEntrada(fp);
   const linhas: [string, string][] = [
     [
+      sem ? "Entrada: não há (venda sem entrada)" :
       fp.sinal_forma === "mista" && p.saldoValores.length
         ? `Entrada (R$ ${fmtBRL(lerValor(fp.sinal_avista) ?? 0)} à vista + ${textoCurtoParcelas(p.saldoValores)})`
         : p.entradaParcelas > 1
@@ -362,8 +367,11 @@ export function ConferenciaPlano({
     linhas.push(["Financiamento bancário", fmtBRL(p.financiamento)]);
   }
   if (!comBaloes || p.chave) linhas.push(["Chave (entrega das chaves)", fmtBRL(p.chave)]);
-  const partes = comBaloes ? (p.chave ? "entrada + parcelas + balões + financiamento + chave" : "entrada + parcelas + balões + financiamento") : "entrada + parcelas + chave";
-  const ajusteEm: "chave" | "financiamento" | "entrada" = p.chave > 0 ? "chave" : p.financiamento > 0 ? "financiamento" : "entrada";
+  const partes = sem ? (p.chave ? "parcelas + chave" : "parcelas") : comBaloes ? (p.chave ? "entrada + parcelas + balões + financiamento + chave" : "entrada + parcelas + balões + financiamento") : "entrada + parcelas + chave";
+  // Sem entrada (24/11): parcelas iguais não têm onde absorver centavos --
+  // o ajuste vai no valor proposto (= parcelas x valor da parcela).
+  const ajusteEm: "chave" | "financiamento" | "entrada" | "valor" =
+    sem && !p.chave && !p.financiamento ? "valor" : p.chave > 0 ? "chave" : p.financiamento > 0 ? "financiamento" : "entrada";
   return (
     <div className={`rounded-lg border p-3 text-sm ${fecha ? "border-sage/40 bg-sage/10" : "border-rust/40 bg-rust/5"}`}>
       <table className="w-full tabular-nums">
@@ -401,19 +409,22 @@ export function ConferenciaPlano({
           ? `✓ A conta fecha: ${partes} = ${dscEnt ? "valor proposto − desconto na entrada (o contrato sai com o valor proposto e mostra o desconto)" : "valor proposto"}.`
           : `✗ A conta não fecha: diferença de R$ ${fmtBRL(Math.abs(diff))} (${diff > 0 ? "sobrando" : "faltando"}). Ajuste ${comBaloes ? "a entrada, as parcelas, os balões ou o financiamento" : "a entrada, as parcelas ou a chave"}.`}
       </p>
-      {!fecha && onAjustarCentavos && Math.abs(diff) <= 1 && (
+      {!fecha && onAjustarCentavos && (Math.abs(diff) <= 1 || (ajusteEm === "valor" && Math.abs(diff) <= (p.parcelas ?? 1) * 0.01)) && (
         <button
           type="button"
           className="btn-row btn-row-primary mt-2"
           onClick={() => {
             // a diferença de centavos vai pra chave (ou pro financiamento, ou pra entrada)
-            if (ajusteEm === "chave") onAjustarCentavos({ ...fp, chave_valor: fmtBRL(Math.round((p.chave - diff) * 100) / 100) });
+            if (ajusteEm === "valor") onAjustarCentavos({ ...fp, valor_proposto: p.total });
+            else if (ajusteEm === "chave") onAjustarCentavos({ ...fp, chave_valor: fmtBRL(Math.round((p.chave - diff) * 100) / 100) });
             else if (ajusteEm === "financiamento")
               onAjustarCentavos({ ...fp, financiamento_valor: fmtBRL(Math.round((p.financiamento - diff) * 100) / 100) });
             else onAjustarCentavos({ ...fp, sinal: fmtBRL(Math.round(((p.entrada ?? 0) - diff) * 100) / 100) });
           }}
         >
-          ajustar os R$ {fmtBRL(Math.abs(diff))} de arredondamento {ajusteEm === "chave" ? "na chave" : ajusteEm === "financiamento" ? "no financiamento" : "na entrada"}
+          {ajusteEm === "valor"
+            ? `ajustar o valor proposto para R$ ${fmtBRL(p.total)} (soma exata das parcelas)`
+            : `ajustar os R$ ${fmtBRL(Math.abs(diff))} de arredondamento ${ajusteEm === "chave" ? "na chave" : ajusteEm === "financiamento" ? "no financiamento" : "na entrada"}`}
         </button>
       )}
       {valorTabela != null && Math.abs(vp - valorTabela) > 1 && (
@@ -437,6 +448,35 @@ export default function FormaPagamentoEtapa({
   lote: LoteComCondominio | null;
 }) {
   const set = (parcial: Partial<FormaPagamentoDados>) => onChange(semConfirmacao({ ...fp, ...parcial }));
+  const { perfil } = useAuth();
+  const podeSemEntrada = temAcessoAdmin(perfil?.papel);
+  const sem = semEntrada(fp);
+  function marcarSemEntrada(marcar: boolean) {
+    if (marcar) {
+      const ok = window.confirm(
+        "Venda SEM ENTRADA (funcionário / venda direta).\n\n" +
+          "Esta proposta vai ficar SEM ENTRADA, SEM CHAVE e SEM COMISSÃO: o valor proposto todo será dividido em parcelas mensais iguais.\n\n" +
+          "Use o valor proposto já com o desconto. Confirma?",
+      );
+      if (!ok) return;
+      set({
+        sinal_forma: "sem_entrada",
+        sinal: null,
+        sinal_parcelas: null,
+        sinal_meio: null,
+        sinal_vencimento: null,
+        sinal_avista: null,
+        sinal_resto_primeira: null,
+        sinal_valores: null,
+        desconto_entrada_valor: null,
+        chave_valor: null,
+        chave_vencimento: null,
+        desconto_corretor_valor: null,
+      });
+    } else {
+      set({ sinal_forma: "unica", sinal_parcelas: 1 });
+    }
+  }
   const [valorPropostoTxt, setValorPropostoTxt] = useState(fp.valor_proposto != null ? fmtBRL(fp.valor_proposto) : "");
 
   // Primeira vez nesta etapa: já traz o plano de tabela do lote preenchido
@@ -532,8 +572,34 @@ export default function FormaPagamentoEtapa({
         </Bloco>
       )}
 
+      {fp.a_vista === false && podeSemEntrada && (
+        <label
+          id="fp-sem-entrada"
+          className={`flex items-start gap-2 rounded-lg border-2 p-3 text-sm cursor-pointer ${sem ? "border-rust bg-rust/5" : "border-border"}`}
+        >
+          <input type="checkbox" className="mt-0.5" checked={sem} onChange={(e) => marcarSemEntrada(e.target.checked)} />
+          <span>
+            <strong className="text-ink">Venda sem entrada (funcionário / venda direta)</strong>
+            <span className="block text-xs text-ink-soft">
+              Só o financeiro vê esta opção. Sem entrada, sem chave e sem comissão: o valor proposto todo em parcelas iguais.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {fp.a_vista === false && sem && (
+        <Bloco titulo="1. Entrada" destaque>
+          <p id="fp-sem-entrada-aviso" className="text-sm text-ink">
+            <strong>Não há entrada.</strong> O valor proposto (já com o desconto) é dividido todo nas parcelas mensais
+            abaixo. Para fechar no centavo, o valor proposto tem que ser exatamente parcelas × valor da parcela — a
+            conferência no fim mostra o botão para ajustar.
+          </p>
+        </Bloco>
+      )}
+
       {fp.a_vista === false && (
         <>
+          {!sem && (
           <Bloco titulo="1. Entrada (sinal / arras) — obrigatória" destaque>
             <CampoDinheiro id="fp-entrada" label="Valor da entrada *" valor={fp.sinal} onChange={(v) => set(comUltimaParcelaAjustada({ ...fp, sinal: v }))} />
             <div id="fp-bloco-desconto-entrada" className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 grid gap-2">
@@ -560,7 +626,7 @@ export default function FormaPagamentoEtapa({
                   { valor: "parcelada", label: "Parcelada" },
                   { valor: "mista", label: "Parte à vista + parcelar o resto" },
                 ]}
-                valor={fp.sinal_forma}
+                valor={fp.sinal_forma === "sem_entrada" ? null : fp.sinal_forma}
                 onChange={(v) =>
                   set({
                     sinal_forma: v,
@@ -668,6 +734,7 @@ export default function FormaPagamentoEtapa({
               </div>
             )}
           </Bloco>
+          )}
 
           <Bloco titulo="2. Parcelas mensais">
             <div className="grid sm:grid-cols-2 gap-3 items-start">
@@ -725,7 +792,7 @@ export default function FormaPagamentoEtapa({
             </>
           )}
 
-          {(!comBaloes || chaveAtual > 0) && (
+          {!sem && (!comBaloes || chaveAtual > 0) && (
           <Bloco titulo={`${comBaloes ? "5" : "3"}. Chave (paga na entrega das chaves)`}>
             {/* Sem campo de data (09/10): a chave é paga na entrega das
                 chaves, que não tem dia certo -- o contrato não traz data. */}
@@ -743,6 +810,7 @@ export default function FormaPagamentoEtapa({
         </>
       )}
 
+      {!sem && (
       <Bloco titulo="Desconto do corretor (opcional)">
         <CampoDinheiro
           id="fp-desconto-corretor"
@@ -752,8 +820,16 @@ export default function FormaPagamentoEtapa({
           ajuda="Deixe em branco se não houver. Sai só da comissão do corretor — o preço do lote no contrato continua o valor proposto."
         />
       </Bloco>
+      )}
 
-      <ConferenciaPlano fp={fp} valorTabela={lote?.valor_total} onAjustarCentavos={(novo) => onChange(semConfirmacao(novo))} />
+      <ConferenciaPlano
+        fp={fp}
+        valorTabela={lote?.valor_total}
+        onAjustarCentavos={(novo) => {
+          if (novo.valor_proposto !== fp.valor_proposto && novo.valor_proposto != null) setValorPropostoTxt(fmtBRL(novo.valor_proposto));
+          onChange(semConfirmacao(novo));
+        }}
+      />
 
       <Field label="Observações">
         <textarea className="input" rows={3} value={fp.observacoes ?? ""} onChange={(e) => onChange({ ...fp, observacoes: e.target.value })} />

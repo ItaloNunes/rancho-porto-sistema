@@ -495,7 +495,7 @@ class FormaPagamentoDados(BaseModel):
     avista_meio: Optional[MeioPagamento] = None
     avista_data: Optional[str] = None  # AAAA-MM-DD
     # Entrada (sinal/arras) -- obrigatória no parcelado.
-    sinal_forma: Optional[Literal["unica", "parcelada", "mista"]] = None
+    sinal_forma: Optional[Literal["unica", "parcelada", "mista", "sem_entrada"]] = None
     sinal_parcelas: Optional[int] = Field(default=None, ge=1, le=24)
     sinal_valor_parcela: Optional[str] = None  # calculado pelo servidor
     sinal_meio: Optional[MeioPagamento] = None

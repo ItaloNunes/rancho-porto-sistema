@@ -625,6 +625,13 @@ def _com_prazo_da_reserva(sb, propostas: list[dict]) -> list[dict]:
     return propostas
 
 
+def _checar_sem_entrada(corretor: dict, fp: Optional[dict]) -> None:
+    """Venda sem entrada (24/11, ex.: lote para funcionário, sem comissão):
+    só o financeiro/admin monta proposta assim -- corretor não."""
+    if (fp or {}).get("sinal_forma") == "sem_entrada" and not (fp or {}).get("a_vista") and not eh_admin(corretor):
+        raise HTTPException(403, "Venda sem entrada só pode ser feita pelo financeiro.")
+
+
 @router.post("/propostas", response_model=Proposta)
 def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current_corretor)):
     """Assim que o corretor cria a proposta, o lote já sai do estoque na hora
@@ -683,6 +690,7 @@ def criar_proposta(payload: PropostaCreate, corretor: dict = Depends(get_current
         raise HTTPException(422, "A forma de pagamento é obrigatória: preencha a proposta pelo formulário completo.")
     else:
         fp_bruto = payload.dados_qualificacao.forma_pagamento.model_dump(mode="json")
+        _checar_sem_entrada(corretor, fp_bruto)
         problemas = validar_plano(fp_bruto, payload.valor_proposto, lote[0].get("valor_total"))
         # Dados do comprador/cônjuge (03/10): CPF/e-mail/telefone válidos e,
         # se tem cônjuge, os dados dele(a) -- inclusive no cadastro rápido.
@@ -918,6 +926,7 @@ def editar_dados_proposta(
             raise HTTPException(422, "Falta a confirmação final: marque que conferiu os dados corrigidos.")
         fp = dict(fp_antigo)
     else:
+        _checar_sem_entrada(corretor, fp)
         problemas = validar_plano(fp, valor_proposto, lote.get("valor_total")) + problemas_cadastro(dados)
         if problemas:
             raise HTTPException(422, "\n".join(problemas))

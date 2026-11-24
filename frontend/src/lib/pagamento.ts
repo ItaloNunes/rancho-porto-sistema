@@ -208,10 +208,17 @@ export function abatimentoNoPreco(fp: FormaPagamentoDados, total: number, vp: nu
 /** Entrada que o cliente paga de fato: sinal digitado − desconto na entrada
  * (17/11). Mesma regra de plano_pagamento.ler_plano. */
 export function entradaLiquida(fp: FormaPagamentoDados): number | null {
+  if (semEntrada(fp)) return null;
   const bruta = lerValor(fp.sinal);
   const desc = lerValor(fp.desconto_entrada_valor ?? "");
   if (bruta && desc && desc > 0 && desc < bruta) return Math.round((bruta - desc) * 100) / 100;
   return bruta;
+}
+
+/** Venda sem entrada (24/11, ex.: lote para funcionário): o preço todo nas
+ * parcelas mensais. Só o financeiro usa (o servidor recusa corretor). */
+export function semEntrada(fp: FormaPagamentoDados): boolean {
+  return fp.sinal_forma === "sem_entrada" && !fp.a_vista;
 }
 
 export function lerPlano(fp: FormaPagamentoDados): Plano {
@@ -304,42 +311,47 @@ export function validarPlano(
       erros.push("Informe como o pagamento à vista será feito (PIX, transferência, boleto, cheque ou dinheiro).");
     if (!lerData(fp.avista_data)) erros.push("Informe a data do pagamento à vista (dia/mês/ano).");
   } else {
-    if (invalido(fp.desconto_entrada_valor)) erros.push(`Valor do desconto na entrada inválido: ${FORMATO_VALOR}`);
-    else {
-      const db = lerValor(fp.desconto_entrada_valor ?? "");
-      const eb = lerValor(fp.sinal);
-      if (db && eb && db >= eb) erros.push("O desconto na entrada tem que ser menor que a entrada.");
+    let dEntrada: Date | null = null;
+    if (semEntrada(fp)) {
+      if (lerValor(fp.sinal)) erros.push("Venda sem entrada: deixe o valor da entrada em branco.");
+    } else {
+      if (invalido(fp.desconto_entrada_valor)) erros.push(`Valor do desconto na entrada inválido: ${FORMATO_VALOR}`);
+      else {
+        const db = lerValor(fp.desconto_entrada_valor ?? "");
+        const eb = lerValor(fp.sinal);
+        if (db && eb && db >= eb) erros.push("O desconto na entrada tem que ser menor que a entrada.");
+      }
+      if (invalido(fp.sinal)) erros.push(`Valor da entrada inválido: ${FORMATO_VALOR}`);
+      else if (!p.entrada || p.entrada <= 0) erros.push("A entrada é obrigatória: informe o valor da entrada.");
+      else if (p.entrada >= vp)
+        erros.push('A entrada não pode ser igual ou maior que o valor proposto — se for tudo de uma vez, escolha "À vista".');
+      if (fp.sinal_forma !== "unica" && fp.sinal_forma !== "parcelada" && fp.sinal_forma !== "mista")
+        erros.push("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.");
+      else if (fp.sinal_forma === "parcelada") {
+        const n = Number(fp.sinal_parcelas);
+        if (!Number.isInteger(n) || n < 2 || n > MAX_PARCELAS_ENTRADA)
+          erros.push(`Entrada parcelada: informe em quantas vezes (de 2 a ${MAX_PARCELAS_ENTRADA}).`);
+      } else if (fp.sinal_forma === "mista") {
+        const av = lerValor(fp.sinal_avista);
+        if (av == null || av <= 0) erros.push("Informe quanto o cliente paga à vista agora na entrada.");
+        else if (p.entrada && av >= p.entrada)
+          erros.push('O valor à vista não pode ser maior ou igual ao total da entrada — se for tudo à vista, escolha "de uma vez".');
+        const n = Number(fp.sinal_parcelas);
+        if (!Number.isInteger(n) || n < 1 || n > MAX_PARCELAS_ENTRADA)
+          erros.push(`Entrada com saldo parcelado: informe em quantas vezes (de 1 a ${MAX_PARCELAS_ENTRADA}).`);
+        if (!lerData(fp.sinal_resto_primeira)) erros.push("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).");
+      }
+      erros.push(...errosValoresEntrada(fp));
+      if (!fp.sinal_meio || !MEIOS_OK.has(fp.sinal_meio))
+        erros.push("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).");
+      dEntrada = lerData(fp.sinal_vencimento);
+      if (!dEntrada)
+        erros.push(
+          fp.sinal_forma === "parcelada"
+            ? "Informe a data da 1ª parcela da entrada (dia/mês/ano)."
+            : "Informe a data de pagamento da entrada (dia/mês/ano).",
+        );
     }
-    if (invalido(fp.sinal)) erros.push(`Valor da entrada inválido: ${FORMATO_VALOR}`);
-    else if (!p.entrada || p.entrada <= 0) erros.push("A entrada é obrigatória: informe o valor da entrada.");
-    else if (p.entrada >= vp)
-      erros.push('A entrada não pode ser igual ou maior que o valor proposto — se for tudo de uma vez, escolha "À vista".');
-    if (fp.sinal_forma !== "unica" && fp.sinal_forma !== "parcelada" && fp.sinal_forma !== "mista")
-      erros.push("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.");
-    else if (fp.sinal_forma === "parcelada") {
-      const n = Number(fp.sinal_parcelas);
-      if (!Number.isInteger(n) || n < 2 || n > MAX_PARCELAS_ENTRADA)
-        erros.push(`Entrada parcelada: informe em quantas vezes (de 2 a ${MAX_PARCELAS_ENTRADA}).`);
-    } else if (fp.sinal_forma === "mista") {
-      const av = lerValor(fp.sinal_avista);
-      if (av == null || av <= 0) erros.push("Informe quanto o cliente paga à vista agora na entrada.");
-      else if (p.entrada && av >= p.entrada)
-        erros.push('O valor à vista não pode ser maior ou igual ao total da entrada — se for tudo à vista, escolha "de uma vez".');
-      const n = Number(fp.sinal_parcelas);
-      if (!Number.isInteger(n) || n < 1 || n > MAX_PARCELAS_ENTRADA)
-        erros.push(`Entrada com saldo parcelado: informe em quantas vezes (de 1 a ${MAX_PARCELAS_ENTRADA}).`);
-      if (!lerData(fp.sinal_resto_primeira)) erros.push("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).");
-    }
-    erros.push(...errosValoresEntrada(fp));
-    if (!fp.sinal_meio || !MEIOS_OK.has(fp.sinal_meio))
-      erros.push("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).");
-    const dEntrada = lerData(fp.sinal_vencimento);
-    if (!dEntrada)
-      erros.push(
-        fp.sinal_forma === "parcelada"
-          ? "Informe a data da 1ª parcela da entrada (dia/mês/ano)."
-          : "Informe a data de pagamento da entrada (dia/mês/ano).",
-      );
     if (!p.parcelas || !Number.isInteger(p.parcelas) || p.parcelas < 1 || p.parcelas > MAX_PARCELAS)
       erros.push(`Informe a quantidade de parcelas mensais (de 1 a ${MAX_PARCELAS}).`);
     if (invalido(fp.valor_parcela)) erros.push(`Valor da parcela mensal inválido: ${FORMATO_VALOR}`);
@@ -372,7 +384,7 @@ export function validarPlano(
 
 /** Mesmo texto de plano_pagamento._texto_soma no servidor. */
 export function textoSoma(p: Plano): string {
-  const partes = [`entrada R$ ${fmtBRL(p.entrada)}`, `${p.parcelas} x R$ ${fmtBRL(p.parcelaValor)}`];
+  const partes = [...(p.entrada != null ? [`entrada R$ ${fmtBRL(p.entrada)}`] : []), `${p.parcelas} x R$ ${fmtBRL(p.parcelaValor)}`];
   if (p.balaoQtd || p.balaoValor) partes.push(`${p.balaoQtd ?? 0} balões x R$ ${fmtBRL(p.balaoValor ?? 0)}`);
   if (p.financiamento) partes.push(`financiamento R$ ${fmtBRL(p.financiamento)}`);
   if (p.chave || !(p.balaoQtd || p.financiamento)) partes.push(`chave R$ ${fmtBRL(p.chave)}`);
@@ -393,6 +405,7 @@ export function resumoPlano(fp: FormaPagamentoDados): string {
     return s;
   }
   const partes: string[] = [];
+  if (semEntrada(fp)) partes.push("Sem entrada");
   if (p.entrada) partes.push(p.entradaParcelas > 1 ? `Entrada R$ ${fmtBRL(p.entrada)} em ${p.entradaParcelas}x` : `Entrada R$ ${fmtBRL(p.entrada)}`);
   if (p.parcelas && p.parcelaValor) partes.push(`${p.parcelas}x de R$ ${fmtBRL(p.parcelaValor)}`);
   if (p.balaoQtd && p.balaoValor) partes.push(`${p.balaoQtd} balões de R$ ${fmtBRL(p.balaoValor)}`);
@@ -457,6 +470,20 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
       balao_qtd: null,
       balao_valor: null,
       financiamento_valor: null,
+    };
+  }
+  if (semEntrada(fp)) {
+    return {
+      ...fp,
+      avista_meio: null,
+      avista_data: null,
+      sinal: null,
+      sinal_parcelas: null,
+      sinal_meio: null,
+      sinal_vencimento: null,
+      sinal_valor_parcela: null,
+      sinal_valores: null,
+      desconto_entrada_valor: null,
     };
   }
   return {

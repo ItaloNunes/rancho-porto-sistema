@@ -4,7 +4,7 @@ import FormaPagamentoEtapa, { ConferenciaPlano } from "../../components/FormaPag
 import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
 import { apagarRascunho, lerRascunho, quandoFoiSalvo, useRascunhoAutomatico } from "../../lib/rascunho";
 import { ESTADOS_COM_CONJUGE, problemasConjuge, problemasPessoa, problemasTelefones, temConjuge } from "../../lib/cadastro";
-import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, textoCurtoParcelas, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
+import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, semEntrada, textoCurtoParcelas, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
 import { qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
 
@@ -373,6 +373,17 @@ export default function PropostaFormularioCompleto({
       setErro(problema.msg);
       document.getElementById("proposta-formulario-topo")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
+    }
+    // Venda sem entrada (24/11): segunda confirmação, com o resumo exato.
+    if (semEntrada(dados.forma_pagamento)) {
+      const fpS = dados.forma_pagamento;
+      const ok = window.confirm(
+        "CONFIRMAÇÃO FINAL — venda sem entrada\n\n" +
+          `${resumoPlano(fpS)} = R$ ${fmtBRL(fpS.valor_proposto ?? 0)}\n` +
+          "Entrada: não há · Chave: não há · Comissão: zero na hora de gerar o contrato.\n\n" +
+          "Salvar a proposta assim?",
+      );
+      if (!ok) return;
     }
     setSalvando(true);
     if (edicao) {
@@ -1054,7 +1065,7 @@ function Revisao({
           linhaValor("Pagamento à vista", vp, `Via ${textoMeio(fp.avista_meio)} em ${fmtData(fp.avista_data)}`)
         ) : (
           <>
-            {linhaValor(
+            {semEntrada(fp) ? linhaValor("Entrada", null, "Não há (venda sem entrada)") : linhaValor(
               "Entrada",
               p.entrada,
               fp.sinal_forma === "mista" && p.saldoValores.length

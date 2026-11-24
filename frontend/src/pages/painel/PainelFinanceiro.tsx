@@ -3,7 +3,7 @@ import Modal from "../../components/Modal";
 import { api, formatMoney, formatarNumeroProposta, numeroContrato } from "../../lib/api";
 import { PrazoAnaliseBadge } from "./PropostaDocumentos";
 import PropostaFinanceiro from "./PropostaFinanceiro";
-import { abatimentoNoPreco, lerPlano } from "../../lib/pagamento";
+import { abatimentoNoPreco, lerPlano, semEntrada } from "../../lib/pagamento";
 import type { FormaPagamentoDados, PropostaDetalhe, PropostaStatus } from "../../types";
 
 // Uma proposta sai da fila do financeiro assim que alguém decide algo sobre
@@ -557,6 +557,13 @@ function FormularioContrato({
     const dscEntrada = abatimentoNoPreco(fpCompleto, lerPlano(fpCompleto).total, proposta.valor_proposto ?? 0);
     const dcPadrao = dcTxt || (dscEntrada > 0 ? brl(dscEntrada) : "");
     if (dcPadrao) setDescontoCorretor(dcPadrao);
+    if (semEntrada(fpCompleto)) {
+      // Venda sem entrada (24/11, funcionário / venda direta): sem comissão.
+      setComissao("0,00");
+      setDescontoCorretor("");
+      setPreenchido(true);
+      return;
+    }
     if (!reemissao) {
       // Comissão CHEIA sugerida: 5% do valor proposto (padrão de todas as
       // emissões até hoje). O desconto do corretor é abatido depois, sozinho.
@@ -643,6 +650,11 @@ function FormularioContrato({
           </p>
         )}
       </div>
+      {semEntrada(((proposta.dados_qualificacao as { forma_pagamento?: FormaPagamentoDados } | undefined)?.forma_pagamento ?? {}) as FormaPagamentoDados) && (
+        <p id="contrato-sem-entrada-aviso" className="rounded-lg border-2 border-rust/50 bg-rust/5 p-2 text-sm text-ink">
+          <strong>Venda sem entrada</strong> (funcionário / venda direta): a comissão já vem <strong>zerada</strong>.
+        </p>
+      )}
       <label className="grid gap-1 text-sm">
         <span className="text-ink-soft">Comissão CHEIA do corretor, antes do desconto (R$)</span>
         <input

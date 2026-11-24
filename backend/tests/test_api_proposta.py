@@ -806,3 +806,23 @@ def test_comissao_digitada_ja_sem_desconto_nao_desconta_duas_vezes(cliente_api):
         assert f"R$ {formatar_valor(prop['valor_proposto'])}" in texto
         assert f"R$ {formatar_valor(prop['valor_proposto'] - 500)}" not in texto
     assert ultima()["comissao_digitada_liquida"] is True
+
+
+def _fp_sem_entrada():
+    return {"sinal": None, "sinal_forma": "sem_entrada", "sinal_meio": None, "sinal_vencimento": None,
+            "chave_valor": None, "valor_proposto": 85490.0, "dividido_em_parcelas": 100, "valor_parcela": "854,90",
+            "confirma_valor_fora_tabela": True}
+
+
+def test_sem_entrada_so_o_financeiro(cliente_api):
+    """24/11: venda sem entrada (funcionário) -- corretor não consegue."""
+    api, sb = cliente_api  # corretor comum
+    r = api.post("/crm/propostas", json=payload(**_fp_sem_entrada()))
+    assert r.status_code == 403 and "financeiro" in r.text
+    assert not sb.banco.get("propostas")
+    app.dependency_overrides[get_current_corretor] = lambda: ADMIN
+    r = api.post("/crm/propostas", json=payload(**_fp_sem_entrada()))
+    assert r.status_code == 200, r.text
+    gravada = sb.banco["propostas"][0]
+    assert gravada["condicoes_pagamento"] == "Sem entrada + 100x de R$ 854,90"
+    assert gravada["dados_qualificacao"]["forma_pagamento"]["sinal"] is None

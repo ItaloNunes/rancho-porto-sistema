@@ -531,15 +531,22 @@ def gerar_proposta_pdf(
         else:
             forma_entrada = "Pagamento único"
             data_rot = "Entrada paga em"
-        pdf.campo_grade(
-            ("Entrada (sinal/arras)", f"R$ {fmt_brl(plano.entrada)}", 1),
-            ("Forma da entrada", forma_entrada, 1),
-        )
-        pdf.campo_grade(
-            ("Entrada paga via", MEIOS_PAGAMENTO.get(plano.entrada_meio or "", "-"), 1),
-            (data_rot, fmt_data(plano.entrada_data), 1),
-            ("Banco/Agência", " / ".join(p for p in [fp.get("sinal_banco"), fp.get("sinal_agencia")] if p) or "-", 1),
-        )
+        if plano.sem_entrada:
+            # venda sem entrada (24/11): o preço todo nas parcelas mensais
+            pdf.campo_grade(
+                ("Entrada (sinal/arras)", "Não há (venda sem entrada)", 1),
+                ("Forma da entrada", "-", 1),
+            )
+        else:
+            pdf.campo_grade(
+                ("Entrada (sinal/arras)", f"R$ {fmt_brl(plano.entrada)}", 1),
+                ("Forma da entrada", forma_entrada, 1),
+            )
+            pdf.campo_grade(
+                ("Entrada paga via", MEIOS_PAGAMENTO.get(plano.entrada_meio or "", "-"), 1),
+                (data_rot, fmt_data(plano.entrada_data), 1),
+                ("Banco/Agência", " / ".join(p for p in [fp.get("sinal_banco"), fp.get("sinal_agencia")] if p) or "-", 1),
+            )
         pdf.campo_grade(
             ("Parcelas mensais", f"{plano.parcelas}x de R$ {fmt_brl(plano.parcela_valor)}", 1),
             ("1ª parcela em", fmt_data(plano.primeira_parcela), 1),

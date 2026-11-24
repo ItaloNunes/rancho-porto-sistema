@@ -445,7 +445,7 @@ export interface FormaPagamentoDados {
   // --- Plano estruturado (formulário de 02/10 — ver lib/pagamento.ts) ---
   avista_meio?: MeioPagamento | null;
   avista_data?: string | null; // AAAA-MM-DD
-  sinal_forma?: "unica" | "parcelada" | "mista" | null;
+  sinal_forma?: "unica" | "parcelada" | "mista" | "sem_entrada" | null;
   sinal_parcelas?: number | null;
   sinal_valor_parcela?: string | null; // calculado pelo servidor
   sinal_avista?: string | null; // "mista": parte paga à vista agora

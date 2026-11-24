@@ -204,6 +204,13 @@ class Plano:
         return None
 
     @property
+    def sem_entrada(self) -> bool:
+        """Venda sem entrada (24/11, ex.: lote para funcionário): o preço todo
+        nas parcelas mensais (+ chave/balões, se houver). Só o financeiro
+        cria proposta assim (ver crm._checar_sem_entrada)."""
+        return self.entrada_forma == "sem_entrada" and not self.a_vista
+
+    @property
     def entrada_valores(self) -> list[float]:
         """Parcelas da entrada ("parcelada"): as digitadas à mão, se houver,
         senão partes iguais."""
@@ -282,6 +289,8 @@ def ler_plano(fp: Optional[dict]) -> Plano:
     entrada = entrada_bruta
     if entrada_bruta and desconto_entrada and 0 < desconto_entrada < entrada_bruta:
         entrada = round(entrada_bruta - desconto_entrada, 2)
+    if fp.get("sinal_forma") == "sem_entrada" and not fp.get("a_vista"):
+        entrada = entrada_bruta = desconto_entrada = None
     try:
         balao_qtd = int(fp.get("balao_qtd")) if fp.get("balao_qtd") not in (None, "") else None
     except (TypeError, ValueError):
@@ -371,51 +380,57 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
         if not p.avista_data:
             erros.append("Informe a data do pagamento à vista (dia/mês/ano).")
     else:
-        if _invalido(fp, "sinal"):
-            erros.append(f"Valor da entrada inválido: {FORMATO_VALOR}")
-        elif not p.entrada or p.entrada <= 0:
-            erros.append("A entrada é obrigatória: informe o valor da entrada.")
-        elif p.entrada >= vp:
-            erros.append("A entrada não pode ser igual ou maior que o valor proposto -- se for tudo de uma vez, escolha \"À vista\".")
-        if _invalido(fp, "desconto_entrada_valor"):
-            erros.append(f"Valor do desconto na entrada inválido: {FORMATO_VALOR}")
-        elif p.desconto_entrada and p.entrada_bruta and p.desconto_entrada >= p.entrada_bruta:
-            erros.append("O desconto na entrada tem que ser menor que a entrada.")
-        if p.entrada_forma not in ("unica", "parcelada", "mista"):
-            erros.append("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.")
-        elif p.entrada_forma == "parcelada":
-            n_bruto = fp.get("sinal_parcelas")
-            try:
-                n_ok = 2 <= int(n_bruto) <= MAX_PARCELAS_ENTRADA
-            except (TypeError, ValueError):
-                n_ok = False
-            if not n_ok:
-                erros.append(f"Entrada parcelada: informe em quantas vezes (de 2 a {MAX_PARCELAS_ENTRADA}).")
-        elif p.entrada_forma == "mista":
-            if _invalido(fp, "sinal_avista"):
-                erros.append(f"Valor pago à vista na entrada inválido: {FORMATO_VALOR}")
-            elif not p.entrada_avista or p.entrada_avista <= 0:
-                erros.append("Informe quanto o cliente paga à vista agora na entrada.")
-            elif p.entrada and p.entrada_avista >= p.entrada:
-                erros.append("O valor à vista não pode ser maior ou igual ao total da entrada -- se for tudo à vista, escolha \"de uma vez\".")
-            n_bruto = fp.get("sinal_parcelas")
-            try:
-                n_ok = 1 <= int(n_bruto) <= MAX_PARCELAS_ENTRADA
-            except (TypeError, ValueError):
-                n_ok = False
-            if not n_ok:
-                erros.append(f"Entrada com saldo parcelado: informe em quantas vezes (de 1 a {MAX_PARCELAS_ENTRADA}).")
-            if not p.entrada_resto_primeira:
-                erros.append("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).")
-        erros += _erros_valores_entrada(fp, p)
-        if p.entrada_meio not in MEIOS_PAGAMENTO:
-            erros.append("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).")
-        if not p.entrada_data:
-            erros.append(
-                "Informe a data de pagamento da entrada (dia/mês/ano)."
-                if p.entrada_forma != "parcelada"
-                else "Informe a data da 1ª parcela da entrada (dia/mês/ano)."
-            )
+        if p.sem_entrada:
+            # Venda sem entrada (24/11): nada de entrada; o resto (parcelas,
+            # chave, soma) é conferido igual logo abaixo.
+            if valor(fp.get("sinal")):
+                erros.append("Venda sem entrada: deixe o valor da entrada em branco.")
+        else:
+            if _invalido(fp, "sinal"):
+                erros.append(f"Valor da entrada inválido: {FORMATO_VALOR}")
+            elif not p.entrada or p.entrada <= 0:
+                erros.append("A entrada é obrigatória: informe o valor da entrada.")
+            elif p.entrada >= vp:
+                erros.append("A entrada não pode ser igual ou maior que o valor proposto -- se for tudo de uma vez, escolha \"À vista\".")
+            if _invalido(fp, "desconto_entrada_valor"):
+                erros.append(f"Valor do desconto na entrada inválido: {FORMATO_VALOR}")
+            elif p.desconto_entrada and p.entrada_bruta and p.desconto_entrada >= p.entrada_bruta:
+                erros.append("O desconto na entrada tem que ser menor que a entrada.")
+            if p.entrada_forma not in ("unica", "parcelada", "mista"):
+                erros.append("Informe se a entrada será paga de uma vez, parcelada ou com parte à vista.")
+            elif p.entrada_forma == "parcelada":
+                n_bruto = fp.get("sinal_parcelas")
+                try:
+                    n_ok = 2 <= int(n_bruto) <= MAX_PARCELAS_ENTRADA
+                except (TypeError, ValueError):
+                    n_ok = False
+                if not n_ok:
+                    erros.append(f"Entrada parcelada: informe em quantas vezes (de 2 a {MAX_PARCELAS_ENTRADA}).")
+            elif p.entrada_forma == "mista":
+                if _invalido(fp, "sinal_avista"):
+                    erros.append(f"Valor pago à vista na entrada inválido: {FORMATO_VALOR}")
+                elif not p.entrada_avista or p.entrada_avista <= 0:
+                    erros.append("Informe quanto o cliente paga à vista agora na entrada.")
+                elif p.entrada and p.entrada_avista >= p.entrada:
+                    erros.append("O valor à vista não pode ser maior ou igual ao total da entrada -- se for tudo à vista, escolha \"de uma vez\".")
+                n_bruto = fp.get("sinal_parcelas")
+                try:
+                    n_ok = 1 <= int(n_bruto) <= MAX_PARCELAS_ENTRADA
+                except (TypeError, ValueError):
+                    n_ok = False
+                if not n_ok:
+                    erros.append(f"Entrada com saldo parcelado: informe em quantas vezes (de 1 a {MAX_PARCELAS_ENTRADA}).")
+                if not p.entrada_resto_primeira:
+                    erros.append("Informe a data da 1ª parcela do saldo da entrada (dia/mês/ano).")
+            erros += _erros_valores_entrada(fp, p)
+            if p.entrada_meio not in MEIOS_PAGAMENTO:
+                erros.append("Informe como a entrada será paga (PIX, transferência, boleto, cheque ou dinheiro).")
+            if not p.entrada_data:
+                erros.append(
+                    "Informe a data de pagamento da entrada (dia/mês/ano)."
+                    if p.entrada_forma != "parcelada"
+                    else "Informe a data da 1ª parcela da entrada (dia/mês/ano)."
+                )
         if not p.parcelas or not (1 <= p.parcelas <= MAX_PARCELAS):
             erros.append(f"Informe a quantidade de parcelas mensais (de 1 a {MAX_PARCELAS}).")
         if _invalido(fp, "valor_parcela"):
@@ -520,7 +535,7 @@ def _erros_baloes_financiamento(fp: dict, p: Plano) -> list[str]:
 
 def _texto_soma(entrada, parcelas, parcela_valor, chave, balao_qtd, balao_valor, financiamento) -> str:
     """'entrada R$ X + 36 x R$ Y [+ 3 balões x R$ Z] [+ financiamento R$ W] + chave R$ K'."""
-    partes = [f"entrada R$ {fmt_brl(entrada)}", f"{parcelas} x R$ {fmt_brl(parcela_valor)}"]
+    partes = ([f"entrada R$ {fmt_brl(entrada)}"] if entrada is not None else []) + [f"{parcelas} x R$ {fmt_brl(parcela_valor)}"]
     if balao_qtd or balao_valor:
         partes.append(f"{balao_qtd or 0} balões x R$ {fmt_brl(balao_valor or 0)}")
     if financiamento:
@@ -557,6 +572,11 @@ def normalizar(fp: dict) -> dict:
                       "primeiro_mes", "chave_valor", "chave_vencimento", "balao_qtd", "balao_valor",
                       "financiamento_valor", "desconto_entrada_valor"):
             out[chave] = None
+    elif p.sem_entrada:
+        # sem entrada (24/11): limpa qualquer resto de entrada digitada antes
+        for chave in ("sinal", "sinal_avista", "sinal_resto_primeira", "sinal_parcelas", "sinal_meio",
+                      "sinal_vencimento", "sinal_valor_parcela", "desconto_entrada_valor"):
+            out[chave] = None
     elif p.entrada_forma == "parcelada" and p.entrada:
         out["sinal_valor_parcela"] = fmt_brl(p.entrada_valores[0])
     elif p.entrada_forma == "mista" and p.saldo_valores:
@@ -583,6 +603,8 @@ def resumo(fp: Optional[dict]) -> str:
         return f"À vista: R$ {fmt_brl(p.valor_proposto)}" + (f" via {meio}" if meio else "") + \
             (f" em {fmt_data(p.avista_data)}" if p.avista_data else "")
     partes = []
+    if p.sem_entrada:
+        partes.append("Sem entrada")
     if p.entrada:
         desc_txt = (f" (R$ {fmt_brl(p.entrada_bruta)} - desconto R$ {fmt_brl(p.desconto_entrada)})"
                     if p.entrada_bruta and p.entrada != p.entrada_bruta else "")
@@ -646,7 +668,7 @@ def valores_contrato(fp: Optional[dict], lote: Optional[dict]) -> ValoresContrat
         # desconto na entrada, 17/11). Parcelas e chave ficam iguais;
         # o valor total do lote cai no mesmo tanto do desconto.
         # p.entrada já é a LÍQUIDA (sinal - desconto na entrada, 17/11).
-        entrada=p.entrada or valor(lote.get("entrada")),
+        entrada=None if p.sem_entrada else (p.entrada or valor(lote.get("entrada"))),
         parcelas=qtd,
         parcela_valor=p.parcela_valor or valor(lote.get("parcela_mensal")),
         chave=(p.chave or 0.0) if p.estruturado else (valor(lote.get("entrega")) or 0.0),
@@ -693,7 +715,7 @@ def conferir_contrato(fp: Optional[dict], valor_total: Optional[float], lote: Op
         return problemas
     # o preço impresso já desconta o desconto na entrada (17/11)
     valor_total = round(valor_total - ler_plano(fp).abatimento_no_preco(valor_total), 2)
-    if not v.entrada or v.entrada <= 0:
+    if (not v.entrada or v.entrada <= 0) and not ler_plano(fp).sem_entrada:
         problemas.append("A proposta não tem o valor da entrada.")
     if not v.parcelas or not v.parcela_valor:
         problemas.append("A proposta não tem a quantidade e o valor das parcelas mensais.")
