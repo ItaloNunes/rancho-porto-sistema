@@ -14,6 +14,7 @@ import {
   lerPlano,
   lerValor,
   semEntrada,
+  calculoSemEntrada,
   textoCurtoParcelas,
   textoMeio,
   tolerancia,
@@ -451,14 +452,41 @@ export default function FormaPagamentoEtapa({
   const { perfil } = useAuth();
   const podeSemEntrada = temAcessoAdmin(perfil?.papel);
   const sem = semEntrada(fp);
+  // Base da venda sem entrada (24/11): o valor do lote combinado pra esta
+  // venda (ex.: R$ 69.990,00), que pode ser diferente da tabela. Fica num
+  // campo próprio: o valor proposto vira o resultado (base − 5%), e usar o
+  // valor proposto como base de novo tiraria os 5% duas vezes.
+  const [baseSemTxt, setBaseSemTxt] = useState<string>("");
+  const baseSem = lerValor(baseSemTxt);
+  const nSem = Number(fp.dividido_em_parcelas) || Number(lote?.qtd_parcelas) || 100;
+  const calcSem = baseSem ? calculoSemEntrada(baseSem, nSem) : null;
+  /** Preenche valor proposto e parcelas pela regra da venda sem entrada:
+   * valor do lote − 5% do corretor, dividido em parcelas iguais. */
+  function camposCalculoSem(n: number, base: number | null = baseSem): Partial<FormaPagamentoDados> {
+    if (!base || !n) return {};
+    const c = calculoSemEntrada(base, n);
+    setValorPropostoTxt(fmtBRL(c.total));
+    return {
+      valor_proposto: c.total,
+      dividido_em_parcelas: n,
+      valor_parcela: fmtBRL(c.parcela),
+    };
+  }
   function marcarSemEntrada(marcar: boolean) {
     if (marcar) {
+      // base: a já digitada antes; senão o valor proposto atual (ex.: 69.990,00); senão a tabela
+      const base = baseSem ?? fp.valor_proposto ?? lote?.valor_total ?? null;
+      const calcBase = base ? calculoSemEntrada(base, nSem) : null;
       const ok = window.confirm(
         "Venda SEM ENTRADA (funcionário / venda direta).\n\n" +
           "Esta proposta vai ficar SEM ENTRADA, SEM CHAVE e SEM COMISSÃO: o valor proposto todo será dividido em parcelas mensais iguais.\n\n" +
-          "Use o valor proposto já com o desconto. Confirma?",
+          (calcBase && base
+            ? `O sistema calcula sozinho: valor do lote R$ ${fmtBRL(base)} − 5% do corretor (R$ ${fmtBRL(calcBase.comissao)}) = R$ ${fmtBRL(calcBase.restante)}, em ${nSem}x de R$ ${fmtBRL(calcBase.parcela)}. Dá pra mudar o valor do lote e as parcelas depois.\n\n`
+            : "") +
+          "Confirma?",
       );
       if (!ok) return;
+      if (base) setBaseSemTxt(fmtBRL(base));
       set({
         sinal_forma: "sem_entrada",
         sinal: null,
@@ -472,6 +500,7 @@ export default function FormaPagamentoEtapa({
         chave_valor: null,
         chave_vencimento: null,
         desconto_corretor_valor: null,
+        ...camposCalculoSem(nSem, base),
       });
     } else {
       set({ sinal_forma: "unica", sinal_parcelas: 1 });
@@ -590,10 +619,45 @@ export default function FormaPagamentoEtapa({
       {fp.a_vista === false && sem && (
         <Bloco titulo="1. Entrada" destaque>
           <p id="fp-sem-entrada-aviso" className="text-sm text-ink">
-            <strong>Não há entrada.</strong> O valor proposto (já com o desconto) é dividido todo nas parcelas mensais
-            abaixo. Para fechar no centavo, o valor proposto tem que ser exatamente parcelas × valor da parcela — a
-            conferência no fim mostra o botão para ajustar.
+            <strong>Não há entrada.</strong> O valor do lote, tirando os 5% do corretor, é dividido todo nas parcelas
+            mensais abaixo, em parcelas iguais.
           </p>
+          <CampoDinheiro
+            id="fp-sem-entrada-base"
+            label="Valor do lote para esta venda *"
+            valor={baseSemTxt}
+            onChange={setBaseSemTxt}
+            ajuda={lote?.valor_total ? `Tabela do lote: R$ ${fmtBRL(lote.valor_total)}. Digite o valor combinado, antes de tirar os 5% do corretor.` : undefined}
+          />
+          {calcSem && baseSem ? (
+            <div id="fp-sem-entrada-calculo" className="rounded-lg border border-border bg-surface p-3 text-sm grid gap-1 tabular-nums">
+              <div className="flex justify-between"><span className="text-ink-soft">Valor do lote</span><span>R$ {fmtBRL(baseSem)}</span></div>
+              <div className="flex justify-between"><span className="text-ink-soft">− 5% do corretor (não é cobrado)</span><span>− R$ {fmtBRL(calcSem.comissao)}</span></div>
+              <div className="flex justify-between font-semibold"><span>Restante, dividido nas parcelas</span><span>R$ {fmtBRL(calcSem.restante)}</span></div>
+              <div className="flex justify-between font-semibold text-ink">
+                <span>{nSem}x de R$ {fmtBRL(calcSem.parcela)}</span>
+                <span>R$ {fmtBRL(calcSem.total)}</span>
+              </div>
+              {calcSem.arredondamento > 0 && (
+                <span className="text-[11px] text-ink-soft">
+                  Os R$ {fmtBRL(calcSem.arredondamento)} que não dividem em parcelas iguais ficam de desconto.
+                </span>
+              )}
+              {(fp.valor_proposto !== calcSem.total || lerValor(fp.valor_parcela) !== calcSem.parcela) && (
+                <button
+                  id="fp-sem-entrada-recalcular"
+                  type="button"
+                  className="btn-row btn-row-primary justify-self-start mt-1"
+                  onClick={() => set(camposCalculoSem(nSem))}
+                >
+                  usar este cálculo ({nSem}x de R$ {fmtBRL(calcSem.parcela)})
+                </button>
+              )}
+              <span className="text-[11px] text-ink-soft">
+                Mudou o valor do lote ou a quantidade de parcelas? Clique em “usar este cálculo”.
+              </span>
+            </div>
+          ) : null}
         </Bloco>
       )}
 

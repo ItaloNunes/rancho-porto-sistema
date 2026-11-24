@@ -221,6 +221,25 @@ export function semEntrada(fp: FormaPagamentoDados): boolean {
   return fp.sinal_forma === "sem_entrada" && !fp.a_vista;
 }
 
+/** Venda sem entrada (24/11): valor do lote − 5% do corretor, dividido em
+ * `n` parcelas IGUAIS. O meio centavo que não divide fica de desconto (o
+ * valor proposto = n × parcela, então o contrato fecha no centavo). Conta
+ * em centavos inteiros pra não ter erro de arredondamento. */
+export function calculoSemEntrada(valorLote: number, n: number) {
+  const lote = Math.round(valorLote * 100);
+  const comissao = Math.round(lote * 0.05);
+  const restante = lote - comissao;
+  const parcela = Math.floor(restante / n);
+  const total = parcela * n;
+  return {
+    comissao: comissao / 100,
+    restante: restante / 100,
+    parcela: parcela / 100,
+    total: total / 100,
+    arredondamento: (restante - total) / 100,
+  };
+}
+
 export function lerPlano(fp: FormaPagamentoDados): Plano {
   const entrada = entradaLiquida(fp);
   const nEnt = fp.sinal_forma === "parcelada" ? Math.max(1, Number(fp.sinal_parcelas) || 1) : 1;
