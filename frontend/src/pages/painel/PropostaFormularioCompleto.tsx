@@ -5,7 +5,7 @@ import { api, formatarNumeroProposta, prewarmBackend } from "../../lib/api";
 import { apagarRascunho, lerRascunho, quandoFoiSalvo, useRascunhoAutomatico } from "../../lib/rascunho";
 import { ESTADOS_COM_CONJUGE, problemasConjuge, problemasPessoa, problemasTelefones, temConjuge } from "../../lib/cadastro";
 import { fmtBRL, fmtData, lerPlano, lerValor, planoParaEnvio, resumoPlano, semEntrada, textoCurtoParcelas, textoMeio, validarPlano, valorPorExtenso } from "../../lib/pagamento";
-import { qualificacaoDadosVazio } from "../../types";
+import { aceitaReserva, qualificacaoDadosVazio } from "../../types";
 import type { EstadoCivil, LoteComCondominio, PropostaDetalhe, QualificacaoDados, ReservaComLote } from "../../types";
 
 export interface RascunhoProposta {
@@ -199,11 +199,14 @@ export default function PropostaFormularioCompleto({
     prewarmBackend();
   }, []);
 
+  // Só empreendimentos que aceitam proposta agora (25/11): inativos e com a
+  // venda travada nem aparecem (o lote da reserva/edição em aberto fica).
   const empreendimentos = useMemo(() => {
     const vistos = new Map<string, string>();
-    for (const l of lotes) vistos.set(l.condominio_slug, l.condominio_nome);
+    for (const l of lotes)
+      if (aceitaReserva(l) || l.id === reservaOrigem?.lote_id || l.id === edicao?.lote_id) vistos.set(l.condominio_slug, l.condominio_nome);
     return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
-  }, [lotes]);
+  }, [lotes, reservaOrigem?.lote_id, edicao?.lote_id]);
 
   // Só lotes 'disponivel' entram na busca — desde que criar uma proposta já
   // reserva o lote na hora (sem esperar aprovação de admin, ver
@@ -212,7 +215,7 @@ export default function PropostaFormularioCompleto({
   // pra descobrir o erro 409 só no fim, ao salvar.
   const lotesDoEmpreendimento = useMemo(() => {
     const disponiveis = lotes.filter(
-      (l) => l.status === "disponivel" || l.id === reservaOrigem?.lote_id,
+      (l) => (l.status === "disponivel" && aceitaReserva(l)) || l.id === reservaOrigem?.lote_id,
     );
     return condominioSlug ? disponiveis.filter((l) => l.condominio_slug === condominioSlug) : disponiveis;
   }, [lotes, condominioSlug, reservaOrigem]);

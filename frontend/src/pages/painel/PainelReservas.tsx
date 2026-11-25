@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
 import { api, formatDateTime, horasRestantes } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { temAcessoAdmin } from "../../types";
+import { aceitaReserva, temAcessoAdmin } from "../../types";
 import type { LoteComCondominio, Reserva, ReservaComLote, ReservaStatus } from "../../types";
 import PropostaFormularioCompleto, { chaveRascunhoProposta } from "./PropostaFormularioCompleto";
 import { apagarRascunho, lerRascunho, quandoFoiSalvo, useRascunhoAutomatico } from "../../lib/rascunho";
@@ -572,15 +572,22 @@ function ReservaForm({
     !!(nome || contato || cpf || observacao),
   );
 
+  // Só empreendimentos que aceitam reserva agora (25/11): inativos e com a
+  // venda travada (ex.: Rota dos Ventos até sair a tabela) nem aparecem.
+  const lotesReservaveis = useMemo(
+    () => lotes.filter((l) => aceitaReserva(l) || l.id === loteId),
+    [lotes, loteId],
+  );
+
   const empreendimentos = useMemo(() => {
     const vistos = new Map<string, string>();
-    for (const l of lotes) vistos.set(l.condominio_slug, l.condominio_nome);
+    for (const l of lotesReservaveis) vistos.set(l.condominio_slug, l.condominio_nome);
     return [...vistos.entries()].map(([slug, nome]) => ({ slug, nome }));
-  }, [lotes]);
+  }, [lotesReservaveis]);
 
   const lotesDoEmpreendimento = useMemo(
-    () => (condominioSlug ? lotes.filter((l) => l.condominio_slug === condominioSlug) : lotes),
-    [lotes, condominioSlug],
+    () => (condominioSlug ? lotesReservaveis.filter((l) => l.condominio_slug === condominioSlug) : lotesReservaveis),
+    [lotesReservaveis, condominioSlug],
   );
 
   async function onSubmit(e: React.FormEvent) {

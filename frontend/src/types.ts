@@ -610,3 +610,9 @@ export interface ImportacaoPreview {
   linhas: ImportacaoLinha[];
   nao_encontrados: string[];
 }
+
+/** Lote de empreendimento que aceita reserva/proposta agora: ativo e sem a
+ * trava de vendas (25/11). Os outros nem aparecem nos formulários. */
+export function aceitaReserva(l: { condominio_ativo?: boolean; condominio_vendas_bloqueadas?: boolean }): boolean {
+  return l.condominio_ativo !== false && !l.condominio_vendas_bloqueadas;
+}
