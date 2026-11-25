@@ -36,7 +36,13 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        """Os do .env/Render (CORS_ORIGINS) + os dois endereços públicos do
+        site na Vercel -- o novo castelimoveis.vercel.app (25/11) e o antigo,
+        que continua no ar. Fixos aqui pra um endereço novo não depender de
+        alguém lembrar de mexer na variável do Render."""
+        extras = ["https://castelimoveis.vercel.app", "https://rancho-porto-frontend.vercel.app"]
+        lista = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return lista + [o for o in extras if o not in lista]
 
 
 settings = Settings()

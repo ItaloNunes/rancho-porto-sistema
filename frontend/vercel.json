@@ -29,6 +29,30 @@
       "destination": "/lancamentos/:slug/index.html"
     },
     {
+      "source": "/veneza",
+      "destination": "/lancamentos/veneza/index.html"
+    },
+    {
+      "source": "/veneza/",
+      "destination": "/lancamentos/veneza/index.html"
+    },
+    {
+      "source": "/riviera",
+      "destination": "/lancamentos/riviera/index.html"
+    },
+    {
+      "source": "/riviera/",
+      "destination": "/lancamentos/riviera/index.html"
+    },
+    {
+      "source": "/rota-dos-ventos",
+      "destination": "/lancamentos/rota-dos-ventos/index.html"
+    },
+    {
+      "source": "/rota-dos-ventos/",
+      "destination": "/lancamentos/rota-dos-ventos/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

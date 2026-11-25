@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://rancho-porto-frontend.vercel.app/</loc><lastmod>2026-11-25</lastmod><priority>1.0</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/lancamentos/veneza</loc><lastmod>2026-11-25</lastmod><priority>0.9</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/lancamentos/riviera</loc><lastmod>2026-11-25</lastmod><priority>0.9</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/lancamentos/rota-dos-ventos</loc><lastmod>2026-11-25</lastmod><priority>0.9</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/condominios/porto-franco</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/condominios/rancho-texas</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/condominios/veneza</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/condominios/riviera</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
-  <url><loc>https://rancho-porto-frontend.vercel.app/condominios/rota-dos-ventos</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/</loc><lastmod>2026-11-25</lastmod><priority>1.0</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/veneza</loc><lastmod>2026-11-25</lastmod><priority>0.9</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/riviera</loc><lastmod>2026-11-25</lastmod><priority>0.9</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/rota-dos-ventos</loc><lastmod>2026-11-25</lastmod><priority>0.9</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/condominios/porto-franco</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/condominios/rancho-texas</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/condominios/veneza</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/condominios/riviera</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
+  <url><loc>https://castelimoveis.vercel.app/condominios/rota-dos-ventos</loc><lastmod>2026-11-25</lastmod><priority>0.8</priority></url>
 </urlset>

@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, "..", "dist");
 const API_URL = process.env.VITE_API_URL || "https://rancho-porto-sistema.onrender.com";
-const SITE_URL = process.env.SITE_URL || "https://rancho-porto-frontend.vercel.app";
+const SITE_URL = process.env.SITE_URL || "https://castelimoveis.vercel.app";
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
