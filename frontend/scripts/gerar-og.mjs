@@ -72,7 +72,11 @@ async function main() {
     const url = `${SITE_URL}/condominios/${c.slug}`;
 
     const metaTags = `
+    <link rel="canonical" href="${escapeHtml(url)}" />
+    <meta name="description" content="${escapeHtml(descricao)}" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Castel Construções e Incorporações" />
     <meta property="og:title" content="${escapeHtml(titulo)}" />
     <meta property="og:description" content="${escapeHtml(descricao)}" />
     <meta property="og:image" content="${escapeHtml(imagem)}" />
@@ -90,6 +94,8 @@ async function main() {
     // cada rede social escolhe uma ordem diferente pra desempatar. Tira as
     // genéricas antes de injetar as específicas, pra nunca ter ambiguidade.
     html = html.replace(/\s*<meta\s+(?:property="og:[^"]*"|name="twitter:[^"]*")[^>]*\/>\n?/g, "");
+    html = html.replace(/\s*<link rel="canonical"[^>]*\/>\n?/g, "");
+    html = html.replace(/\s*<meta\s+name="description"[\s\S]*?\/>\n?/, "");
     html = html.replace("</head>", metaTags);
 
     fs.writeFileSync(path.join(outDir, `${c.slug}.html`), html);

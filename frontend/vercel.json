@@ -9,6 +9,18 @@
       "destination": "/og/porto-franco.html"
     },
     {
+      "source": "/condominios/veneza",
+      "destination": "/og/veneza.html"
+    },
+    {
+      "source": "/condominios/riviera",
+      "destination": "/og/riviera.html"
+    },
+    {
+      "source": "/condominios/rota-dos-ventos",
+      "destination": "/og/rota-dos-ventos.html"
+    },
+    {
       "source": "/lancamentos/:slug",
       "destination": "/lancamentos/:slug/index.html"
     },

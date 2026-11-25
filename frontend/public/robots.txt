@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /painel
+Disallow: /login
+Disallow: /definir-senha
+Disallow: /qualificacao
+
+Sitemap: https://rancho-porto-frontend.vercel.app/sitemap.xml
