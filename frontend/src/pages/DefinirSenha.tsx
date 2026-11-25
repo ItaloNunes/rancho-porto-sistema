@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import FormTrocaSenha from "../components/FormTrocaSenha";
+import Assinatura from "../components/Assinatura";
 
 /** Tela de "Trocar senha" (link no topo do painel). Login próprio, sem
  * e-mail: só acessível já logado (ver RequireAuth em main.tsx) e pede a
@@ -27,6 +28,7 @@ export default function DefinirSenha() {
           />
         )}
       </div>
+      <Assinatura />
     </div>
   );
 }

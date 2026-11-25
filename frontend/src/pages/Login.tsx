@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import CampoSenha from "../components/CampoSenha";
 import { useAuth } from "../lib/auth";
+import Assinatura from "../components/Assinatura";
 
 /** Login do painel (redesenho de 03/10): mostrar/ocultar senha, aviso de
  * Caps Lock, mensagem clara quando o acesso fica bloqueado por excesso de
@@ -66,7 +67,7 @@ export default function Login() {
       </aside>
 
       {/* Formulário */}
-      <main className="min-h-screen lg:min-h-0 grid place-items-center px-4 py-10 sm:px-6">
+      <main className="relative min-h-screen lg:min-h-0 grid place-items-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-sm">
           <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-ink mb-8">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
@@ -162,6 +163,7 @@ export default function Login() {
             Acesso restrito. Entradas e tentativas são registradas.
           </p>
         </div>
+        <Assinatura className="absolute bottom-0 inset-x-0" />
       </main>
     </div>
   );

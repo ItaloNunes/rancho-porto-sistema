@@ -7,6 +7,7 @@ import GateCompletarCadastro from "./GateCompletarCadastro";
 import GateTrocarSenha from "./GateTrocarSenha";
 import AvisoNovaVersao from "../../components/AvisoNovaVersao";
 import { temAcessoAdmin } from "../../types";
+import Assinatura from "../../components/Assinatura";
 
 // Mudança de setembro/2026: não tem mais Cadastro de Cliente nem
 // Qualificação de Leads (o corretor informa nome/CPF direto no pedido de
@@ -103,7 +104,7 @@ export default function PainelLayout() {
   return (
     // data-clarity-mask: o Clarity (mapa de cliques do site público) não grava
     // nada do que aparece no painel -- CPF, propostas, valores (LGPD, 03/10).
-    <div className="min-h-screen grid grid-rows-[auto_auto_1fr] min-w-0" data-clarity-mask="True">
+    <div className="min-h-screen grid grid-rows-[auto_auto_1fr_auto] min-w-0" data-clarity-mask="True">
       <AvisoNovaVersao />
       <header className="border-b border-border bg-surface min-w-0">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 h-16 flex items-center justify-between gap-4">
@@ -193,6 +194,7 @@ export default function PainelLayout() {
       <main className="max-w-6xl mx-auto px-6 sm:px-8 py-6 sm:py-8 w-full min-w-0">
         <Outlet />
       </main>
+      <Assinatura />
 
       <BotaoSuporte />
     </div>

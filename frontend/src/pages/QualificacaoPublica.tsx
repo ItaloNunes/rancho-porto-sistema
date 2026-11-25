@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { CorrespondenciaCampo, ESTADO_CIVIL_OPCOES, EnderecoCampos, Field } from "../components/qualificacaoCampos";
+import Assinatura from "../components/Assinatura";
 import {
   DOCUMENTO_LABEL,
   DOCUMENTOS_CONJUGE,
@@ -113,6 +114,7 @@ export default function QualificacaoPublica() {
           onEnviado={(r) => setPublica(r)}
         />
       </main>
+      <Assinatura />
     </div>
   );
 }
@@ -121,6 +123,7 @@ function TelaCentralizada({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-bg grid place-items-center px-5" data-clarity-mask="True">
       <div className="card max-w-md w-full p-6 sm:p-8 text-center">{children}</div>
+      <Assinatura />
     </div>
   );
 }
