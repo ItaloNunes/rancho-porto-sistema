@@ -456,7 +456,7 @@ export default function FormaPagamentoEtapa({
   // venda (ex.: R$ 69.990,00), que pode ser diferente da tabela. Fica num
   // campo próprio: o valor proposto vira o resultado (base − 5%), e usar o
   // valor proposto como base de novo tiraria os 5% duas vezes.
-  const [baseSemTxt, setBaseSemTxt] = useState<string>("");
+  const [baseSemTxt, setBaseSemTxt] = useState<string>(fp.valor_base_sem_entrada ?? "");
   const baseSem = lerValor(baseSemTxt);
   const nSem = Number(fp.dividido_em_parcelas) || Number(lote?.qtd_parcelas) || 100;
   const calcSem = baseSem ? calculoSemEntrada(baseSem, nSem) : null;
@@ -470,6 +470,8 @@ export default function FormaPagamentoEtapa({
       valor_proposto: c.total,
       dividido_em_parcelas: n,
       valor_parcela: fmtBRL(c.parcela),
+      // gravado: o contrato imprime o valor cheio e o desconto (25/11)
+      valor_base_sem_entrada: fmtBRL(base),
     };
   }
   function marcarSemEntrada(marcar: boolean) {
@@ -503,7 +505,7 @@ export default function FormaPagamentoEtapa({
         ...camposCalculoSem(nSem, base),
       });
     } else {
-      set({ sinal_forma: "unica", sinal_parcelas: 1 });
+      set({ sinal_forma: "unica", sinal_parcelas: 1, valor_base_sem_entrada: null });
     }
   }
   const [valorPropostoTxt, setValorPropostoTxt] = useState(fp.valor_proposto != null ? fmtBRL(fp.valor_proposto) : "");
@@ -626,7 +628,10 @@ export default function FormaPagamentoEtapa({
             id="fp-sem-entrada-base"
             label="Valor do lote para esta venda *"
             valor={baseSemTxt}
-            onChange={setBaseSemTxt}
+            onChange={(v) => {
+              setBaseSemTxt(v);
+              set({ valor_base_sem_entrada: v || null });
+            }}
             ajuda={lote?.valor_total ? `Tabela do lote: R$ ${fmtBRL(lote.valor_total)}. Digite o valor combinado, antes de tirar os 5% do corretor.` : undefined}
           />
           {calcSem && baseSem ? (

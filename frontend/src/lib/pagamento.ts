@@ -473,6 +473,7 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
       ...fp,
       sinal: null,
       sinal_forma: null,
+      valor_base_sem_entrada: null,
       sinal_parcelas: null,
       sinal_meio: null,
       sinal_vencimento: null,
@@ -509,6 +510,7 @@ export function planoParaEnvio(fp: FormaPagamentoDados): FormaPagamentoDados {
     ...fp,
     avista_meio: null,
     avista_data: null,
+    valor_base_sem_entrada: null,
     sinal_valores: fp.sinal_forma === "parcelada" || fp.sinal_forma === "mista" ? (fp.sinal_valores ?? null) : null,
   };
 }

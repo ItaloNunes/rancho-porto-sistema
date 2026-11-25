@@ -456,6 +456,8 @@ export interface FormaPagamentoDados {
 /** Desconto que o corretor dá ao cliente saindo da própria comissão (10/11). */
   desconto_corretor_valor?: string | null; // "mista": AAAA-MM-DD da 1ª parcela do saldo
   /** Desconto aplicado na entrada: reduz o valor que o cliente paga de entrada e, por consequência, o valor do lote. */
+  /** Venda sem entrada (25/11): valor cheio do lote; o contrato mostra ele e o desconto. */
+  valor_base_sem_entrada?: string | null;
   desconto_entrada_valor?: string | null;
   sinal_meio?: MeioPagamento | null;
   sinal_vencimento?: string | null; // AAAA-MM-DD

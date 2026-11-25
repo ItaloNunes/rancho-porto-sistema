@@ -193,6 +193,8 @@ class Plano:
     balao_qtd: Optional[int] = None
     balao_valor: Optional[float] = None
     financiamento: Optional[float] = None
+    # venda sem entrada (25/11): valor cheio do lote, antes do desconto
+    valor_base: Optional[float] = None
     # metadado
     estruturado: bool = False  # True = proposta feita no formulário novo (02/10)
     erros: list = field(default_factory=list)
@@ -209,6 +211,14 @@ class Plano:
         nas parcelas mensais (+ chave/balões, se houver). Só o financeiro
         cria proposta assim (ver crm._checar_sem_entrada)."""
         return self.entrada_forma == "sem_entrada" and not self.a_vista
+
+    def desconto_sem_entrada(self, vp: Optional[float]) -> float:
+        """Venda sem entrada com valor cheio informado (25/11): desconto =
+        valor cheio do lote − valor proposto (o que vai nas parcelas). O
+        contrato imprime o valor cheio e esse desconto. 0 se não se aplica."""
+        if not self.sem_entrada or not self.valor_base or not vp or self.valor_base <= vp:
+            return 0.0
+        return round(self.valor_base - vp, 2)
 
     @property
     def entrada_valores(self) -> list[float]:
@@ -321,6 +331,7 @@ def ler_plano(fp: Optional[dict]) -> Plano:
         balao_qtd=balao_qtd,
         balao_valor=valor(fp.get("balao_valor")),
         financiamento=valor(fp.get("financiamento_valor")),
+        valor_base=valor(fp.get("valor_base_sem_entrada")) if fp.get("sinal_forma") == "sem_entrada" else None,
         estruturado=bool(fp.get("sinal_forma") or fp.get("avista_meio")),
     )
 
@@ -385,6 +396,10 @@ def validar(fp: Optional[dict], valor_proposto: Optional[float], valor_tabela: O
             # chave, soma) é conferido igual logo abaixo.
             if valor(fp.get("sinal")):
                 erros.append("Venda sem entrada: deixe o valor da entrada em branco.")
+            if _invalido(fp, "valor_base_sem_entrada"):
+                erros.append(f"Valor do lote para esta venda inválido: {FORMATO_VALOR}")
+            elif p.valor_base is not None and p.valor_base < vp:
+                erros.append("Venda sem entrada: o valor do lote não pode ser menor que o valor proposto.")
         else:
             if _invalido(fp, "sinal"):
                 erros.append(f"Valor da entrada inválido: {FORMATO_VALOR}")
@@ -552,7 +567,7 @@ def normalizar(fp: dict) -> dict:
     out = dict(fp)
     p = ler_plano(fp)
     for chave in ("sinal", "sinal_avista", "valor_parcela", "chave_valor", "renda", "balao_valor", "financiamento_valor",
-                  "desconto_entrada_valor"):
+                  "desconto_entrada_valor", "valor_base_sem_entrada"):
         v = valor(fp.get(chave))
         if v is not None:
             out[chave] = fmt_brl(v)
@@ -591,6 +606,8 @@ def normalizar(fp: dict) -> dict:
         out["sinal_valores"] = None
     else:
         out["sinal_valores"] = [fmt_brl(valor(b)) if valor(b) is not None else b for b in brutos]
+    if not p.sem_entrada:
+        out["valor_base_sem_entrada"] = None  # só vale na venda sem entrada (25/11)
     return out
 
 

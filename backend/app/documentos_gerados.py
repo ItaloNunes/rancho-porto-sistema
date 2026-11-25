@@ -479,6 +479,7 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float 
         return out
 
     v = valores_contrato(fp, lote)  # mesmos números que conferir_contrato confere
+    out["sem_entrada"] = plano.sem_entrada  # venda sem entrada (24/11)
     entrada = v.entrada
     out["entrada"] = brl(entrada) if entrada else None
     compl_pf = compl_rt = ""
@@ -535,6 +536,25 @@ def _textos_pagamento(fp: dict, lote: dict, valor_total: float, desconto: float 
     else:
         out["chave_valor"] = max(0.0, round(chave_bruta - desconto, 2))
     return out
+
+
+def _preco_venda_direta(fp: dict, valor_total: float) -> Optional[str]:
+    """Venda sem entrada com o valor cheio do lote informado (25/11, pedido
+    do Italo): o preço sai pelo valor cheio, com o desconto (os 5% da
+    corretagem, que não existe nesta venda direta) e o valor líquido que vai
+    nas parcelas. None = proposta comum -> o contrato sai exatamente como
+    antes."""
+    plano = ler_plano(fp)
+    dsc = plano.desconto_sem_entrada(valor_total)
+    if not dsc:
+        return None
+    base = plano.valor_base
+
+    def brl(v: float) -> str:
+        return f"R$ {formatar_valor(v)} ({valor_por_extenso(v)})"
+
+    return (f"{brl(base)}, com desconto de {brl(dsc)} concedido pela VENDEDORA, correspondente à comissão "
+            f"de corretagem não devida nesta venda direta, sendo o valor líquido de {brl(valor_total)}")
 
 
 def _substituir_texto(paragrafo, velho: str, novo: str) -> None:
@@ -842,7 +862,7 @@ def preencher_contrato_porto_franco(
     _substituir_texto(
         p_preco,
         "R$ 69.990,00 (Sessenta e nove mil novecentos e noventa reais)",
-        f"R$ {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)})",
+        _preco_venda_direta(fp, valor_total) or f"R$ {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)})",
     )
 
     # --- VII. FORMA DE PAGAMENTO -------------------------------------------
@@ -857,6 +877,8 @@ def preencher_contrato_porto_franco(
             "Entrada / Arras confirmatórias: ",
             f"Entrada / Arras confirmatórias: {tp['entrada']}{tp['entrada_compl_pf']}.",
         )
+    elif tp.get("sem_entrada"):
+        _substituir_texto(pp[3], "Entrada / Arras confirmatórias: ", "Entrada / Arras confirmatórias: não há.")
     if tp["a_vista"]:
         _substituir_texto(pp[5], "Parcelas mensais", "Parcelas mensais: não há (pagamento à vista).")
     elif tp["parcelas"]:
@@ -912,7 +934,16 @@ def preencher_contrato_porto_franco(
     p_comissao = next(
         (par for par in pp if "COMISSÃO DE CORRETAGEM" in par.text or "[QUALIFICAR:" in par.text), None
     )
-    if p_comissao is not None and "fixada em R$" in p_comissao.text:
+    if p_comissao is not None and "fixada em R$" in p_comissao.text and not valor_comissao and tp.get("sem_entrada"):
+        # Venda direta sem entrada (25/11): sem corretor, sem comissão.
+        _substituir_texto(
+            p_comissao,
+            "fixada em R$  (), a ser paga diretamente ao CORRETOR/IMOBILIÁRIA "
+            "[QUALIFICAR: nome/razão social, CPF/CNPJ, CRECI e dados bancários], "
+            "mediante transferência bancária ou PIX para conta por este indicada",
+            "fixada em R$ 0,00 (zero reais), por se tratar de venda direta, sem intermediação de corretor",
+        )
+    elif p_comissao is not None and "fixada em R$" in p_comissao.text:
         _substituir_texto(
             p_comissao,
             "fixada em R$  (), a ser paga diretamente ao CORRETOR/IMOBILIÁRIA "
@@ -1105,7 +1136,8 @@ def preencher_contrato_rancho_texas(
     _substituir_texto(
         p_preco,
         "R$: XXX  (XX) (“Preço”)",
-        f"R$: {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)}) (“Preço”)",
+        f"R$: {_preco_venda_direta(fp, valor_total)[3:]} (“Preço”)" if _preco_venda_direta(fp, valor_total)
+        else f"R$: {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)}) (“Preço”)",
     )
 
     # --- VII. FORMA DE PAGAMENTO ---------------------------------------------
@@ -1126,6 +1158,9 @@ def preencher_contrato_rancho_texas(
     if tp["entrada"]:
         _substituir_texto(pp[3], sinal_modelo, f"Sinal/Arras confirmatórias: {tp['entrada']}{tp['entrada_compl_rt']}.")
         _substituir_texto(pp[11], arras_modelo, tp["entrada"])
+    elif tp.get("sem_entrada"):
+        _substituir_texto(pp[3], sinal_modelo, "Sinal/Arras confirmatórias: não há.")
+        _substituir_texto(pp[11], arras_modelo, "R$ 0,00 (zero reais)")
     else:
         _substituir_texto(pp[3], sinal_modelo, "Sinal/Arras confirmatórias: -.")
         _substituir_texto(pp[11], arras_modelo, "-")
@@ -1310,13 +1345,13 @@ def preencher_contrato_riviera(
     _substituir_texto(
         t.rows[9].cells[0].paragraphs[1],
         "R$ 170.000,00 (Cento e setenta mil reais)",
-        f"R$ {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)})",
+        _preco_venda_direta(fp, valor_total) or f"R$ {formatar_valor(valor_total)} ({valor_por_extenso(valor_total)})",
     )
 
     # --- VII. FORMA DE PAGAMENTO (o quadro em branco) ---------------------------
     pp = t.rows[11].cells[0].paragraphs
     tp = _textos_pagamento(fp, lote, valor_total, desconto=desconto)
-    _substituir_texto(pp[3], "Entrada:", f"Entrada: {tp['entrada'] or '-'}{tp['entrada_compl_pf']}.")
+    _substituir_texto(pp[3], "Entrada:", f"Entrada: {tp['entrada'] or ('não há' if tp.get('sem_entrada') else '-')}{tp['entrada_compl_pf']}.")
     if tp["a_vista"]:
         _substituir_texto(pp[4], "Parcelas: ", "Parcelas: não há (pagamento à vista).")
     elif tp["parcelas"]:
@@ -1626,7 +1661,7 @@ def preencher_contrato_rota_ventos(
 
     # --- 5. PREÇO E PAGAMENTO (tabela 8) -------------------------------------
     t8 = doc.tables[8]
-    _trocar_texto_campo(t8.rows[0].cells[1].paragraphs[0], f"R$ {formatar_valor(valor)} ({valor_por_extenso(valor).upper()})")
+    _trocar_texto_campo(t8.rows[0].cells[1].paragraphs[0], _preco_venda_direta(fp, valor) or f"R$ {formatar_valor(valor)} ({valor_por_extenso(valor).upper()})")
     tp = _textos_pagamento(fp, lote, valor, desconto=desconto)
     p_entrada, p_parcelas = t8.rows[1].cells[0].paragraphs[1], t8.rows[1].cells[0].paragraphs[2]
     if tp["a_vista"]:

@@ -519,6 +519,11 @@ class FormaPagamentoDados(BaseModel):
     # um abatimento pontual na entrada negociada (ex.: entrada acordada de
     # R$ 10.000, desconto de R$ 1.000, cliente paga R$ 9.000).
     desconto_entrada_valor: Optional[str] = None
+    # Venda sem entrada (25/11): valor cheio do lote combinado (ex.:
+    # R$ 69.990,00). O valor proposto é o que sobra tirando os 5% do corretor
+    # (ex.: R$ 66.490,00, em parcelas); o contrato imprime o valor cheio e o
+    # desconto (a diferença).
+    valor_base_sem_entrada: Optional[str] = None
     # Chave (parcela paga na entrega) -- vem do plano de tabela do lote.
     chave_valor: Optional[str] = None
     chave_vencimento: Optional[str] = None  # AAAA-MM-DD, opcional

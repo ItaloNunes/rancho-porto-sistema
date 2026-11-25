@@ -735,3 +735,28 @@ def test_pf_desconto_na_entrada_mantem_o_preco_cheio_e_escreve_o_desconto():
     assert "R$ 89.990,00" in t and "88.989" not in t
     assert "Entrada / Arras confirmatórias: R$ 10.000,00" in t
     assert "com desconto de R$ 1.001,00" in t and "valor líquido de R$ 8.999,00" in t
+
+
+# ------------------------------------------------------------------ venda sem entrada com valor cheio (25/11)
+def test_pf_venda_sem_entrada_mostra_valor_cheio_e_desconto():
+    fp = {"a_vista": False, "renda": "3.500,00", "valor_proposto": 66490.0, "sinal_forma": "sem_entrada",
+          "dividido_em_parcelas": 100, "valor_parcela": "664,90", "primeiro_mes": "2026-12-25", "vencimento": "25",
+          "valor_base_sem_entrada": "69.990,00", "confirma_valor_fora_tabela": True, "confirmado": True}
+    t = texto_docx(preencher_contrato_porto_franco(
+        proposta=proposta(fp, LOTE_PF), lote=LOTE_PF, cliente=CLIENTE, corretor={}, valor_comissao=0.0,
+        data_contrato=date(2026, 11, 25)))
+    assert ("pelo valor de R$ 69.990,00 (sessenta e nove mil novecentos e noventa reais), com desconto de "
+            "R$ 3.500,00 (três mil e quinhentos reais) concedido pela VENDEDORA") in t
+    assert "sendo o valor líquido de R$ 66.490,00" in t
+    assert "Entrada / Arras confirmatórias: não há." in t and "Chave: não há." in t
+    assert "100 (cem) parcelas mensais e sucessivas de R$ 664,90" in t
+    assert "fixada em R$ 0,00 (zero reais), por se tratar de venda direta, sem intermediação de corretor" in t
+
+
+def test_valor_cheio_so_vale_na_venda_sem_entrada():
+    from app.plano_pagamento import normalizar, ler_plano
+    fp = {**fp_unica(LOTE_PF), "valor_base_sem_entrada": "99.000,00"}
+    assert normalizar(fp)["valor_base_sem_entrada"] is None
+    assert ler_plano(fp).desconto_sem_entrada(89990.0) == 0.0
+    t = texto_docx(pf(fp_unica(LOTE_PF)))
+    assert "com desconto de" not in t and "venda direta" not in t
